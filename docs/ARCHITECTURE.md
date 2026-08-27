@@ -1,10 +1,12 @@
 # Architecture: how dark mode works
 
-This document explains how Designer Dark Mode turns the Ignition Designer dark, and
-records the reverse-engineered Ignition internals it relies on. None of this is
-covered by the Ignition SDK docs — it was learned by decompiling the platform
-and JIDE jars and by iterating against the running Designer. Read this before
-touching theming code; the pieces interact in non-obvious ways.
+This document explains how Designer Dark Mode turns the Ignition Designer dark,
+and records the Ignition and JIDE implementation details it depends on. None of
+this is covered by the Ignition SDK docs — it was established empirically, by
+observing the running Designer and iterating until each surface themed
+correctly. Read this before touching theming code; the pieces interact in
+non-obvious ways, and several of them exist to work around a specific failure
+recorded below.
 
 ## The core problem
 
@@ -157,9 +159,27 @@ Designer keeps its own logs in memory only; this file is the dev-loop's eyes.
 - **macOS native title bar** stays dark after a light switch unless the root
   pane's `apple.awt.windowAppearance` client property is explicitly cleared.
 
-## Where the internals came from
+## When Ignition changes underneath us
 
-Platform and JIDE classes were decompiled from the local Designer cache:
-`~/.ignition/cache/resources/{platform,modules}/<name>.jar/<hash>/<name>.jar`
-(each `.jar` path is a directory containing the real jar). `javap -c -p` on the
-extracted classes was enough — no decompiler required.
+Every Ignition class, field and `UIManager` key named in this document is an
+implementation detail of the Designer, not public SDK surface. Any of them can
+change in a point release without notice, and that is the expected maintenance
+burden of this module rather than a bug in Ignition.
+
+Names are resolved reflectively at runtime, and the module degrades in two
+tiers when one stops resolving:
+
+- **Phase 1 — the look-and-feel swap.** A failure here means the switch is
+  genuinely off, so it is logged, the preference is reverted (a broken dark
+  state must never persist into the next launch) and `apply` returns. The
+  Designer is left on the theme it had.
+- **Everything after.** Each pass runs inside `safely(...)`, so a pass that
+  throws is logged with its stack and the remaining passes still run. A renamed
+  field costs one unthemed surface and a warning, not a broken switch.
+
+That shapes how to debug a regression after an Ignition upgrade. A surface that
+has gone light is usually a name that no longer resolves: check
+`~/.ignition/designer-dark-mode.log` for the warning before assuming the theming
+logic itself is wrong, and use the component inspector
+(**Cmd/Ctrl+Shift+I**, see [DEVELOPMENT.md](DEVELOPMENT.md#the-inspector--diagnosing-a-still-light-component))
+to identify what is actually painting the area now.

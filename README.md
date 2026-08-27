@@ -81,8 +81,8 @@ docs/                       Architecture and development guides
 ## Documentation
 
 - **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** — how the dark theme is
-  applied, why it takes so much machinery, and the reverse-engineered Ignition
-  internals it depends on. Read this before changing theming code.
+  applied, why it takes so much machinery, and the Ignition implementation
+  details it depends on. Read this before changing theming code.
 - **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)** — build, run, deploy, debug, and
   sign; the diagnostic tools; how to fix a "still light" component.
 - **[ops/README.md](ops/README.md)** — the local dev gateway.

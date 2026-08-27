@@ -98,8 +98,9 @@ Then pick the matching mechanism (see
 it. The whole approach is additive nets, so most fixes are one entry in a map or
 one predicate.
 
-If you need to see what a platform class actually does, decompile it from the
-Designer cache — see the end of [ARCHITECTURE.md](ARCHITECTURE.md#where-the-internals-came-from).
+If a surface that used to be dark has gone light after an Ignition upgrade,
+suspect a renamed class or field before suspecting the theming logic — see
+[ARCHITECTURE.md](ARCHITECTURE.md#when-ignition-changes-underneath-us).
 
 ## Recovering from a bricked launch
 
