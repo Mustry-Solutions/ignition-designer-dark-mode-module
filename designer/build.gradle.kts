@@ -35,6 +35,12 @@ tasks.test {
     // rather than on anything meaningful.
     jvmArgs("--add-opens", "java.desktop/java.awt=ALL-UNNAMED")
 
+    // Keep the module's debug log out of the developer's ~/.ignition during
+    // tests: some tests deliberately exercise failure paths that log a stack
+    // trace, and those then read as live Designer faults.
+    systemProperty("designerdarkmode.logFile",
+        layout.buildDirectory.file("test-debug.log").get().asFile.absolutePath)
+
     testLogging {
         events("passed", "skipped", "failed")
     }

@@ -71,6 +71,7 @@ public class ThemeManager {
     private boolean uiReady = false;
 
     private final ComponentInspector inspector = new ComponentInspector();
+    private final ScriptEditorTheme scriptEditors = new ScriptEditorTheme();
 
     /** Called once on Designer startup; re-applies dark mode once the UI is up. */
     public void startup(DesignerContext context) {
@@ -212,7 +213,18 @@ public class ThemeManager {
         safely("jideOverrides", () -> applyJideDarkOverrides(dark));
         safely("updateComponentTrees", () -> {
             for (Window window : Window.getWindows()) {
-                SwingUtilities.updateComponentTreeUI(window);
+                // Isolate per WINDOW, not per phase. Synthetica can NPE out of
+                // updateComponentTreeUI on a window holding a stale delegate
+                // ("Cannot invoke java.awt.Font.getFamily() because font is
+                // null"); with one guard around the whole loop that aborted
+                // every window after it, leaving the light restore visibly
+                // half-applied — some panels light, others still dark.
+                try {
+                    SwingUtilities.updateComponentTreeUI(window);
+                } catch (Throwable t) {
+                    DebugLog.log("updateComponentTreeUI failed for "
+                        + window.getClass().getName() + "; continuing with the rest.", t);
+                }
             }
         });
         safely("cachedPopups", this::refreshCachedPopups);
@@ -233,6 +245,7 @@ public class ThemeManager {
             safely("cellRenderers", cellRenderers::install);
             safely("collapsibles", () -> recolorCollapsibleTitlePanes(true));
             safely("whiteSwap", () -> swapWhiteTokenBackgrounds(true));
+            safely("scriptEditors", scriptEditors::install);
             installComponentWatcher();
             debugDumpDockState();
         } else {
@@ -242,6 +255,7 @@ public class ThemeManager {
             safely("cellRenderers", cellRenderers::uninstall);
             safely("collapsibles", () -> recolorCollapsibleTitlePanes(false));
             safely("whiteSwap", () -> swapWhiteTokenBackgrounds(false));
+            safely("scriptEditors", scriptEditors::uninstall);
         }
         log.info(dark ? "Dark mode applied." : "Stock Designer theme restored.");
     }
@@ -867,6 +881,7 @@ public class ThemeManager {
         cellRenderers.install();
         recolorCollapsibleTitlePanes(true);
         swapWhiteTokenBackgrounds(true);
+        scriptEditors.install();
         refreshStaleInSecondaryWindows();
     }
 
