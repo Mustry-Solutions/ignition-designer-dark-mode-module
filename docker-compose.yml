@@ -18,8 +18,8 @@ services:
       # The gateway always listens on 8088/8043 INSIDE the container.
       # Defaults differ from first-ignition-module (9088/9043) so both dev
       # gateways can run side by side.
-      - "${GATEWAY_HTTP_PORT:-9188}:8088"    # Gateway web UI (http://localhost:<host port>)
-      - "${GATEWAY_HTTPS_PORT:-9143}:8043"   # Gateway web UI over HTTPS
+      - "${GATEWAY_HTTP_PORT:-9388}:8088"    # Gateway web UI (http://localhost:<host port>)
+      - "${GATEWAY_HTTPS_PORT:-9343}:8043"   # Gateway web UI over HTTPS
     environment:
       # Accept the Inductive Automation license agreement (required to start).
       ACCEPT_IGNITION_EULA: "Y"

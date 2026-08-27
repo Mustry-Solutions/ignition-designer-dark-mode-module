@@ -15,23 +15,22 @@ info "Starting the Ignition gateway container..."
 # it during first-time commissioning.
 "${COMPOSE[@]}" up -d
 
-wait_for_gateway 60 || true
+# On a fresh volume the gateway parks in COMMISSIONING over the staged module
+# until its certificate AND EULA are accepted. Seed both into data/modules.json
+# rather than making someone click through the browser wizard.
+wait_for_modules_registry 60 && accept_staged_module
+
+wait_for_gateway 90 || true
 
 echo
-ok "Gateway is running. Your signed module is staged and awaiting commissioning."
+ok "Gateway is running with the module accepted and enabled."
 echo
-warn "ONE-TIME STEP on a fresh gateway: finish commissioning in the browser."
-echo "   1. Open ${GATEWAY_URL}"
-echo "   2. Step through the commissioning wizard. When it lists"
-echo "      'Designer Dark Mode', ACCEPT its certificate and license"
-echo "      (8.3 accepts third-party modules right in the wizard)."
-echo "   3. Finish the wizard / start the gateway."
-echo "   4. Log in as ${ADMIN_USER} / ${ADMIN_PASS} and open Config -> Modules to"
-echo "      see it Running."
+echo "   Open ${GATEWAY_URL} and log in as ${ADMIN_USER} / ${ADMIN_PASS};"
+echo "   Config -> Modules should list 'Designer Dark Mode' as Running."
 echo
-echo "   The accepted certificate persists in the gateway data volume, so this is"
-echo "   only needed once (and again after 'teardown.sh --purge'). The dev cert is"
-echo "   stable across rebuilds, so ops/deploy.sh reloads new builds with no prompt."
+echo "   Acceptance persists in the gateway data volume, so this is only done"
+echo "   once (and again after 'teardown.sh --purge'). The dev cert is stable"
+echo "   across rebuilds, so ops/deploy.sh reloads new builds with no prompt."
 echo
 echo "   To test the Designer dark mode: open Designer Launcher, add gateway"
 echo "   ${GATEWAY_URL}, launch a Designer, then check Tools -> Dark Mode."

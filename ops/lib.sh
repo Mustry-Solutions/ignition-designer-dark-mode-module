@@ -34,7 +34,7 @@ if [[ -f "${PROJECT_ROOT}/.env" ]]; then
   # shellcheck disable=SC1091
   set -a; source "${PROJECT_ROOT}/.env"; set +a
 fi
-GATEWAY_HTTP_PORT="${GATEWAY_HTTP_PORT:-9188}"
+GATEWAY_HTTP_PORT="${GATEWAY_HTTP_PORT:-9388}"
 GATEWAY_URL="http://localhost:${GATEWAY_HTTP_PORT}"
 ADMIN_USER="admin"
 ADMIN_PASS="password"
@@ -132,4 +132,74 @@ wait_for_gateway() {
   done
   warn "Gateway did not report ready after $((tries * 5))s. Check 'ops/logs.sh'."
   return 1
+}
+
+# --- unattended module acceptance ------------------------------------------
+# Wait until the gateway has written its module registry (data/modules.json,
+# carrying the built-ins' cert fingerprints). On a fresh volume this happens
+# while the gateway parks in COMMISSIONING over the staged-but-unaccepted
+# module — it is the point where accept_staged_module can safely merge.
+wait_for_modules_registry() {
+  local tries="${1:-60}"
+  info "Waiting for the gateway to write its module registry ..."
+  for ((i = 1; i <= tries; i++)); do
+    if docker exec "${CONTAINER_NAME}" \
+         grep -q certFingerprint /usr/local/bin/ignition/data/modules.json 2>/dev/null; then
+      ok "Module registry present."
+      return 0
+    fi
+    sleep 5
+  done
+  err "Gateway never wrote data/modules.json after $((tries * 5))s. Check 'ops/logs.sh'."
+  return 1
+}
+
+# Pre-accept the staged module's signing certificate and EULA with no browser
+# wizard. Ignition 8.3 records third-party acceptance in data/modules.json as
+# {filename, onStartup, certFingerprint (sha1 of the signing cert),
+# licenseAgreementHash (CRC32 of the module's license.html, matching the
+# platform's ModuleUtil.calculateLicenseCrc)}. The gateway treats that file as
+# authoritative, so merge our entry into the gateway-written file — never
+# replace it, it also carries every built-in module.
+#
+# The licenseAgreementHash half matters here specifically: this module ships a
+# license.html (build.gradle.kts `license.set`), and without the hash every
+# fresh boot parks in commissioning even with the certificate accepted.
+accept_staged_module() {
+  local modl fingerprint tmp license_crc
+  modl="$(find "${MODULES_DIR}" -maxdepth 1 -name '*.modl' | head -1)"
+  [[ -n "${modl}" ]] || { err "No staged .modl in ops/modules."; return 1; }
+  fingerprint="$(openssl x509 -in "${CERT_FILE}" -noout -fingerprint -sha1 \
+                   | cut -d= -f2 | tr -d ':' | tr '[:upper:]' '[:lower:]')"
+  [[ -n "${fingerprint}" ]] || { err "Could not fingerprint ${CERT_FILE}."; return 1; }
+  license_crc="$(python3 -c "import zipfile,zlib,sys; print(zlib.crc32(zipfile.ZipFile(sys.argv[1]).read('license.html')))" "${modl}")"
+
+  info "Pre-accepting the module certificate (fingerprint ${fingerprint}) + license (crc ${license_crc})..."
+  "${COMPOSE[@]}" stop gateway
+  tmp="$(mktemp -d)"
+  docker cp "${CONTAINER_NAME}:/usr/local/bin/ignition/data/modules.json" "${tmp}/modules.json"
+  LICENSE_CRC="${license_crc}" MODULE_ID="${MODULE_ID}" MODL_NAME="$(basename "${modl}")" FINGERPRINT="${fingerprint}" \
+  python3 - "${tmp}/modules.json" <<'PY'
+import json, os, sys
+path = sys.argv[1]
+with open(path) as f:
+    modules = json.load(f)
+modules[os.environ["MODULE_ID"]] = {
+    "filename": f"/external-modules/{os.environ['MODL_NAME']}",
+    "onStartup": "enabled",
+    "certFingerprint": os.environ["FINGERPRINT"],
+    "licenseAgreementHash": int(os.environ["LICENSE_CRC"]),
+}
+with open(path, "w") as f:
+    json.dump(modules, f, indent=2)
+PY
+  docker cp "${tmp}/modules.json" "${CONTAINER_NAME}:/usr/local/bin/ignition/data/modules.json"
+  rm -rf "${tmp}"
+  # docker cp writes the file as root; the gateway must be able to rewrite its
+  # own registry (it spams AccessDeniedException otherwise). Chown via a helper
+  # container against the same volume — the gateway itself is stopped here.
+  "${COMPOSE[@]}" run --rm -u root --entrypoint sh gateway \
+      -c 'chown ignition:ignition /usr/local/bin/ignition/data/modules.json'
+  "${COMPOSE[@]}" start gateway
+  ok "Module acceptance seeded; gateway restarting."
 }
