@@ -108,7 +108,7 @@ Debug only. **Cmd/Ctrl+Shift+I** (or `+F12`) dumps the component chain under the
 mouse to the debug log — class, background/foreground with `UIResource` vs
 explicit vs inherited markers, opacity, and UI delegate per level. This is the
 primary tool for diagnosing a "still light" area. See
-[DEVELOPMENT.md](DEVELOPMENT.md#diagnosing-a-still-light-component).
+[DEVELOPMENT.md](DEVELOPMENT.md#the-inspector--diagnosing-a-still-light-component).
 
 ### DebugLog
 Best-effort append-only log at `~/.ignition/designer-dark-mode-theme.log`. The

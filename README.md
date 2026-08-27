@@ -87,6 +87,43 @@ docs/                       Architecture and development guides
   sign; the diagnostic tools; how to fix a "still light" component.
 - **[ops/README.md](ops/README.md)** — the local dev gateway.
 
-## License
+## Prior art
 
-Not yet specified.
+Inductive Automation's Exchange already has a
+[Dark Mode for the Designer](https://inductiveautomation.com/exchange/2719/overview)
+by Justin Edwards — a well-polished Jython script, MIT licensed, that has been
+serving this need on **Ignition 8.1** since 2024. If you are on 8.1, use it.
+
+Designer Dark Mode differs in two ways. It targets **8.3**, and it is a module
+rather than a project-library script, so it installs once on the gateway
+instead of being imported into each project and needs no Vision client tag to
+persist. Under the hood it swaps the Designer's look and feel for
+[FlatLaf](https://www.formdev.com/flatlaf/) and restyles Ignition's own design
+tokens, rather than painting enumerated components one class at a time — which
+means surfaces nobody has explicitly catalogued come out dark by default.
+
+That script's careful catalogue of where the Designer leaks light informed this
+project's testing, and is gratefully acknowledged.
+
+## Contributing
+
+Bug reports and pull requests are welcome — see
+[CONTRIBUTING.md](CONTRIBUTING.md). Security issues should go through the
+private channels in [SECURITY.md](SECURITY.md) rather than a public issue.
+
+## Licensing & support
+
+Licensed under the **Apache License, Version 2.0** — see [LICENSE](LICENSE).
+
+The module is **free**: no trial period, no activation, no per-seat or
+per-gateway fee, and it may be installed on any number of gateways. Bundled
+third-party components are listed in
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+
+Designer Dark Mode is an independent third-party module. It is not produced,
+endorsed, supported, or certified by Inductive Automation, LLC. "Ignition",
+"Perspective" and "Vision" are trademarks of Inductive Automation, LLC, used
+here only to identify the software this module interoperates with.
+
+There is no commercial support contract. Please raise questions and bugs as
+[GitHub issues](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues).
