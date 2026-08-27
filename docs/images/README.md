@@ -47,8 +47,19 @@ not add dates or version numbers.
 
 ## Known caveat in the current pair
 
-The dark capture shows [#1](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/1):
-the toolbar icons keep their dark "enabled" variant, which against a dark
-toolbar reads as disabled. Compare the top toolbar between the two files — it
-is the most visible difference after the background. When #1 is fixed, retake
-both.
+The dark capture still shows [#21](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/21):
+a faint pale band under the Tag Browser's `Tag | Value` header. It is cosmetic,
+confined to that one panel, and documented in the README's Known limitations.
+
+## Why the light shot comes from a fresh launch
+
+Capture the light image from a Designer that has **never been toggled**, not by
+switching dark mode off. Two reasons: it is what a user actually sees before
+installing the module, and toggling back currently leaves an artifact in the
+Perspective property editor
+([#23](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/23))
+that would misrepresent the stock Designer.
+
+Set the preference to light, relaunch, and capture. Then toggle dark in a
+separate session for the dark shot — or relaunch again, since dark applies at
+startup from the preference.
