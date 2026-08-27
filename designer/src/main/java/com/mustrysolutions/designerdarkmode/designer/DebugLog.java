@@ -26,6 +26,20 @@ public final class DebugLog {
             new File(System.getProperty("user.home"), ".ignition/designer-dark-mode.log")
                 .getPath()));
 
+    /**
+     * Whether the noisy diagnostic dumps should run.
+     *
+     * <p>These exist for developing the module — enumerating every dock title
+     * pane, every light {@code UIManager} default — and each costs a hundred
+     * or more lines per theme switch. Useful while chasing a mistyped surface;
+     * pure noise in an ordinary user's log, where the interesting lines are
+     * the warnings. Enable with {@code -Ddesignerdarkmode.debug=true} on the
+     * Designer's command line.
+     */
+    public static boolean verbose() {
+        return Boolean.getBoolean("designerdarkmode.debug");
+    }
+
     private DebugLog() {
     }
 

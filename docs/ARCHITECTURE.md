@@ -57,8 +57,9 @@ pass is logged (with a stack trace, to the debug log) without stranding the rest
 7. **macOS title bars** — set/clear the `apple.awt.windowAppearance` client
    property so the native title bar follows the theme.
 8. **The passes** (dark only): tree icons, button/label icons, cell-renderer
-   sanitizer, collapsible title panes, white-token background swaps, stale-
-   delegate refresh in secondary windows. On light, the corresponding restores.
+   sanitizer, collapsible title panes, white-token background and border swaps,
+   script editors, console output styles, cached JIDE painters, stale-delegate
+   refresh in secondary windows. On light, the corresponding restores.
 9. **Component watcher** installed (dark) / removed (light).
 
 On light mode, the restores iterate **tracked component sets**, never the live
@@ -84,8 +85,17 @@ classes (`CLASS_DARK` — e.g. `NodeEditor`'s gutter/hover colors, the welcome
 panel's tile-selection color). Originals are snapshotted and restored on light.
 
 **Never mutate `Base000`** — it is `java.awt.Color.WHITE` itself, and corrupting
-it would break white JVM-wide. Components handed that instance are swapped
-per-component by identity instead (in `ThemeManager` / the renderers).
+it would break white JVM-wide. `isJdkGlobal` refuses it and every other JDK
+`Color` singleton; unit tests pin that, including that the check is by identity
+so an IA colour that merely *equals* white stays restyleable.
+
+Components handed that instance are corrected per-component by identity instead,
+in `ThemeManager`. Note there are **two** ways the token leaks and both need
+covering: as a `background` (`swapWhiteTokenBackgrounds`) and as a **border**
+colour (`swapWhiteBorder`, including a `JScrollPane`'s separate
+`viewportBorder`). Only the first was handled originally, and a white
+`MatteBorder` drew a pale band that survived two dozen inspections because
+nothing examined borders.
 
 ### TreeIconRecolorer
 Wraps every `JTree`'s cell renderer so that, per render: SVG/vector/bitmap icons
@@ -104,6 +114,46 @@ grid tables is resolved dynamically and bypasses column/default renderers, but
 mechanism. On each renderer paint it darkens light backgrounds and, if the
 renderer component's UI delegate has gone stale (Synthetica under FlatLaf),
 refreshes it. Undoes color mutations and restores original renderers on light.
+
+### ScriptEditorTheme
+The code editors — script console, project library, Vision component scripts,
+Perspective transforms, Named Query editor — are `RSyntaxTextArea`s. They own
+their colours through a `SyntaxScheme` rather than the look and feel, so nothing
+else here reaches them: not the LAF swap, not the token mutation, not a
+component walk.
+
+Ignition ships a dark one. `NamedTheme` (in `common.jar`) is a platform enum with
+`Default`, `Dark`, `VisualStudio` and `Disabled` members, each backed by a theme
+XML, exposed through `getTheme()`. Using IA's own beats inventing one: it is
+tuned for their syntax colours and follows their editor if they change it.
+
+Two deliberate choices. `NamedTheme` is resolved **reflectively** — it is not SDK
+surface, and a Designer without it should lose editor theming rather than the
+whole dark mode. And the theme is applied **as-is**: `getTheme()` returns a
+*shared* instance, so tuning its fields would repeat exactly the shared-singleton
+mutation `IaColorTokens` refuses to make on `Base000`.
+
+Switching tree nodes or editor tabs makes Ignition re-install its own scheme over
+ours, so a guard on `RSTA.syntaxScheme` re-applies. It is scheduled rather than
+immediate, because it fires from inside the property change that is still
+installing the other scheme.
+
+### ConsoleTextTheme
+The Script Console's interpreter and the Output Console colour text per
+character through the document, not through the component, so the LAF swap
+leaves near-black output and `Color.blue` banners on a dark background.
+
+`ConsolePanel` registers its colours as **named styles** on the styled document
+— `regular`, `emphasize`, `error` — rather than stamping attributes onto each
+run. That is the useful detail: restyling those style objects recolours all
+existing *and future* text at once, and is exactly reversible. Rewriting
+character attributes across the document would be neither, and could not be
+undone once text scrolled away.
+
+Styles are looked up by name, so only documents that define them are touched.
+The restore distinguishes a style that had an explicit foreground from one that
+inherited it, and removes the attribute rather than writing an explicit value
+back.
 
 ### ComponentInspector
 Debug only. **Cmd/Ctrl+Shift+I** (or `+F12`) dumps the component chain under the

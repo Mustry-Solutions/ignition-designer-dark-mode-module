@@ -28,7 +28,7 @@ Useful variants:
 
 ```bash
 ./gradlew :designer:compileJava   # fast compile-only check while iterating
-./gradlew build -x test           # skip tests (there are none yet)
+./gradlew test                    # unit tests only (no gateway needed)
 ```
 
 ## Run it against a gateway
@@ -43,9 +43,11 @@ ops/status.sh     # container status, URL, staged files
 ops/teardown.sh   # stop (add --purge to wipe gateway data)
 ```
 
-The gateway comes up at **http://localhost:9188** (ports configurable in
-`.env`). On the very first `setup.sh` you finish the commissioning wizard in the
-browser once. See [../ops/README.md](../ops/README.md) for the full picture.
+The gateway comes up at **http://localhost:8088** (copy `.env.example` to `.env`
+to use different ports). Commissioning is unattended — `setup.sh` seeds the
+module's certificate and EULA into the gateway's `data/modules.json`, so there
+is no browser wizard. See [../ops/README.md](../ops/README.md) for the full
+picture.
 
 **Designer-scope code only loads when the Designer starts.** `deploy.sh` reloads
 the module on the gateway, but you must **relaunch the Designer** to pick up
@@ -64,13 +66,18 @@ Two tools make it tractable:
 
 ### The debug log
 
-`~/.ignition/designer-dark-mode-theme.log` — append-only, written by `DebugLog`.
+`~/.ignition/designer-dark-mode.log` — append-only, written by `DebugLog`.
 Theme switches, per-phase failures (with stack traces), icon classes
 encountered, popup contents, and stale-delegate refreshes all land here.
 **Timestamps are UTC** — add your local offset when correlating with the clock.
 
+The noisiest diagnostics (every dock title pane, every light `UIManager`
+default) are off unless the Designer is launched with
+`-Ddesignerdarkmode.debug=true`. Turn them on when hunting a mistyped surface;
+leave them off otherwise, or the warnings drown.
+
 ```bash
-tail -f ~/.ignition/designer-dark-mode-theme.log
+tail -f ~/.ignition/designer-dark-mode.log
 ```
 
 ### The inspector — diagnosing a "still light" component
@@ -78,8 +85,15 @@ tail -f ~/.ignition/designer-dark-mode-theme.log
 With dark mode active, hover the mouse over the offending area and press
 **Cmd+Shift+I** (Ctrl+Shift+I also works; `+F12` too if your F-keys aren't
 media keys). The component chain under the cursor is dumped to the debug log:
-each level's class, background, foreground (marked `uires` / `explicit` /
-`inherited`), opacity, and UI delegate.
+each level's class, bounds, background and foreground (marked `uires` /
+`explicit` / `inherited`), opacity, border (with its colour, recursing compound
+borders), UI delegate, and — for a `JScrollPane` — its `viewportBorder` plus its
+parts: the viewport's view, the row and column header views, and the corners.
+
+The parts matter more than they sound. An empty `JTable` has almost no height,
+so the pointer falls straight past it to the viewport and it never appears in
+the chain; a pale band at the top of a viewport survived a dozen "everything is
+dark" inspections for exactly that reason.
 
 Read the dump top-down and identify *why* the pixel is light:
 
@@ -89,9 +103,16 @@ Read the dump top-down and identify *why* the pixel is light:
 - **A stale UI delegate** — a `Synthetica*` delegate under FlatLaf means a
   cached/detached component; it needs a `refreshStaleUiDelegates` reachable at
   the point it's shown.
-- **Nothing light in the chain** — then the pixel is *renderer-painted* (the
-  deepest real component is a table/tree), and the fix belongs in
-  `CellRendererSanitizer` / `TreeIconRecolorer`, not a hierarchy walk.
+- **A light border** — a component can report a perfectly dark background while
+  drawing a pale `MatteBorder`. Check the `border=` field; `Base000` used as a
+  border colour is handled by `swapWhiteBorder`.
+- **Nothing light in the chain** — then it is not a component property at all.
+  Either the pixel is *renderer-painted* (the deepest real component is a
+  table/tree), and the fix belongs in `CellRendererSanitizer` /
+  `TreeIconRecolorer`; or a UI delegate is painting from a shared default, in
+  which case relaunch with `-Ddesignerdarkmode.debug=true` and read the
+  "Light UIManager colour defaults under dark" line. That is how the JIDE
+  `SidePane.background` and `CommandBarSeparator.background` strips were found.
 
 Then pick the matching mechanism (see
 [ARCHITECTURE.md](ARCHITECTURE.md#the-components)) and add the color/key/class to

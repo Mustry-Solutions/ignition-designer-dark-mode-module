@@ -289,8 +289,10 @@ public class ThemeManager {
             safely("consoleText", consoleText::install);
             safely("cachedPainters", () -> repointCachedThemePainters(true));
             installComponentWatcher();
-            debugDumpDockState();
-            safely("lightDefaults", this::debugDumpLightDefaults);
+            if (DebugLog.verbose()) {
+                debugDumpDockState();
+                safely("lightDefaults", this::debugDumpLightDefaults);
+            }
         } else {
             uninstallComponentWatcher();
             // After the light theme is back, so restored colors are light.

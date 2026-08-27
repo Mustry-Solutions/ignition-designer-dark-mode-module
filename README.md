@@ -5,18 +5,22 @@ most-requested Designer idea on Inductive Automation's ideas portal.
 
 ![The Ignition Designer with dark mode enabled](docs/images/designer-dark.png)
 
-> Status: early development (`0.0.1-SNAPSHOT`). Designer scope only; targets
-> Ignition **8.3+**.
+> Status: young but usable. Designer scope only; targets Ignition **8.3+**.
+> See [Known limitations](#known-limitations) before installing.
 
 ## What it does
 
 Ignition ships the Designer with a light, Synthetica-based look and feel and no
 dark option. Designer Dark Mode adds a **Tools → Dark Mode** toggle that restyles the
 whole Designer — dock panels, trees, tables, menus, the Perspective component
-palette and property editor, the tag browser and tag editor, dialogs, and icons
-— to a dark theme built on [FlatLaf](https://www.formdev.com/flatlaf/), and puts
-it back exactly as it was when you toggle off. The choice is remembered between
+palette and property editor, the tag browser and tag editor, the script editors
+and output console, dialogs, and icons — to a dark theme built on
+[FlatLaf](https://www.formdev.com/flatlaf/). The choice is remembered between
 sessions.
+
+Toggling back restores the stock Designer. That restore is thorough but not yet
+perfect — see [Known limitations](#known-limitations). Relaunching the Designer
+always gives a clean stock theme.
 
 Because Ignition's own UI hard-codes many light colors in ways a normal look and
 feel swap cannot reach, the module does substantial work under the hood to make
@@ -31,13 +35,21 @@ The same Designer, toggled off and on:
 
 ## Known limitations
 
-- **Script editors are not themed yet** — the script console, project library
-  and Vision component script editors keep their light syntax theme
-  ([#2](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/2)).
-- **Output console text** stays dark-on-dark
-  ([#3](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/3)).
+- **A faint pale band** sits under the Tag Browser's `Tag | Value` header in
+  dark mode
+  ([#21](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/21)).
+  Cosmetic, one panel.
+- **Toggling dark mode off** leaves an orange highlight behind every property
+  name in the Perspective property editor
+  ([#23](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/23)).
+  It is the property filter's own highlight showing through, it affects nothing
+  but appearance, and relaunching the Designer clears it. If you leave dark mode
+  on you will never see it.
 - The Vision design canvas is deliberately left alone: it renders your own
-  window content, and theming it would misrepresent what users will see.
+  window content, and theming it would misrepresent what your users will see.
+
+Both open issues are cosmetic. Neither affects the Designer's behaviour or
+anything you build with it.
 
 ## Install
 
@@ -83,13 +95,15 @@ settings.gradle             Gradle project + IA Maven repositories
 designer/                   The only scope: Designer-side code
   build.gradle.kts          Designer deps (FlatLaf bundled via modlImplementation)
   src/main/java/.../designer/
-    DesignerDarkModeHook  Module entry point; registers the Tools menu item
+    DesignerDarkModeHook     Module entry point; registers the Tools menu item
     ThemeManager             Orchestrates the whole theme switch
     IaColorTokens            Reflectively restyles Ignition's hard-coded colors
     TreeIconRecolorer        Dark-adapts tree icons and cell renderers
     CellRendererSanitizer    Dark-adapts table/list cells and renderer delegates
-    ComponentInspector           Debug tool: dumps the component under the cursor
-    DebugLog               Append-only debug log
+    ScriptEditorTheme        Applies Ignition's own dark theme to the code editors
+    ConsoleTextTheme         Recolours the console output styles
+    ComponentInspector       Debug tool: dumps the component under the cursor
+    DebugLog                 Append-only debug log
     MoonIcon                 The menu item's icon
   src/main/resources/.../    Bundle strings (menu/action labels)
 ops/                        Disposable Docker gateway for local testing
