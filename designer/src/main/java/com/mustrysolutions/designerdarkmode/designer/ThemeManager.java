@@ -540,6 +540,9 @@ public class ThemeManager {
     private static final String THEME_PAINTER_TYPE = "com.jidesoft.plaf.basic.ThemePainter";
 
     private final java.util.Map<Object, Object> painterSnapshot = new java.util.HashMap<>();
+    /** Resolved once per dark switch so the synchronous add-hook stays cheap. */
+    private Class<?> themePainterType;
+    private Object basicPainterInstance;
     /** Component -> the ThemePainter fields we repointed, and what they held. */
     private final java.util.Map<java.awt.Component, java.util.Map<java.lang.reflect.Field, Object>>
         cachedPainterFields = new java.util.WeakHashMap<>();
@@ -666,6 +669,8 @@ public class ThemeManager {
                 entry.getKey().repaint();
             }
             cachedPainterFields.clear();
+            themePainterType = null;
+            basicPainterInstance = null;
             if (restored > 0) {
                 DebugLog.log("Restored " + restored + " cached ThemePainter field(s).");
             }
@@ -678,6 +683,8 @@ public class ThemeManager {
             DebugLog.log("BasicPainter unavailable; cached-painter repoint skipped.", t);
             return;
         }
+        themePainterType = painterType;
+        basicPainterInstance = basicPainter;
         int repointed = 0;
         for (Window window : Window.getWindows()) {
             repointed += repointCachedThemePainters(window, painterType, basicPainter);
@@ -768,6 +775,14 @@ public class ThemeManager {
     private final java.util.Set<java.awt.Component> whiteSwapped =
         java.util.Collections.newSetFromMap(new java.util.WeakHashMap<>());
     private static final java.awt.Color DARK_CONTENT_BACKGROUND = new java.awt.Color(0x3A3D3F);
+    /** Line colour substituted for a white matte/line border under dark mode. */
+    static final java.awt.Color DARK_BORDER_LINE = new java.awt.Color(0x55595B);
+    /** Component -> its stock border, for the light restore. */
+    private final java.util.Map<javax.swing.JComponent, javax.swing.border.Border>
+        swappedBorders = new java.util.WeakHashMap<>();
+    /** Scroll pane -> its stock viewport border, a separate property from getBorder(). */
+    private final java.util.Map<javax.swing.JScrollPane, javax.swing.border.Border>
+        swappedViewportBorders = new java.util.WeakHashMap<>();
 
     /**
      * IA code re-sets Color.WHITE at runtime (NodeEditor's hover exit path
@@ -810,6 +825,10 @@ public class ThemeManager {
                 }
             }
             whiteSwapped.clear();
+            swappedBorders.forEach(javax.swing.JComponent::setBorder);
+            swappedBorders.clear();
+            swappedViewportBorders.forEach(javax.swing.JScrollPane::setViewportBorder);
+            swappedViewportBorders.clear();
             staleUiresBackgrounds.forEach(java.awt.Component::setBackground);
             staleUiresBackgrounds.clear();
             staleUiresForegrounds.forEach(java.awt.Component::setForeground);
@@ -825,6 +844,86 @@ public class ThemeManager {
     private final java.util.Map<java.awt.Component, java.awt.Color> liftedForegrounds =
         new java.util.WeakHashMap<>();
     private static final java.awt.Color LIGHT_FOREGROUND = new java.awt.Color(0xDDE0E3);
+
+    /**
+     * Replace a border drawn in the {@code Color.WHITE} instance with the same
+     * border in a dark line colour.
+     *
+     * <p>{@code Base000} is {@code java.awt.Color.WHITE} itself, so
+     * {@link IaColorTokens} refuses to mutate it — rewriting that instance
+     * would change white for the whole JVM. The compensating pass corrects
+     * components handed it by identity, but only ever looked at BACKGROUNDS.
+     * A component handed the same instance as a BORDER colour was never
+     * covered, which is why the Project Browser tree and the tag table's
+     * header kept a white band across two dozen clean inspections: their
+     * backgrounds really were dark, and nothing examined their borders.
+     *
+     * <p>The border is <em>replaced</em>, never recoloured — {@code
+     * MatteBorder} is immutable, and mutating the shared colour is precisely
+     * the thing that must not happen. The original object is tracked so the
+     * light restore puts it back rather than reconstructing an approximation.
+     */
+    private void swapWhiteBorder(javax.swing.JComponent component) {
+        if (!swappedBorders.containsKey(component)) {
+            javax.swing.border.Border border = component.getBorder();
+            javax.swing.border.Border darkened = darkenWhiteBorder(border);
+            if (darkened != null) {
+                swappedBorders.put(component, border);
+                component.setBorder(darkened);
+            }
+        }
+        // A JScrollPane paints a SECOND border around its viewport. It is a
+        // separate property that getBorder() does not cover, so a white one
+        // survives every pass above and draws a band along the viewport edge.
+        if (component instanceof javax.swing.JScrollPane
+                && !swappedViewportBorders.containsKey(component)) {
+            javax.swing.JScrollPane pane = (javax.swing.JScrollPane) component;
+            javax.swing.border.Border darkened =
+                darkenWhiteBorder(pane.getViewportBorder());
+            if (darkened != null) {
+                swappedViewportBorders.put(pane, pane.getViewportBorder());
+                pane.setViewportBorder(darkened);
+            }
+        }
+    }
+
+    /** The border with white lines darkened, or null if it has none. */
+    static javax.swing.border.Border darkenWhiteBorder(javax.swing.border.Border border) {
+        if (border instanceof javax.swing.border.MatteBorder) {
+            javax.swing.border.MatteBorder matte = (javax.swing.border.MatteBorder) border;
+            if (matte.getMatteColor() != java.awt.Color.WHITE) {
+                return null;
+            }
+            java.awt.Insets insets = matte.getBorderInsets();
+            return javax.swing.BorderFactory.createMatteBorder(
+                insets.top, insets.left, insets.bottom, insets.right, DARK_BORDER_LINE);
+        }
+        if (border instanceof javax.swing.border.LineBorder) {
+            javax.swing.border.LineBorder line = (javax.swing.border.LineBorder) border;
+            if (line.getLineColor() != java.awt.Color.WHITE) {
+                return null;
+            }
+            return javax.swing.BorderFactory.createLineBorder(
+                DARK_BORDER_LINE, line.getThickness(), line.getRoundedCorners());
+        }
+        if (border instanceof javax.swing.border.CompoundBorder) {
+            // The tag table header nests one inside another; darken whichever
+            // halves qualify and keep the rest as they are.
+            javax.swing.border.CompoundBorder compound =
+                (javax.swing.border.CompoundBorder) border;
+            javax.swing.border.Border outside = compound.getOutsideBorder();
+            javax.swing.border.Border inside = compound.getInsideBorder();
+            javax.swing.border.Border darkOutside = darkenWhiteBorder(outside);
+            javax.swing.border.Border darkInside = darkenWhiteBorder(inside);
+            if (darkOutside == null && darkInside == null) {
+                return null;
+            }
+            return javax.swing.BorderFactory.createCompoundBorder(
+                darkOutside != null ? darkOutside : outside,
+                darkInside != null ? darkInside : inside);
+        }
+        return null;
+    }
 
     private void swapWhiteTokenBackgrounds(java.awt.Container container) {
         for (java.awt.Component child : container.getComponents()) {
@@ -855,6 +954,7 @@ public class ThemeManager {
                     component.setBackground(DARK_CONTENT_BACKGROUND);
                     liftDarkForeground(component);
                 }
+                swapWhiteBorder(component);
                 java.awt.Color foreground = component.isForegroundSet()
                     ? component.getForeground() : null;
                 if (foreground instanceof javax.swing.plaf.UIResource
@@ -923,6 +1023,58 @@ public class ThemeManager {
     private final java.util.List<java.lang.ref.WeakReference<java.awt.Component>> pendingAdded =
         new java.util.ArrayList<>();
 
+    /**
+     * Correct a subtree that has just been attached, before it can paint.
+     *
+     * <p>Ignition builds a workspace's dock panels early — under the stock
+     * Synthetica look and feel — and only attaches them when you first open
+     * that workspace. Until then they are invisible to any walk of the window
+     * hierarchy, so none of the theming passes have ever seen them. On attach
+     * they paint immediately, well inside the rescan's 150 ms debounce, and
+     * fail in two different ways:
+     *
+     * <ul>
+     *   <li>a title pane holding {@code SyntheticaJidePainter} casts the
+     *       active look and feel to {@code SyntheticaLookAndFeel} and throws
+     *       {@code ClassCastException};</li>
+     *   <li>a component still on a Synthetica UI delegate paints a Synthetica
+     *       border and throws {@code NullPointerException} out of
+     *       {@code ImagePainter} ("dInsets is null").</li>
+     * </ul>
+     *
+     * <p>Both are the same underlying problem — built under one look and feel,
+     * painted under another — so both are corrected here, in order: refreshing
+     * the delegates re-runs {@code installDefaults}, which re-reads
+     * {@code Theme.painter} and usually fixes the painter as a side effect;
+     * the repoint then catches whatever that missed.
+     *
+     * <p>This is the same shape as the {@code JPopupMenu} handling below, and
+     * for the same reason: some things must be corrected before their first
+     * paint, not on the next sweep. {@code hasStaleUi} short-circuits on the
+     * first stale descendant, so the common case (nothing stale) is cheap.
+     */
+    private void correctBeforeFirstPaint(java.awt.Component added) {
+        if (!(added instanceof java.awt.Container)) {
+            return;
+        }
+        try {
+            if (added instanceof javax.swing.JComponent) {
+                refreshStaleUiDelegates((javax.swing.JComponent) added);
+            }
+            if (themePainterType != null && basicPainterInstance != null) {
+                int repointed = repointCachedThemePainters(
+                    (java.awt.Container) added, themePainterType, basicPainterInstance);
+                if (repointed > 0) {
+                    DebugLog.log("Repointed " + repointed + " cached ThemePainter field(s) on "
+                        + added.getClass().getName() + " as it was attached.");
+                }
+            }
+        } catch (Throwable t) {
+            DebugLog.log("Pre-paint correction failed for "
+                + added.getClass().getName(), t);
+        }
+    }
+
     private void installComponentWatcher() {
         if (componentWatcher != null) {
             return;
@@ -953,6 +1105,11 @@ public class ThemeManager {
             if (event.getID() == ContainerEvent.COMPONENT_ADDED) {
                 java.awt.Component child = ((ContainerEvent) event).getChild();
                 if (child instanceof java.awt.Container) {
+                    // Before the debounce: a workspace's dock panels are built
+                    // early under Synthetica and attached only when that
+                    // workspace is first opened, so they paint (and throw)
+                    // long before the rescan would reach them.
+                    correctBeforeFirstPaint(child);
                     pendingAdded.add(new java.lang.ref.WeakReference<>(child));
                 }
                 if (child instanceof javax.swing.JPopupMenu) {
