@@ -579,12 +579,25 @@ public class ThemeManager {
             if (dark) {
                 Object basicPainter = Class.forName(BASIC_PAINTER)
                     .getMethod("getInstance").invoke(null);
+                // Re-assert rather than set once. JIDE repopulates this map
+                // when it installs its extension for a newly created dockable
+                // frame, which puts SyntheticaJidePainter back and hands it to
+                // every pane built from then on — the pane then casts the
+                // active look and feel to SyntheticaLookAndFeel and throws on
+                // each repaint. This runs on every rescan for that reason.
+                java.util.List<Object> reverted = new java.util.ArrayList<>();
                 for (Object key : new java.util.ArrayList<>(painters.keySet())) {
-                    painters.put(key, basicPainter);
+                    Object current = painters.get(key);
+                    if (current != basicPainter) {
+                        reverted.add(current);
+                        painters.put(key, basicPainter);
+                    }
                 }
-                DebugLog.log("Theme.painter: repointed " + painters.size()
-                    + " classloader entr(ies) at BasicPainter; stock snapshot: "
-                    + painterSnapshot.values());
+                if (!reverted.isEmpty()) {
+                    DebugLog.log("Theme.painter: repointed " + reverted.size() + " of "
+                        + painters.size() + " classloader entr(ies) at BasicPainter; "
+                        + "displaced: " + reverted);
+                }
             } else {
                 painters.putAll(painterSnapshot);
                 painterSnapshot.clear();
@@ -1034,6 +1047,10 @@ public class ThemeManager {
         swapWhiteTokenBackgrounds(true);
         scriptEditors.install();
         consoleText.install();
+        // Before the cached-field pass: if JIDE has put its own painter back
+        // in the map, fix the map first so anything built next reads the right
+        // one, then correct the instances that already read the wrong one.
+        overrideThemePainters(true);
         repointCachedThemePainters(true);
         refreshStaleInSecondaryWindows();
     }
