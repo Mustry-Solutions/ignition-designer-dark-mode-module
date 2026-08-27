@@ -7,23 +7,9 @@ how to build, run, and submit changes.
 
 - Be respectful — see our [Code of Conduct](CODE_OF_CONDUCT.md).
 - By contributing you agree your work is licensed under the repository's
-  [Apache-2.0 License](LICENSE), and you certify the **Developer Certificate
-  of Origin** (below).
+  [Apache-2.0 License](LICENSE).
 - Found a security issue? **Do not** open a public issue — see
   [SECURITY.md](SECURITY.md).
-
-## Developer Certificate of Origin (DCO)
-
-We use the [DCO](https://developercertificate.org/) instead of a CLA. Every
-commit must be signed off, certifying you wrote the code (or have the right to
-submit it) under the project license:
-
-```bash
-git commit -s -m "Your message"
-```
-
-This appends a `Signed-off-by: Your Name <you@example.com>` line. Set your git
-`user.name`/`user.email` to a real identity.
 
 ## Prerequisites
 
@@ -64,8 +50,9 @@ already fixed.
 
 This is the most common kind of contribution. The module ships a component
 inspector: with dark mode on, press **Cmd/Ctrl+Shift+I** (or `+F12`) with the
-mouse over the offending area, and the component chain — class, colors, opacity
-and UI delegate per level — is dumped to
+mouse over the offending area, and the component chain — class, bounds, colors,
+opacity, borders and UI delegate per level, plus a scroll pane's parts — is
+dumped to
 `~/.ignition/designer-dark-mode.log`. Full walkthrough in
 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#the-inspector--diagnosing-a-still-light-component).
 
@@ -82,8 +69,8 @@ and UI delegate per level — is dumped to
    right in dark mode is half a change — restores iterate tracked component
    sets rather than the live hierarchy, and it is easy to darken something
    without registering it for restore.
-4. Open a PR. The **Build & test** check must pass and commits must be
-   DCO-signed.
+4. Open a PR. The **Build & test** check must pass — it is a required status
+   check on `main`, so a red build cannot be merged.
 5. A maintainer squash-merges. `main` is always releasable.
 
 ## Conventions
