@@ -665,12 +665,12 @@ public class ThemeManager {
         }
     }
 
-    private static int luminance(java.awt.Color color) {
+    static int luminance(java.awt.Color color) {
         return (color.getRed() * 299 + color.getGreen() * 587 + color.getBlue() * 114) / 1000;
     }
 
     /** Grayish — the channel spread is too small to be a deliberate color. */
-    private static boolean isNeutral(java.awt.Color color) {
+    static boolean isNeutral(java.awt.Color color) {
         int max = Math.max(color.getRed(), Math.max(color.getGreen(), color.getBlue()));
         int min = Math.min(color.getRed(), Math.min(color.getGreen(), color.getBlue()));
         return max - min < 24;
@@ -698,9 +698,7 @@ public class ThemeManager {
         if (foreground == null || foreground instanceof javax.swing.plaf.UIResource) {
             return;
         }
-        int luminance = (foreground.getRed() * 299 + foreground.getGreen() * 587
-            + foreground.getBlue() * 114) / 1000;
-        if (luminance < 90 && !liftedForegrounds.containsKey(component)) {
+        if (luminance(foreground) < 90 && !liftedForegrounds.containsKey(component)) {
             liftedForegrounds.put(component, foreground);
             component.setForeground(LIGHT_FOREGROUND);
         }

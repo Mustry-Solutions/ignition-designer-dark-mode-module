@@ -100,10 +100,7 @@ final class IaColorTokens {
                     continue;
                 }
                 Color token = (Color) field.get(null);
-                // Never mutate a JDK-global constant that IA aliased.
-                if (token == null || token == Color.WHITE || token == Color.BLACK
-                        || token == Color.GRAY || token == Color.LIGHT_GRAY
-                        || token == Color.DARK_GRAY) {
+                if (token == null || isJdkGlobal(token)) {
                     continue;
                 }
                 if (!originals.containsKey(token)) {
@@ -129,7 +126,7 @@ final class IaColorTokens {
                     Field field = owner.getDeclaredField(colorEntry.getKey());
                     field.setAccessible(true);
                     Color color = (Color) field.get(null);
-                    if (color == null || color == Color.WHITE || color == Color.BLACK
+                    if (color == null || isJdkGlobal(color)
                             || originals.containsKey(color)) {
                         continue;
                     }
@@ -157,20 +154,45 @@ final class IaColorTokens {
         originals.clear();
     }
 
-    private void reflectColorInternals() throws Exception {
+    /**
+     * True for the {@link Color} constants the JDK itself hands out as shared
+     * singletons. IA aliases some of its tokens straight onto these, and the
+     * mutation this class performs is in-place on the instance — so rewriting
+     * one would change that colour for the whole JVM, not just the Designer
+     * chrome. {@code Base000} is {@code Color.WHITE} itself; corrupting it
+     * would break white everywhere, Vision and Perspective content included.
+     * Such tokens are skipped here and corrected per-component instead.
+     */
+    static boolean isJdkGlobal(Color color) {
+        return color == Color.WHITE || color == Color.BLACK
+            || color == Color.GRAY || color == Color.LIGHT_GRAY
+            || color == Color.DARK_GRAY || color == Color.RED
+            || color == Color.GREEN || color == Color.BLUE
+            || color == Color.YELLOW || color == Color.ORANGE
+            || color == Color.CYAN || color == Color.MAGENTA
+            || color == Color.PINK;
+    }
+
+    void reflectColorInternals() throws Exception {
         if (valueField != null) {
             return;
         }
         valueField = Color.class.getDeclaredField("value");
         valueField.setAccessible(true);
-        // Lazily-computed caches that would go stale after a value change.
+        // A Color built through the ColorSpace constructor keeps a float copy
+        // of itself here, and getColorComponents() returns that copy rather
+        // than deriving it from the packed int — so it would survive a value
+        // change and keep reporting the old colour. Int-RGB Colors (which is
+        // what IA's tokens are) never populate these at all: they are set at
+        // construction, not lazily. Clearing them is therefore defensive, for
+        // any token that is not int-constructed.
         frgbField = Color.class.getDeclaredField("frgbvalue");
         frgbField.setAccessible(true);
         fvalueField = Color.class.getDeclaredField("fvalue");
         fvalueField.setAccessible(true);
     }
 
-    private void setColorValue(Color color, int argb) throws Exception {
+    void setColorValue(Color color, int argb) throws Exception {
         valueField.setInt(color, argb);
         frgbField.set(color, null);
         fvalueField.set(color, null);

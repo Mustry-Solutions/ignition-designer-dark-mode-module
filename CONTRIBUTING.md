@@ -73,6 +73,10 @@ and UI delegate per level — is dumped to
 
 1. Branch off `main` (`feature/…`, `fix/…`, `docs/…`).
 2. Make your change and add a `CHANGELOG.md` entry under `## [Unreleased]`.
+   Most of this module can only be judged by looking at a running Designer,
+   but anything that is pure logic — a colour predicate, a threshold, the
+   token snapshot/restore bookkeeping — should come with a unit test. Run
+   them with `./gradlew test`; they need no gateway.
 3. **Verify the light restore, not just the dark result.** Toggling dark mode
    off must return the Designer exactly to stock. A change that only looks
    right in dark mode is half a change — restores iterate tracked component

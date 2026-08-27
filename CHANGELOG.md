@@ -20,3 +20,14 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   tag-driven release workflow that signs and publishes the `.modl`.
 - `ops/` scripts for a disposable Docker dev gateway, including unattended
   module acceptance so a fresh gateway needs no browser commissioning.
+- Unit tests (JUnit 5) covering the colour-token mutation and restore, the
+  refusal to touch JDK global `Color` singletons, and the neutral/luminance
+  predicates that decide what gets restyled.
+
+### Fixed
+
+- `IaColorTokens.installClassColors` guarded only `Color.WHITE` and
+  `Color.BLACK` against in-place mutation, while the token path also guarded
+  the greys. A hard-coded `Color.GRAY` in an Ignition class would have been
+  rewritten JVM-wide. Both paths now share one `isJdkGlobal` check, extended
+  to every JDK `Color` singleton.
