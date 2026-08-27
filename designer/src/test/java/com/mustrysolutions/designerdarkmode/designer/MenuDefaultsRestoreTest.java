@@ -96,6 +96,32 @@ class MenuDefaultsRestoreTest {
             "UIManager.put(key, null) deletes rather than reverts");
     }
 
+    @Test
+    @DisplayName("an aborted restore leaves a later one able to clear again")
+    void anAbortedRestoreDoesNotRelapse() throws Exception {
+        UIManager.setLookAndFeel(new StockLikeLaf());
+        UIManager.setLookAndFeel(new DarkLikeLaf());
+        manager.snapshotMenuDefaults();
+        manager.applyMenuDefaults(true);
+
+        // Phase 0 clears, the look-and-feel swap throws, and the abort path
+        // re-asserts the stashed overrides — still dark, and still holding a
+        // snapshot for the next attempt.
+        manager.applyMenuDefaults(false);
+        manager.snapshotMenuDefaults();
+        manager.applyMenuDefaults(true);
+        assertEquals(DARK, UIManager.getColor(KEY),
+            "the abort path must leave dark mode as it found it");
+
+        // The next toggle-off has to clear what the abort put back; an empty
+        // snapshot here would clear nothing and strand the key dark.
+        manager.applyMenuDefaults(false);
+        UIManager.setLookAndFeel(new StockLikeLaf());
+
+        assertEquals(STOCK, UIManager.getColor(KEY),
+            "a retry after an aborted restore must still land on the stock value");
+    }
+
     /**
      * Synthetica-shaped: no colours in its own defaults table, written into the
      * developer defaults from {@code initialize()} and withdrawn again from

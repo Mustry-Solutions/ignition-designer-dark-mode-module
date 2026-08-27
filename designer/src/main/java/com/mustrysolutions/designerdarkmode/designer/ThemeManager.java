@@ -204,6 +204,9 @@ public class ThemeManager {
             return;
         }
         DebugLog.log("ThemeManager: switching to " + (dark ? "dark" : "light") + " mode.");
+        // Held only for the abort path below: the exact overrides phase 0 drops,
+        // so a failed swap can put them back rather than guessing at them.
+        final java.util.Map<String, Object> clearedDefaults = new java.util.HashMap<>();
         if (!dark) {
             // Phase 0, light only — drop our UIManager overrides FIRST, while
             // FlatLaf is still installed and still serving the same values from
@@ -228,6 +231,7 @@ public class ThemeManager {
             // property editor the parent is NodeEditor$FilterWrapper, which
             // permanently holds the filter-match amber (#F7901E), so every
             // property name lit up at once.
+            clearedDefaults.putAll(flatLafDefaults);
             safely("flatDefaults", () -> applyMenuDefaults(false));
             safely("jideOverrides", () -> applyJideDarkOverrides(false));
         }
@@ -261,6 +265,31 @@ public class ThemeManager {
             DebugLog.log("Theme switch FAILED in the look-and-feel phase.", t);
             if (dark && !(UIManager.getLookAndFeel() instanceof FlatDarkLaf)) {
                 prefs.putBoolean(PREF_DARK_MODE, false);
+            }
+            if (!dark && UIManager.getLookAndFeel() instanceof FlatDarkLaf) {
+                // The restore failed and we are still dark — but phase 0 has
+                // already dropped the overrides dark mode depends on. FlatLaf's
+                // own defaults table still covers the keys it defines; the JIDE
+                // ones (DockableFrame.*, CommandBar.*, JideButton.*, ...) it does
+                // not, so leaving them cleared strands the Designer dark with
+                // light dock chrome. Put both sets back, so the state we abort
+                // into is the one we started from and the next toggle-off retries
+                // from something coherent.
+                //
+                // Re-applying the stashed copy rather than re-snapshotting: by
+                // now installJideExtension has overwritten some of these keys in
+                // the look-and-feel table, so a fresh snapshot would capture
+                // JIDE's values for them (MenuBar.border, CheckBoxMenuItem
+                // .borderPainted) instead of FlatLaf's. It also puts
+                // flatLafDefaults back, so the next toggle-off has something to
+                // clear and cannot relapse into #23.
+                DebugLog.log("Restore failed with FlatLaf still active; "
+                    + "re-asserting the dark overrides.");
+                safely("flatDefaults", () -> {
+                    flatLafDefaults.putAll(clearedDefaults);
+                    applyMenuDefaults(true);
+                });
+                safely("jideOverrides", () -> applyJideDarkOverrides(true));
             }
             return;
         }
