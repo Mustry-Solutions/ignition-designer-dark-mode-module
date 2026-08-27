@@ -1,0 +1,57 @@
+# Local development gateway for testing the Designer Dark Mode module.
+#
+# Runs a disposable Ignition 8.3.6 gateway in Docker. DEVELOPMENT ONLY: it accepts
+# the EULA automatically and uses a fixed weak admin password. Do NOT use in production.
+#
+# The module is self-signed with a local dev certificate (see ops/lib.sh). On a fresh
+# gateway you accept that certificate once during the commissioning wizard; after that
+# it persists in the data volume and reloads automatically on every redeploy.
+#
+# Drive it with the scripts in ./ops (setup.sh / deploy.sh / teardown.sh / ...).
+
+services:
+  gateway:
+    image: inductiveautomation/ignition:8.3.6
+    container_name: designer-dark-mode-ignition
+    ports:
+      # Host port is configurable via .env (GATEWAY_HTTP_PORT/GATEWAY_HTTPS_PORT).
+      # The gateway always listens on 8088/8043 INSIDE the container.
+      # Defaults differ from first-ignition-module (9088/9043) so both dev
+      # gateways can run side by side.
+      - "${GATEWAY_HTTP_PORT:-9188}:8088"    # Gateway web UI (http://localhost:<host port>)
+      - "${GATEWAY_HTTPS_PORT:-9143}:8043"   # Gateway web UI over HTTPS
+    environment:
+      # Accept the Inductive Automation license agreement (required to start).
+      ACCEPT_IGNITION_EULA: "Y"
+      # Initial gateway admin credentials. Fine for local dev; never reuse in prod.
+      GATEWAY_ADMIN_USERNAME: "admin"
+      GATEWAY_ADMIN_PASSWORD: "password"
+      IGNITION_EDITION: "standard"
+      TZ: "UTC"
+    volumes:
+      # Persists gateway configuration/state across restarts (survives `up`/`down`,
+      # removed by `teardown.sh --purge`). Holds the one-time module cert acceptance.
+      - gateway-data:/usr/local/bin/ignition/data
+      # Dedicated third-party module folder (see externalModulesFolder arg below).
+      # setup.sh/deploy.sh stage the freshly built+signed .modl here.
+      - ./ops/modules:/external-modules
+    # Everything after "--" is passed to the JVM / service wrapper.
+    #   externalModulesFolder -> where the gateway looks for third-party modules.
+    command:
+      - "-n"
+      - "designer-dark-mode-dev"
+      - "--"
+      - "-Dignition.gateway.externalModulesFolder=/external-modules"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8088/StatusPing"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    # Deliberately no restart policy: a disposable dev gateway should not
+    # resurrect itself (and reclaim its ports) on every Docker/laptop boot.
+    # Bring it back explicitly with ops/deploy.sh or `docker compose start`.
+    restart: "no"
+
+volumes:
+  gateway-data:

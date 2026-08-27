@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Least privilege: CI only reads the repo. Fork PRs already run without
+# secrets — this keeps the token read-only too.
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build & test
+    runs-on: ubuntu-latest
+    # Normal runs finish in well under a minute; the cap stops a wedged job
+    # from burning the 6-hour GitHub default.
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # gradle-wrapper.jar is a committed binary; verify it matches a known
+      # Gradle release rather than trusting whatever is in the tree.
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@v5
+
+      - name: Cache Gradle
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*') }}
+          restore-keys: gradle-${{ runner.os }}-
+
+      # No signing properties are passed, so skipModlSigning leaves the module
+      # unsigned here (build.gradle.kts). That is what we want for CI: this job
+      # proves the module assembles, not that the release keys work — the
+      # release workflow's dry run covers signing.
+      - name: Build and test
+        run: ./gradlew build --no-daemon --stacktrace
+        env:
+          ORG_GRADLE_PROJECT_org.gradle.java.installations.auto-download: "false"
+
+      # Cheap guard on the two things most likely to regress silently in
+      # module.xml: the EULA reference and the free-module flag. Both are set
+      # in build.gradle.kts and neither has a test that would catch a
+      # accidental removal.
+      - name: Check module.xml wiring
+        run: |
+          modl="$(find build -maxdepth 1 -name '*.unsigned.modl' | head -1)"
+          if [ -z "$modl" ]; then echo "::error::no .modl produced"; exit 1; fi
+          xml="$(unzip -p "$modl" module.xml)"
+          echo "$xml"
+          echo "$xml" | grep -q '<license>license.html</license>' \
+            || { echo "::error::module.xml is missing the <license> element"; exit 1; }
+          echo "$xml" | grep -q '<freeModule>true</freeModule>' \
+            || { echo "::error::module.xml no longer declares freeModule=true"; exit 1; }
+          unzip -l "$modl" | grep -q 'license.html' \
+            || { echo "::error::license.html was not staged into the .modl"; exit 1; }

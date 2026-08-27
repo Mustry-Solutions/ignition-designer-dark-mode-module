@@ -1,0 +1,27 @@
+# --- Gradle ---
+.gradle/
+build/
+**/build/
+
+# --- Staged module artifacts for the local dev gateway ---
+ops/modules/*.modl
+
+# --- Local dev signing material (NEVER commit keystores/certs/keys) ---
+ops/signing/
+# Belt-and-suspenders: any stray signing dir + common keystore/cert extensions.
+signing/
+*.p12
+*.jks
+*.keystore
+
+# --- IDE / editor ---
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+# Eclipse/Buildship Java compile output (designer/bin, ...)
+bin/
+
+# --- macOS ---
+.DS_Store

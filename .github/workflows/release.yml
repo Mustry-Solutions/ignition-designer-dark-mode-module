@@ -1,0 +1,151 @@
+name: Release
+
+# A release is a git tag `vX.Y.Z`. Pushing the tag builds + signs the module,
+# then publishes a GitHub Release with the signed .modl attached. The tag
+# drives the module version.
+#
+# Required secrets (repo or org level — Settings → Secrets and variables → Actions):
+#   SIGNING_KEYSTORE_B64       base64 of the signing keystore (.p12/.jks)
+#   SIGNING_CERT_B64           base64 of the certificate chain (.pem)
+#   SIGNING_KEYSTORE_PASSWORD  keystore password
+#   SIGNING_CERT_ALIAS         key alias inside the keystore
+#   SIGNING_CERT_PASSWORD      key password (often == keystore password)
+#
+# Validate the signing path without publishing: run this workflow manually
+# with dry_run=true. It builds, signs and uploads the .modl as an artifact.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to stamp (dry-run only; no tag involved)'
+        default: '0.0.0-test'
+        type: string
+      dry_run:
+        description: 'Build + sign only, no GitHub Release'
+        default: true
+        type: boolean
+
+permissions:
+  contents: write   # create the release + upload the asset
+
+jobs:
+  release:
+    name: Build, sign & publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Derive version + publish flag
+        id: ver
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            version="${GITHUB_REF_NAME#v}"
+            # Policy: plain x.y.z tags only. Ignition's module.xml version
+            # parser is numeric-only — a prerelease suffix (v0.1.0-beta.1)
+            # produces a .modl the gateway rejects at install. Bump the patch
+            # number instead.
+            if ! echo "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+              echo "::error::Tag version '$version' is not plain x.y.z — prerelease suffixes break Ignition's numeric module version parser. Bump the patch number instead."
+              exit 1
+            fi
+            echo "version=$version" >> "$GITHUB_OUTPUT"
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+            echo "publish=${{ !inputs.dry_run }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@v5
+
+      - name: Cache Gradle
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*') }}
+          restore-keys: gradle-${{ runner.os }}-
+
+      - name: Decode signing material
+        env:
+          KEYSTORE_B64: ${{ secrets.SIGNING_KEYSTORE_B64 }}
+          CERT_B64: ${{ secrets.SIGNING_CERT_B64 }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ] || [ -z "$CERT_B64" ]; then
+            echo "::error::Signing secrets missing. Add SIGNING_KEYSTORE_B64, SIGNING_CERT_B64, SIGNING_KEYSTORE_PASSWORD, SIGNING_CERT_ALIAS, SIGNING_CERT_PASSWORD."
+            exit 1
+          fi
+          printf '%s' "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/keystore.p12"
+          printf '%s' "$CERT_B64" | base64 -d > "$RUNNER_TEMP/cert.pem"
+
+      - name: Build & sign the module
+        env:
+          ORG_GRADLE_PROJECT_org.gradle.java.installations.auto-download: "false"
+        run: |
+          ./gradlew clean build --no-daemon --stacktrace \
+            -PreleaseVersion="${{ steps.ver.outputs.version }}" \
+            -Pignition.signing.keystoreFile="$RUNNER_TEMP/keystore.p12" \
+            -Pignition.signing.keystorePassword="${{ secrets.SIGNING_KEYSTORE_PASSWORD }}" \
+            -Pignition.signing.certFile="$RUNNER_TEMP/cert.pem" \
+            -Pignition.signing.certAlias="${{ secrets.SIGNING_CERT_ALIAS }}" \
+            -Pignition.signing.certPassword="${{ secrets.SIGNING_CERT_PASSWORD }}"
+
+      - name: Locate the signed .modl
+        id: modl
+        run: |
+          f="$(find build -maxdepth 1 -name '*.modl' ! -name '*.unsigned.modl' | head -1)"
+          if [ -z "$f" ]; then echo "::error::no signed .modl produced"; exit 1; fi
+          echo "path=$f" >> "$GITHUB_OUTPUT"
+
+      - name: Verify the signature
+        run: |
+          echo "Signed artifact: ${{ steps.modl.outputs.path }}"
+          # A signed Ignition .modl carries certificates.p7b + signatures.properties
+          # (an unsigned one has neither) — not a JAR-style META-INF block.
+          names="$(unzip -l "${{ steps.modl.outputs.path }}")"
+          echo "$names" | grep -q 'certificates.p7b' && echo "$names" | grep -q 'signatures.properties' \
+            && echo "signature present (certificates.p7b + signatures.properties)" \
+            || { echo "::error::.modl is not signed (missing certificates.p7b / signatures.properties)"; exit 1; }
+
+      - name: Check the stamped version
+        run: |
+          unzip -p "${{ steps.modl.outputs.path }}" module.xml | grep -q "<version>${{ steps.ver.outputs.version }}</version>" \
+            || { echo "::error::module.xml version does not match the tag"; unzip -p "${{ steps.modl.outputs.path }}" module.xml; exit 1; }
+
+      # Dry run (workflow_dispatch): keep the signed .modl as an artifact
+      # instead of publishing — the way to confirm the signing secrets work.
+      - name: Upload signed .modl (dry run)
+        if: ${{ steps.ver.outputs.publish != 'true' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: signed-modl-${{ steps.ver.outputs.version }}
+          path: ${{ steps.modl.outputs.path }}
+          if-no-files-found: error
+
+      - name: Publish GitHub Release
+        if: ${{ steps.ver.outputs.publish == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Draft first, publish only once the asset is attached — a failed
+          # upload must never leave a half-public release.
+          # Notes are generated from commits/PRs; switch to a CHANGELOG
+          # extract once this repo has one.
+          gh release create "$GITHUB_REF_NAME" \
+            --title "v${{ steps.ver.outputs.version }}" \
+            --generate-notes \
+            --draft \
+            "${{ steps.modl.outputs.path }}"
+          gh release edit "$GITHUB_REF_NAME" --draft=false

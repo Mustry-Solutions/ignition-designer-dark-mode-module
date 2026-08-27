@@ -1,0 +1,378 @@
+package com.mustrysolutions.designerdarkmode.designer;
+
+import java.awt.Color;
+import java.awt.Component;
+import java.awt.Container;
+import java.awt.Graphics2D;
+import java.awt.Image;
+import java.awt.Toolkit;
+import java.awt.Window;
+import java.awt.image.BufferedImage;
+import java.awt.image.FilteredImageSource;
+import java.awt.image.RGBImageFilter;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.IdentityHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.WeakHashMap;
+
+import javax.swing.Icon;
+import javax.swing.ImageIcon;
+import javax.swing.JLabel;
+import javax.swing.JTree;
+import javax.swing.UIManager;
+import javax.swing.tree.DefaultTreeCellRenderer;
+import javax.swing.tree.TreeCellRenderer;
+
+import com.inductiveautomation.ignition.client.icons.SvgIconUtil;
+import com.inductiveautomation.ignition.client.util.gui.tree.PanelBasedTreeCellRenderer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+/**
+ * Adapts the Designer's trees (Project Browser, Tag Browser, ...) to dark mode
+ * by wrapping each tree's cell renderer:
+ *
+ * 1) SVG icons are replaced with a cached, tinted COPY: the icon is painted to
+ *    an offscreen image and its silhouette filled with the theme foreground
+ *    (the SVG machinery bakes colors in at construction, so the live icon
+ *    cannot be recolored — and copies leave the originals pristine for light
+ *    mode).
+ * 2) Bitmap icons (ImageIcon) get a cached "smart invert" copy: dark
+ *    low-saturation pixels are brightened, saturated brand colors are kept.
+ * 3) Ignition's renderers cache their colors in fields populated under the
+ *    light theme at construction; both flavors (PanelBasedTreeCellRenderer and
+ *    DefaultTreeCellRenderer) are re-synced from the current UIManager values
+ *    on every render.
+ *
+ * uninstall() must run AFTER the stock look and feel is restored so the final
+ * color re-sync picks up the light palette.
+ */
+public class TreeIconRecolorer {
+
+    private final Logger log = LoggerFactory.getLogger(TreeIconRecolorer.class);
+
+    // Weak keys: the watcher keeps re-running install() for the whole session,
+    // and trees from closed views must not be pinned in memory.
+    private final Map<JTree, TreeCellRenderer> wrappedTrees = new WeakHashMap<>();
+    private final Map<Icon, Icon> darkVariants = new IdentityHashMap<>();
+    private final Set<Icon> variantIcons =
+        Collections.newSetFromMap(new IdentityHashMap<>());
+    private final Set<TreeCellRenderer> touchedRenderers =
+        Collections.newSetFromMap(new IdentityHashMap<>());
+    private final Set<Component> whitenedRendererComponents =
+        Collections.newSetFromMap(new WeakHashMap<>());
+    private final Set<String> loggedIconClasses = new HashSet<>();
+
+    private final JLabel paintDummy = new JLabel();
+    private Color iconColor;
+    private Color rendererBackground;
+
+    /** Wrap the renderers of every tree currently in the UI. Safe to re-run. */
+    public void install() {
+        iconColor = UIManager.getColor("Tree.foreground");
+        if (iconColor == null) {
+            iconColor = new Color(0xB8BFC6);
+        }
+        rendererBackground = UIManager.getColor("Tree.background");
+        if (rendererBackground == null) {
+            rendererBackground = new Color(0x3A3D3F);
+        }
+        int wrapped = 0;
+        for (JTree tree : findAllTrees()) {
+            TreeCellRenderer current = tree.getCellRenderer();
+            if (current == null || current instanceof RecoloringRenderer) {
+                continue;
+            }
+            // JIDE's CheckBoxTree hands out a CheckBoxTreeCellRenderer that
+            // calls back into the tree's configured renderer — wrapping it
+            // recurses infinitely (StackOverflow). Leave those trees to the
+            // renderer-pane sanitizer.
+            if (current.getClass().getName().contains("CheckBoxTreeCellRenderer")
+                    || tree.getClass().getName().contains("CheckBoxTree")) {
+                continue;
+            }
+            wrappedTrees.put(tree, current);
+            tree.setCellRenderer(new RecoloringRenderer(current));
+            tree.repaint();
+            wrapped++;
+        }
+        // The component watcher re-runs install() on every UI change; only log
+        // passes that actually wrapped something.
+        if (wrapped > 0) {
+            DebugLog.log("TreeIconRecolorer: wrapped " + wrapped + " tree renderer(s), "
+                + wrappedTrees.size() + " total under management.");
+        }
+    }
+
+    /** Undo every wrapped renderer and cached renderer color. */
+    public void uninstall() {
+        wrappedTrees.forEach((tree, original) -> {
+            if (tree.getCellRenderer() instanceof RecoloringRenderer) {
+                tree.setCellRenderer(original);
+                tree.repaint();
+            }
+        });
+        wrappedTrees.clear();
+        darkVariants.clear();
+        variantIcons.clear();
+        // UIManager now holds the light theme's values again; push them back
+        // into the renderers' cached color fields.
+        for (TreeCellRenderer renderer : touchedRenderers) {
+            syncRendererColors(renderer);
+        }
+        touchedRenderers.clear();
+        for (Component component : whitenedRendererComponents) {
+            component.setBackground(Color.WHITE);
+        }
+        whitenedRendererComponents.clear();
+        buttonIconOriginals.forEach((component, icon) -> {
+            if (component instanceof javax.swing.AbstractButton) {
+                ((javax.swing.AbstractButton) component).setIcon(icon);
+            } else if (component instanceof javax.swing.JLabel) {
+                ((javax.swing.JLabel) component).setIcon(icon);
+            }
+        });
+        buttonIconOriginals.clear();
+        DebugLog.log("TreeIconRecolorer: uninstalled.");
+    }
+
+    private List<JTree> findAllTrees() {
+        List<JTree> trees = new ArrayList<>();
+        for (Window window : Window.getWindows()) {
+            collectTrees(window, trees);
+        }
+        return trees;
+    }
+
+    private void collectTrees(Container container, List<JTree> out) {
+        for (Component child : container.getComponents()) {
+            if (child instanceof JTree) {
+                out.add((JTree) child);
+            }
+            if (child instanceof Container) {
+                collectTrees((Container) child, out);
+            }
+        }
+    }
+
+    /** How many trees live under this container — used as a UI-readiness probe. */
+    static int countTrees(Container container) {
+        int count = 0;
+        for (Component child : container.getComponents()) {
+            if (child instanceof JTree) {
+                count++;
+            }
+            if (child instanceof Container) {
+                count += countTrees((Container) child);
+            }
+        }
+        return count;
+    }
+
+    /** Push the current UIManager tree palette into the renderer's cached fields. */
+    private void syncRendererColors(TreeCellRenderer renderer) {
+        Color background = UIManager.getColor("Tree.background");
+        Color foreground = UIManager.getColor("Tree.foreground");
+        Color selectionBackground = UIManager.getColor("Tree.selectionBackground");
+        Color selectionForeground = UIManager.getColor("Tree.selectionForeground");
+        Color selectionBorder = UIManager.getColor("Tree.selectionBorderColor");
+        if (renderer instanceof PanelBasedTreeCellRenderer) {
+            PanelBasedTreeCellRenderer panel = (PanelBasedTreeCellRenderer) renderer;
+            panel.setBackgroundNonSelectionColor(background);
+            panel.setTextNonSelectionColor(foreground);
+            panel.setBackgroundSelectionColor(selectionBackground);
+            panel.setTextSelectionColor(selectionForeground);
+            panel.setBorderSelectionColor(selectionBorder);
+        } else if (renderer instanceof DefaultTreeCellRenderer) {
+            DefaultTreeCellRenderer label = (DefaultTreeCellRenderer) renderer;
+            label.setBackgroundNonSelectionColor(background);
+            label.setTextNonSelectionColor(foreground);
+            label.setBackgroundSelectionColor(selectionBackground);
+            label.setTextSelectionColor(selectionForeground);
+            label.setBorderSelectionColor(selectionBorder);
+        }
+    }
+
+    /** Swap icons for dark variants on the label itself and any nested labels. */
+    private void processComponent(Component component) {
+        // Some renderers (Perspective's palette items) re-set the Base000
+        // token — the Color.WHITE instance — as their background on every
+        // render; identity check so a user's own white is left alone. Track
+        // them: renderers that set colors only at construction would stay
+        // dark into light mode otherwise.
+        if (component instanceof javax.swing.JComponent
+                && component.getBackground() == Color.WHITE) {
+            whitenedRendererComponents.add(component);
+            component.setBackground(rendererBackground);
+        }
+        if (component instanceof JLabel) {
+            JLabel label = (JLabel) component;
+            Icon icon = label.getIcon();
+            if (icon != null && !variantIcons.contains(icon)) {
+                logIconClassOnce(icon);
+                Icon variant = darkVariant(icon);
+                if (variant != null) {
+                    label.setIcon(variant);
+                }
+            }
+        }
+        if (component instanceof Container) {
+            for (Component child : ((Container) component).getComponents()) {
+                processComponent(child);
+            }
+        }
+    }
+
+    private void logIconClassOnce(Icon icon) {
+        if (loggedIconClasses.add(icon.getClass().getName())) {
+            DebugLog.log("TreeIconRecolorer: encountered icon class "
+                + icon.getClass().getName());
+        }
+    }
+
+    /**
+     * Cached dark-mode replacement for an icon, or null to leave it alone.
+     * Every icon type gets the same silhouette tint — the trees mix at least
+     * six icon classes (SVG, vector-path, and bitmap flavors), and a uniform
+     * monochrome treatment is both consistent and the standard dark-IDE look.
+     */
+    private Icon darkVariant(Icon original) {
+        Icon cached = darkVariants.get(original);
+        if (cached != null) {
+            return cached;
+        }
+        Icon variant = tintedCopy(original);
+        if (variant != null) {
+            darkVariants.put(original, variant);
+            variantIcons.add(variant);
+        }
+        return variant;
+    }
+
+    /**
+     * Paint the icon offscreen and adapt it for a dark background with a
+     * "smart invert": neutral (low-saturation) pixels have their lightness
+     * inverted and take the theme tint — dark strokes become light — while
+     * saturated brand colors (status greens/reds, logo colors) keep their hue
+     * and are only brightened enough to read on the dark surface.
+     */
+    private Icon tintedCopy(Icon source) {
+        try {
+            int width = Math.max(source.getIconWidth(), 1);
+            int height = Math.max(source.getIconHeight(), 1);
+            BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+            Graphics2D g2 = image.createGraphics();
+            try {
+                source.paintIcon(paintDummy, g2, 0, 0);
+            } finally {
+                g2.dispose();
+            }
+            float[] tintHsb = Color.RGBtoHSB(
+                iconColor.getRed(), iconColor.getGreen(), iconColor.getBlue(), null);
+            for (int y = 0; y < height; y++) {
+                for (int x = 0; x < width; x++) {
+                    int pixel = image.getRGB(x, y);
+                    int alpha = pixel >>> 24;
+                    if (alpha == 0) {
+                        continue;
+                    }
+                    float[] hsb = Color.RGBtoHSB(
+                        (pixel >> 16) & 0xFF, (pixel >> 8) & 0xFF, pixel & 0xFF, null);
+                    int rgb;
+                    if (hsb[1] < 0.25f) {
+                        // Neutral: invert lightness, colored with the theme tint.
+                        float brightness = Math.min(1f, 0.25f + (1f - hsb[2]) * 0.75f);
+                        rgb = Color.HSBtoRGB(tintHsb[0], tintHsb[1], brightness);
+                    } else {
+                        // Brand color: keep the hue, ensure it reads on dark.
+                        rgb = Color.HSBtoRGB(hsb[0], hsb[1] * 0.9f, Math.max(hsb[2], 0.7f));
+                    }
+                    image.setRGB(x, y, (alpha << 24) | (rgb & 0xFFFFFF));
+                }
+            }
+            return new ImageIcon(image);
+        } catch (Exception e) {
+            log.warn("Could not tint a Designer SVG icon.", e);
+            return null;
+        }
+    }
+
+    /** Original icons of buttons/labels whose icon was swapped for a dark variant. */
+    private final Map<Component, Icon> buttonIconOriginals = new WeakHashMap<>();
+
+    /**
+     * Toolbar/button icons (the Project Properties gear, ...) are dark glyphs
+     * invisible on the dark theme; give them the same dark variants as tree
+     * icons. Safe to re-run; restored by uninstall().
+     */
+    public void recolorButtonIcons() {
+        for (Window window : Window.getWindows()) {
+            recolorButtonIcons(window);
+        }
+    }
+
+    private void recolorButtonIcons(Container container) {
+        recolorButtonIcons(container, false);
+    }
+
+    /**
+     * Recolor toolbar/status-bar glyph icons. Buttons anywhere are fair game;
+     * bare JLabels only inside toolbars or the status bar (a JLabel elsewhere
+     * is usually content, and tree/table renderer labels are handled by the
+     * render path). {@code inIconBar} tracks whether we are under such a bar.
+     */
+    private void recolorButtonIcons(Container container, boolean inIconBar) {
+        boolean bar = inIconBar
+            || container instanceof javax.swing.JToolBar
+            || container.getClass().getName().endsWith("StatusBar");
+        for (Component child : container.getComponents()) {
+            javax.swing.JLabel label = null;
+            Icon icon = null;
+            if (child instanceof javax.swing.AbstractButton) {
+                icon = ((javax.swing.AbstractButton) child).getIcon();
+            } else if (bar && child instanceof javax.swing.JLabel) {
+                label = (javax.swing.JLabel) child;
+                icon = label.getIcon();
+            }
+            if (icon != null && !variantIcons.contains(icon)) {
+                Icon variant = darkVariant(icon);
+                if (variant != null) {
+                    buttonIconOriginals.putIfAbsent((Component) child, icon);
+                    if (label != null) {
+                        label.setIcon(variant);
+                    } else {
+                        ((javax.swing.AbstractButton) child).setIcon(variant);
+                    }
+                }
+            }
+            if (child instanceof Container) {
+                recolorButtonIcons((Container) child, bar);
+            }
+        }
+    }
+
+    /** Delegates to the original renderer, then adapts colors and icons. */
+    private class RecoloringRenderer implements TreeCellRenderer {
+
+        private final TreeCellRenderer delegate;
+
+        RecoloringRenderer(TreeCellRenderer delegate) {
+            this.delegate = delegate;
+        }
+
+        @Override
+        public Component getTreeCellRendererComponent(JTree tree, Object value, boolean selected,
+                boolean expanded, boolean leaf, int row, boolean hasFocus) {
+            touchedRenderers.add(delegate);
+            syncRendererColors(delegate);
+            Component component = delegate.getTreeCellRendererComponent(
+                tree, value, selected, expanded, leaf, row, hasFocus);
+            processComponent(component);
+            return component;
+        }
+    }
+}
