@@ -18,9 +18,8 @@ and output console, dialogs, and icons — to a dark theme built on
 [FlatLaf](https://www.formdev.com/flatlaf/). The choice is remembered between
 sessions.
 
-Toggling back restores the stock Designer. That restore is thorough but not yet
-perfect — see [Known limitations](#known-limitations). Relaunching the Designer
-always gives a clean stock theme.
+Toggling back restores the stock Designer. Relaunching always gives a clean
+stock theme, whichever way you left it.
 
 Because Ignition's own UI hard-codes many light colors in ways a normal look and
 feel swap cannot reach, the module does substantial work under the hood to make
@@ -39,16 +38,10 @@ The same Designer, toggled off and on:
   dark mode
   ([#21](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/21)).
   Cosmetic, one panel.
-- **Toggling dark mode off** leaves an orange highlight behind every property
-  name in the Perspective property editor
-  ([#23](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/23)).
-  It is the property filter's own highlight showing through, it affects nothing
-  but appearance, and relaunching the Designer clears it. If you leave dark mode
-  on you will never see it.
 - The Vision design canvas is deliberately left alone: it renders your own
   window content, and theming it would misrepresent what your users will see.
 
-Both open issues are cosmetic. Neither affects the Designer's behaviour or
+The open issue is cosmetic. It affects neither the Designer's behaviour nor
 anything you build with it.
 
 ## Install
