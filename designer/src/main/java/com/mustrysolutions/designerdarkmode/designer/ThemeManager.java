@@ -72,6 +72,7 @@ public class ThemeManager {
 
     private final ComponentInspector inspector = new ComponentInspector();
     private final ScriptEditorTheme scriptEditors = new ScriptEditorTheme();
+    private final ConsoleTextTheme consoleText = new ConsoleTextTheme();
 
     /** Called once on Designer startup; re-applies dark mode once the UI is up. */
     public void startup(DesignerContext context) {
@@ -246,6 +247,7 @@ public class ThemeManager {
             safely("collapsibles", () -> recolorCollapsibleTitlePanes(true));
             safely("whiteSwap", () -> swapWhiteTokenBackgrounds(true));
             safely("scriptEditors", scriptEditors::install);
+            safely("consoleText", consoleText::install);
             installComponentWatcher();
             debugDumpDockState();
         } else {
@@ -256,6 +258,7 @@ public class ThemeManager {
             safely("collapsibles", () -> recolorCollapsibleTitlePanes(false));
             safely("whiteSwap", () -> swapWhiteTokenBackgrounds(false));
             safely("scriptEditors", scriptEditors::uninstall);
+            safely("consoleText", consoleText::uninstall);
         }
         log.info(dark ? "Dark mode applied." : "Stock Designer theme restored.");
     }
@@ -882,6 +885,7 @@ public class ThemeManager {
         recolorCollapsibleTitlePanes(true);
         swapWhiteTokenBackgrounds(true);
         scriptEditors.install();
+        consoleText.install();
         refreshStaleInSecondaryWindows();
     }
 
