@@ -26,6 +26,11 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ### Fixed
 
+- Selected toolbar toggle buttons kept the stock near-white highlight under
+  dark mode. JIDE's `BasicPainter` resolves button-state colours through
+  `UIDefaultsLookup`, so neither the component walk nor the token mutation
+  reached them; the eight `JideButton.*` keys it reads are now overridden.
+
 - `IaColorTokens.installClassColors` guarded only `Color.WHITE` and
   `Color.BLACK` against in-place mutation, while the token path also guarded
   the greys. A hard-coded `Color.GRAY` in an Ignition class would have been

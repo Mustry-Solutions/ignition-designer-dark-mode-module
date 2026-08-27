@@ -31,12 +31,6 @@ The same Designer, toggled off and on:
 
 ## Known limitations
 
-- **Selected toolbar buttons keep a light background.** A toggle button in its
-  selected state (the layout and pointer tools, for example) still paints the
-  stock light highlight, which stands out sharply against the dark toolbar.
-  Tracked in
-  [#9](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/9);
-  cosmetic, no effect on behaviour.
 - **Script editors are not themed yet** — the script console, project library
   and Vision component script editors keep their light syntax theme
   ([#2](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/2)).
