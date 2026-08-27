@@ -33,7 +33,10 @@ not add dates or version numbers.
      macOS title bar is part of what the theme changes.
 
 3. Capture with dark mode **off**, then **Tools → Dark Mode**, then capture
-   again. Do not move, resize or scroll anything in between.
+   again. Do not move, resize or scroll anything in between. Grab the window
+   itself (`⌘⇧4`, then Space) rather than a screen region: that keeps the macOS
+   drop shadow on a transparent background, which is how the current pair is
+   framed and which GitHub renders correctly on a light or dark page.
 
 4. Downscale to 1600px wide and replace the files:
 
