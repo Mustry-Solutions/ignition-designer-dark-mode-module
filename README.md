@@ -3,6 +3,8 @@
 A **dark mode** for the Ignition Designer, packaged as an Ignition module — the
 most-requested Designer idea on Inductive Automation's ideas portal.
 
+![The Ignition Designer with dark mode enabled](docs/images/designer-dark.png)
+
 > Status: early development (`0.0.1-SNAPSHOT`). Designer scope only; targets
 > Ignition **8.3+**.
 
@@ -20,6 +22,28 @@ Because Ignition's own UI hard-codes many light colors in ways a normal look and
 feel swap cannot reach, the module does substantial work under the hood to make
 the theme comprehensive. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) if you
 want to understand how, or extend it.
+
+The same Designer, toggled off and on:
+
+| Dark mode off | Dark mode on |
+|---|---|
+| ![Designer with dark mode off](docs/images/designer-light.png) | ![Designer with dark mode on](docs/images/designer-dark.png) |
+
+## Known limitations
+
+- **Toolbar and command-bar icons look dimmed** under dark mode. Ignition ships
+  two variants of each icon — a dark one meaning *enabled* and a light one
+  meaning *disabled* — and against a dark background that reading inverts, so
+  enabled buttons can appear greyed out. Tracked in
+  [#1](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/1);
+  it is cosmetic and affects no behaviour.
+- **Script editors are not themed yet** — the script console, project library
+  and Vision component script editors keep their light syntax theme
+  ([#2](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/2)).
+- **Output console text** stays dark-on-dark
+  ([#3](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/3)).
+- The Vision design canvas is deliberately left alone: it renders your own
+  window content, and theming it would misrepresent what users will see.
 
 ## Install
 
