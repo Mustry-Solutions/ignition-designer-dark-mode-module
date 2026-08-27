@@ -16,8 +16,15 @@ import java.util.Date;
  */
 public final class DebugLog {
 
-    private static final File LOG_FILE =
-        new File(System.getProperty("user.home"), ".ignition/designer-dark-mode.log");
+    /**
+     * Overridable so unit tests do not append to the developer's real
+     * ~/.ignition log — a test exercising a failure path wrote a stack trace
+     * there that then looked like a live Designer fault.
+     */
+    private static final File LOG_FILE = new File(
+        System.getProperty("designerdarkmode.logFile",
+            new File(System.getProperty("user.home"), ".ignition/designer-dark-mode.log")
+                .getPath()));
 
     private DebugLog() {
     }
