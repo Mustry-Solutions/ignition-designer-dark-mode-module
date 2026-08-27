@@ -34,7 +34,7 @@ if [[ -f "${PROJECT_ROOT}/.env" ]]; then
   # shellcheck disable=SC1091
   set -a; source "${PROJECT_ROOT}/.env"; set +a
 fi
-GATEWAY_HTTP_PORT="${GATEWAY_HTTP_PORT:-9388}"
+GATEWAY_HTTP_PORT="${GATEWAY_HTTP_PORT:-8088}"
 GATEWAY_URL="http://localhost:${GATEWAY_HTTP_PORT}"
 ADMIN_USER="admin"
 ADMIN_PASS="password"

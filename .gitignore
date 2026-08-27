@@ -14,6 +14,9 @@ signing/
 *.jks
 *.keystore
 
+# --- Local env overrides (ports etc.); .env.example is the committed template ---
+.env
+
 # --- IDE / editor ---
 .idea/
 *.iml
