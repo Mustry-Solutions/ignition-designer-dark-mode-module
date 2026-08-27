@@ -1,8 +1,8 @@
 # Local dev gateway
 
 Disposable Ignition 8.3.6 gateway in Docker for testing the Designer Dark Mode module.
-Mirrors the setup used in `first-ignition-module`. Development only: fixed weak
-admin credentials (`admin` / `password`), auto-accepted EULA.
+Development only: fixed weak admin credentials (`admin` / `password`) and an
+auto-accepted EULA. Never point this at anything real.
 
 | Script | What it does |
 |--------|--------------|
@@ -13,7 +13,7 @@ admin credentials (`admin` / `password`), auto-accepted EULA.
 | `teardown.sh` | Stop the gateway (`--purge` also wipes its data volume). |
 
 The gateway publishes on **http://localhost:8088** (HTTPS 8043), Ignition's own defaults — configurable in
-`../.env` — so it can run alongside the first-ignition-module gateway on 9088.
+`../.env` (copy `../.env.example` if you already run a gateway on 8088).
 
 How the pieces fit:
 
