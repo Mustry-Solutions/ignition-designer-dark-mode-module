@@ -332,6 +332,19 @@ public class ThemeManager {
         "DockableBarContainer.background",
         "DockableBar.background",
         "Workspace.background",
+        // JIDE toolbar buttons: BasicPainter.paintButtonBackground resolves
+        // these through UIDefaultsLookup, so neither a component walk nor the
+        // token mutation reaches them. Without them a SELECTED toggle button
+        // (the layout and pointer tools) keeps the stock near-white highlight
+        // against the dark toolbar.
+        "JideButton.background",
+        "JideButton.selectedBackground",
+        "JideButton.selectedAndFocusedBackground",
+        "JideButton.focusedBackground",
+        "JideButton.borderColor",
+        "JideButton.highlight",
+        "JideButton.shadow",
+        "JideButton.darkShadow",
     };
 
     /**
@@ -387,6 +400,20 @@ public class ThemeManager {
         UIManager.put("DockableBarContainer.background", background);
         UIManager.put("DockableBar.background", background);
         UIManager.put("Workspace.background", background);
+
+        // Toolbar button states. `selected` has to stay clearly distinguishable
+        // from the toolbar behind it without shouting — a toggle that is merely
+        // active should not out-compete the content, which is exactly what the
+        // stock near-white highlight does on a dark bar.
+        java.awt.Color selected = titleBackground;
+        UIManager.put("JideButton.background", background);
+        UIManager.put("JideButton.selectedBackground", selected);
+        UIManager.put("JideButton.selectedAndFocusedBackground", selected.brighter());
+        UIManager.put("JideButton.focusedBackground", selected);
+        UIManager.put("JideButton.borderColor", border);
+        UIManager.put("JideButton.highlight", selected.brighter());
+        UIManager.put("JideButton.shadow", border);
+        UIManager.put("JideButton.darkShadow", background.darker());
     }
 
     /** Log which UI/painter actually drives the dock title bars right now. */
