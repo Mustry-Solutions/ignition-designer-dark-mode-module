@@ -8,7 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Note that released module versions are plain `x.y.z`: Ignition's `module.xml`
 version parser is numeric-only and rejects a prerelease suffix at install time.
 
-## [Unreleased]
+## [0.1.0] - 2026-08-28
+
+First release.
 
 ### Added
 
