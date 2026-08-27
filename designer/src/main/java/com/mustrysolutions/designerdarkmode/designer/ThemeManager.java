@@ -248,6 +248,7 @@ public class ThemeManager {
             safely("whiteSwap", () -> swapWhiteTokenBackgrounds(true));
             safely("scriptEditors", scriptEditors::install);
             safely("consoleText", consoleText::install);
+            safely("cachedPainters", () -> repointCachedThemePainters(true));
             installComponentWatcher();
             debugDumpDockState();
         } else {
@@ -259,6 +260,7 @@ public class ThemeManager {
             safely("whiteSwap", () -> swapWhiteTokenBackgrounds(false));
             safely("scriptEditors", scriptEditors::uninstall);
             safely("consoleText", consoleText::uninstall);
+            safely("cachedPainters", () -> repointCachedThemePainters(false));
         }
         log.info(dark ? "Dark mode applied." : "Stock Designer theme restored.");
     }
@@ -496,8 +498,12 @@ public class ThemeManager {
 
     private static final String THEME_PAINTER_KEY = "Theme.painter";
     private static final String BASIC_PAINTER = "com.jidesoft.plaf.basic.BasicPainter";
+    private static final String THEME_PAINTER_TYPE = "com.jidesoft.plaf.basic.ThemePainter";
 
     private final java.util.Map<Object, Object> painterSnapshot = new java.util.HashMap<>();
+    /** Component -> the ThemePainter fields we repointed, and what they held. */
+    private final java.util.Map<java.awt.Component, java.util.Map<java.lang.reflect.Field, Object>>
+        cachedPainterFields = new java.util.WeakHashMap<>();
 
     /**
      * JIDE resolves the painter behind dock title bars, grippers, and split
@@ -565,6 +571,109 @@ public class ThemeManager {
      * dialog, a hidden section) would be missed by a hierarchy walk and come
      * back later stuck in the old theme.
      */
+    /**
+     * Repoint {@code ThemePainter} references that JIDE components cached
+     * before the switch.
+     *
+     * <p>Rewriting the {@code Theme.painter} map is not enough on its own.
+     * {@code BasicDockableFrameTitlePane.installDefaults} reads
+     * {@code UIDefaultsLookup.get("Theme.painter")} <em>once</em> and keeps the
+     * result in a private field, so every dock title pane built before dark
+     * mode was applied still holds {@code SyntheticaJidePainter}. That painter
+     * casts the active look and feel to {@code SyntheticaLookAndFeel}
+     * unconditionally, so under FlatLaf it throws {@code ClassCastException}
+     * on every repaint of every docked panel's title bar.
+     *
+     * <p>Fields are located by TYPE rather than by name: JIDE ships obfuscated,
+     * the field is currently called {@code a}, and matching on that would be a
+     * silent no-op the moment they rebuild. Matching on the field type also
+     * catches any other JIDE component caching a painter the same way.
+     */
+    private void repointCachedThemePainters(boolean dark) {
+        Class<?> painterType;
+        try {
+            painterType = Class.forName(THEME_PAINTER_TYPE);
+        } catch (Throwable t) {
+            DebugLog.log("ThemePainter type unavailable; cached-painter repoint skipped.", t);
+            return;
+        }
+        if (!dark) {
+            int restored = 0;
+            for (java.util.Map.Entry<java.awt.Component,
+                    java.util.Map<java.lang.reflect.Field, Object>> entry
+                    : cachedPainterFields.entrySet()) {
+                for (java.util.Map.Entry<java.lang.reflect.Field, Object> field
+                        : entry.getValue().entrySet()) {
+                    try {
+                        field.getKey().set(entry.getKey(), field.getValue());
+                        restored++;
+                    } catch (Throwable t) {
+                        DebugLog.log("Could not restore a cached ThemePainter.", t);
+                    }
+                }
+                entry.getKey().repaint();
+            }
+            cachedPainterFields.clear();
+            if (restored > 0) {
+                DebugLog.log("Restored " + restored + " cached ThemePainter field(s).");
+            }
+            return;
+        }
+        Object basicPainter;
+        try {
+            basicPainter = Class.forName(BASIC_PAINTER).getMethod("getInstance").invoke(null);
+        } catch (Throwable t) {
+            DebugLog.log("BasicPainter unavailable; cached-painter repoint skipped.", t);
+            return;
+        }
+        int repointed = 0;
+        for (Window window : Window.getWindows()) {
+            repointed += repointCachedThemePainters(window, painterType, basicPainter);
+        }
+        if (repointed > 0) {
+            DebugLog.log("Repointed " + repointed + " cached ThemePainter field(s) at BasicPainter.");
+        }
+    }
+
+    private int repointCachedThemePainters(java.awt.Container container,
+            Class<?> painterType, Object basicPainter) {
+        int repointed = 0;
+        for (java.awt.Component child : container.getComponents()) {
+            for (Class<?> type = child.getClass(); type != null; type = type.getSuperclass()) {
+                if (!type.getName().startsWith("com.jidesoft.")) {
+                    continue;
+                }
+                for (java.lang.reflect.Field field : type.getDeclaredFields()) {
+                    if (!painterType.isAssignableFrom(field.getType())
+                            || java.lang.reflect.Modifier.isStatic(field.getModifiers())) {
+                        continue;
+                    }
+                    try {
+                        field.setAccessible(true);
+                        Object current = field.get(child);
+                        if (current == null || current == basicPainter) {
+                            continue;
+                        }
+                        cachedPainterFields
+                            .computeIfAbsent(child, key -> new java.util.HashMap<>())
+                            .putIfAbsent(field, current);
+                        field.set(child, basicPainter);
+                        child.repaint();
+                        repointed++;
+                    } catch (Throwable t) {
+                        DebugLog.log("Could not repoint a cached ThemePainter on "
+                            + child.getClass().getName(), t);
+                    }
+                }
+            }
+            if (child instanceof java.awt.Container) {
+                repointed += repointCachedThemePainters(
+                    (java.awt.Container) child, painterType, basicPainter);
+            }
+        }
+        return repointed;
+    }
+
     private void recolorCollapsibleTitlePanes(boolean dark) {
         if (!dark) {
             collapsibleOriginals.forEach((pane, original) -> {
@@ -886,6 +995,7 @@ public class ThemeManager {
         swapWhiteTokenBackgrounds(true);
         scriptEditors.install();
         consoleText.install();
+        repointCachedThemePainters(true);
         refreshStaleInSecondaryWindows();
     }
 
