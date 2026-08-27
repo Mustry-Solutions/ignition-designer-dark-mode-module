@@ -204,6 +204,33 @@ public class ThemeManager {
             return;
         }
         DebugLog.log("ThemeManager: switching to " + (dark ? "dark" : "light") + " mode.");
+        if (!dark) {
+            // Phase 0, light only — drop our UIManager overrides FIRST, while
+            // FlatLaf is still installed and still serving the same values from
+            // its own defaults table, so nothing renders differently in between.
+            //
+            // These clears are UIManager.put(key, null), which does not revert a
+            // key: it DELETES the entry from the developer defaults. That is the
+            // only place most standard Swing colours live in a stock Designer —
+            // Synthetica is Synth-based and its look-and-feel table defines none
+            // of them; TextField.background, Table.background, List.background
+            // and ~190 others are written into the developer defaults by
+            // Synthetica's own compatibility defaults and by
+            // installJideExtension(). Clearing AFTER the restore therefore
+            // deleted the values the restore had just put back, and left them
+            // resolving to null for the rest of the session.
+            //
+            // A null TextField.background is exactly what #23 looked like.
+            // BasicTextUI.installDefaults sets a field's background from that
+            // key, so the phase-6 updateComponentTreeUI below left every text
+            // field with NO background of its own — and Component.getBackground()
+            // falls through to the parent when unset. In the Perspective
+            // property editor the parent is NodeEditor$FilterWrapper, which
+            // permanently holds the filter-match amber (#F7901E), so every
+            // property name lit up at once.
+            safely("flatDefaults", () -> applyMenuDefaults(false));
+            safely("jideOverrides", () -> applyJideDarkOverrides(false));
+        }
         // Phase 1 — the look-and-feel swap itself. If THIS fails the switch is
         // genuinely off and we stop (reverting the pref so a broken dark state
         // never persists into the next launch).
@@ -247,10 +274,13 @@ public class ThemeManager {
         }
         safely("jideExtension", () -> installJideExtension(dark));
         safely("painters", () -> overrideThemePainters(dark));
-        // FlatLaf re-assert first, then the JIDE-specific keys on top so
-        // the dock/collapsible overrides win where both define a key.
-        safely("flatDefaults", () -> applyMenuDefaults(dark));
-        safely("jideOverrides", () -> applyJideDarkOverrides(dark));
+        if (dark) {
+            // FlatLaf re-assert first, then the JIDE-specific keys on top so
+            // the dock/collapsible overrides win where both define a key. The
+            // light direction clears both in phase 0 instead — see there.
+            safely("flatDefaults", () -> applyMenuDefaults(true));
+            safely("jideOverrides", () -> applyJideDarkOverrides(true));
+        }
         safely("updateComponentTrees", () -> {
             for (Window window : Window.getWindows()) {
                 // Isolate per WINDOW, not per phase. Synthetica can NPE out of
@@ -1428,7 +1458,7 @@ public class ThemeManager {
     private final java.util.Map<String, Object> flatLafDefaults = new java.util.HashMap<>();
 
     /** Capture ALL of FlatLaf's resolved defaults right after it is installed. */
-    private void snapshotMenuDefaults() {
+    void snapshotMenuDefaults() {
         flatLafDefaults.clear();
         java.util.Enumeration<Object> keys = UIManager.getLookAndFeelDefaults().keys();
         while (keys.hasMoreElements()) {
@@ -1451,8 +1481,14 @@ public class ThemeManager {
      * mode. Re-assert every FlatLaf default on top, leaving only the
      * JIDE-specific keys (which FlatLaf does not define) to the extension;
      * clear the overrides again when light mode returns.
+     *
+     * <p>The clear is destructive, not a revert: {@code UIManager.put(key,
+     * null)} REMOVES the developer-defaults entry, and it cannot distinguish
+     * ours from the one that was there before. It must therefore run while
+     * FlatLaf is still installed — before the stock look and feel and
+     * {@code installJideExtension()} repopulate those same keys (#23).
      */
-    private void applyMenuDefaults(boolean dark) {
+    void applyMenuDefaults(boolean dark) {
         if (dark) {
             flatLafDefaults.forEach(UIManager::put);
         } else {

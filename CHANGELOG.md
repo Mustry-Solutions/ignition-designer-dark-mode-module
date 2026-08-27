@@ -63,6 +63,19 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 - Three JIDE `UIManager` defaults stayed light under dark mode and painted thin
   strips: `SidePane.background`, `CommandBarSeparator.background`, and
   `JideTabbedPane.darkShadow` (a "darkShadow" holding `#DDDDDD`).
+- Turning dark mode **off** left every property name in the Perspective Property
+  Editor on an amber block, and left 192 of 1409 `UIManager` defaults at the
+  wrong value. The light restore dropped the module's overrides with
+  `UIManager.put(key, null)` — which deletes the developer-defaults entry rather
+  than reverting it — *after* the stock look and feel and
+  `installJideExtension()` had repopulated those same keys. Synthetica is
+  Synth-based and owns none of the standard Swing colours in its own table, so
+  `TextField.background` and ~190 others were left resolving to `null`;
+  `BasicTextUI.installDefaults` then left every text field with no background of
+  its own, and each inherited its parent's — in the property editor,
+  `NodeEditor$FilterWrapper`'s permanent filter-match amber. The overrides are
+  now cleared before the look-and-feel swap, while FlatLaf still serves the same
+  values from its own defaults table, and are put back if that swap fails.
 - `IaColorTokens.installClassColors` guarded only `Color.WHITE` and
   `Color.BLACK` against in-place mutation, while the token path also guarded the
   greys. A hard-coded `Color.GRAY` in an Ignition class would have been rewritten
@@ -76,9 +89,5 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 - A faint pale band under the Tag Browser's `Tag | Value` header in dark mode
   ([#21](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/21)).
-- Toggling dark mode off leaves an orange highlight behind property names in the
-  Perspective property editor
-  ([#23](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/23));
-  relaunching the Designer clears it.
 
-Both are cosmetic and affect no behaviour.
+Cosmetic, and affects no behaviour.
