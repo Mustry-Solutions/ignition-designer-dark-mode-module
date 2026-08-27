@@ -290,6 +290,7 @@ public class ThemeManager {
             safely("cachedPainters", () -> repointCachedThemePainters(true));
             installComponentWatcher();
             debugDumpDockState();
+            safely("lightDefaults", this::debugDumpLightDefaults);
         } else {
             uninstallComponentWatcher();
             // After the light theme is back, so restored colors are light.
@@ -403,6 +404,17 @@ public class ThemeManager {
         "JideButton.highlight",
         "JideButton.shadow",
         "JideButton.darkShadow",
+        // Found by dumping every UIManager colour default still LIGHT under
+        // dark mode (#21). Both are thin strips painted by a JIDE delegate
+        // from a shared default, so no component-level pass could reach them:
+        // SidePane.background was #E5E8ED — the very colour the comment above
+        // calls out — and CommandBarSeparator.background #DBD8D1.
+        "SidePane.background",
+        "SidePane.foreground",
+        "CommandBarSeparator.background",
+        // A key named "darkShadow" holding #DDDDDD. Whatever it draws, a light
+        // shadow under a dark theme is wrong on its face.
+        "JideTabbedPane.darkShadow",
     };
 
     /**
@@ -472,9 +484,53 @@ public class ThemeManager {
         UIManager.put("JideButton.highlight", selected.brighter());
         UIManager.put("JideButton.shadow", border);
         UIManager.put("JideButton.darkShadow", background.darker());
+        UIManager.put("SidePane.background", background);
+        UIManager.put("SidePane.foreground", foreground);
+        UIManager.put("CommandBarSeparator.background", border);
+        UIManager.put("JideTabbedPane.darkShadow", background.darker());
     }
 
     /** Log which UI/painter actually drives the dock title bars right now. */
+    /**
+     * Log every {@code UIManager} colour default that is still LIGHT while
+     * dark mode is active.
+     *
+     * <p>Diagnostic for #21: a pale band that no component owns. Every
+     * component in that area reports a dark background and no border, and the
+     * viewport's view has zero height — so nothing in the component-property
+     * model explains it. The remaining candidate is a UI delegate painting
+     * from a shared default that our passes never re-asserted, and a light
+     * value under a dark look and feel is by definition suspect.
+     *
+     * <p>Kept rather than deleted after use: "which defaults are still light?"
+     * is the first question for any future band of this kind, and rederiving
+     * it costs a deploy cycle.
+     */
+    private void debugDumpLightDefaults() {
+        try {
+            java.util.List<String> light = new java.util.ArrayList<>();
+            javax.swing.UIDefaults defaults = UIManager.getDefaults();
+            for (Object key : new java.util.ArrayList<>(defaults.keySet())) {
+                Object value;
+                try {
+                    value = defaults.get(key);
+                } catch (Throwable t) {
+                    continue;
+                }
+                if (value instanceof java.awt.Color
+                        && luminance((java.awt.Color) value) > 200) {
+                    light.add(key + "=" + String.format("#%06X",
+                        ((java.awt.Color) value).getRGB() & 0xFFFFFF));
+                }
+            }
+            java.util.Collections.sort(light);
+            DebugLog.log("Light UIManager colour defaults under dark ("
+                + light.size() + "): " + light);
+        } catch (Throwable t) {
+            DebugLog.log("Could not dump light UIManager defaults.", t);
+        }
+    }
+
     private void debugDumpDockState() {
         DebugLog.log("DockableFrameUI -> " + UIManager.get("DockableFrameUI"));
         Object painter = UIManager.get("Theme.painter");
