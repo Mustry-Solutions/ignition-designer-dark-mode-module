@@ -49,7 +49,8 @@ public class ThemeManager {
     private static final String JIDE_LAF_FACTORY = "com.jidesoft.plaf.LookAndFeelFactory";
 
     /** Give up waiting for the main window after ~2 minutes (250ms ticks). */
-    private static final int MAX_STARTUP_POLLS = 480;
+    /** 250ms per poll. A silent two-minute wait was far worse than applying early. */
+    private static final int MAX_STARTUP_POLLS = 120;
 
     private final Logger log = LoggerFactory.getLogger(ThemeManager.class);
     private final Preferences prefs = Preferences.userNodeForPackage(ThemeManager.class);
@@ -126,18 +127,30 @@ public class ThemeManager {
         final int[] readyTicks = {0};
         timer.addActionListener(e -> {
             Frame frame = context.getFrame();
-            // "Showing" is not enough: at that point the docked panels (and
-            // their trees) are still being built, and theming a half-built UI
-            // leaves it blank/mistyled. Wait until the panel trees exist and
-            // the UI has been stable for a few ticks.
-            boolean ready = frame != null && frame.isShowing()
-                && frame instanceof java.awt.Container
-                && TreeIconRecolorer.countTrees((java.awt.Container) frame) >= 2;
+            // "Showing" is not enough: at that point the docked panels are
+            // still being built, and theming a half-built UI leaves it
+            // blank/mistyled. Wait until the dock panels exist and the UI has
+            // been stable for a few ticks.
+            //
+            // Readiness is measured in DOCKABLE FRAMES, not trees. Counting
+            // trees made this depend on which workspace the Designer happened
+            // to restore: open on Sequential Function Charts and only the
+            // Project Browser has one (the Tag Browser shows a table), so the
+            // count never reached 2, the probe never succeeded, and dark mode
+            // arrived via the timeout — two minutes after launch, looking for
+            // all the world like the module had failed. Dock panels are
+            // present in every workspace.
+            int docks = frame instanceof java.awt.Container
+                ? countDockableFrames((java.awt.Container) frame) : 0;
+            int trees = frame instanceof java.awt.Container
+                ? TreeIconRecolorer.countTrees((java.awt.Container) frame) : 0;
+            boolean ready = frame != null && frame.isShowing() && (docks >= 2 || trees >= 2);
             if (ready) {
                 if (++readyTicks[0] >= 4) {
                     timer.stop();
                     DebugLog.log("Startup apply: designer UI ready after "
-                        + polls[0] + " polls.");
+                        + polls[0] + " polls (" + docks + " dock frame(s), "
+                        + trees + " tree(s)).");
                     uiReady = true;
                     if (isDarkModeEnabled()) {
                         apply(true);
@@ -149,7 +162,9 @@ public class ThemeManager {
             }
             if (++polls[0] > MAX_STARTUP_POLLS) {
                 timer.stop();
-                DebugLog.log("Startup apply: readiness never detected; applying anyway.");
+                DebugLog.log("Startup apply: readiness never detected after " + polls[0]
+                    + " polls (" + docks + " dock frame(s), " + trees + " tree(s)); "
+                    + "applying anyway. If dark mode looked delayed at launch, this is why.");
                 uiReady = true;
                 if (isDarkModeEnabled()) {
                     apply(true);
@@ -157,6 +172,30 @@ public class ThemeManager {
             }
         });
         timer.start();
+    }
+
+    /**
+     * How many JIDE dockable frames live under this container — the readiness
+     * probe for {@link #applyWhenDesignerVisible()}.
+     *
+     * <p>Matched on class name rather than an imported type: the docking
+     * classes are not SDK surface, and a missing class must cost us this
+     * heuristic, not the whole startup path.
+     */
+    private static int countDockableFrames(java.awt.Container container) {
+        int count = 0;
+        for (java.awt.Component child : container.getComponents()) {
+            for (Class<?> type = child.getClass(); type != null; type = type.getSuperclass()) {
+                if ("com.jidesoft.docking.DockableFrame".equals(type.getName())) {
+                    count++;
+                    break;
+                }
+            }
+            if (child instanceof java.awt.Container) {
+                count += countDockableFrames((java.awt.Container) child);
+            }
+        }
+        return count;
     }
 
     private void apply(boolean dark) {
