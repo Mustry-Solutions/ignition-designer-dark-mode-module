@@ -58,17 +58,6 @@ ignitionModule {
     ))
 
     /*
-     * Add your module dependencies here, following the examples, with scope being one or more of G, C or D,
-     * for (G)ateway, (D)esigner, Vision (C)lient.
-     * Example:
-     * moduleDependencies = mapOf(
-     *    "CD" to "com.inductiveautomation.vision",
-     *    "G" to "com.inductiveautomation.opcua"
-     *  )
-     */
-    moduleDependencies.set(mapOf<String, String>())
-
-    /*
      * Add required module dependencies here, following the examples, with scope being one or more of G, C or D,
      * for (G)ateway, (D)esigner, Vision (C)lient.
      *

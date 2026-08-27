@@ -137,6 +137,13 @@ public class TreeIconRecolorer {
             }
         });
         buttonIconOriginals.clear();
+        buttonIconPairs.forEach((button, stock) -> {
+            button.setIcon(stock[0]);
+            button.setDisabledIcon(stock[1]);
+            button.setDisabledSelectedIcon(stock[2]);
+        });
+        buttonIconPairs.clear();
+        iconBrightness.clear();
         DebugLog.log("TreeIconRecolorer: uninstalled.");
     }
 
@@ -240,6 +247,135 @@ public class TreeIconRecolorer {
      * six icon classes (SVG, vector-path, and bitmap flavors), and a uniform
      * monochrome treatment is both consistent and the standard dark-IDE look.
      */
+    /**
+     * Average brightness of an icon's <em>visible</em> pixels, 0-255.
+     *
+     * <p>Transparent pixels are excluded rather than counted as black: a glyph
+     * is mostly transparent, so averaging every pixel would rank icons by how
+     * much ink they contain instead of how light that ink is, and two icons of
+     * the same colour but different coverage would compare unequal.
+     *
+     * <p>Cached by icon identity — rasterising is not free and the theming
+     * passes re-run on every debounced rescan.
+     */
+    private double brightness(Icon icon) {
+        Double cached = iconBrightness.get(icon);
+        if (cached != null) {
+            return cached;
+        }
+        double result = 0;
+        try {
+            int width = Math.max(icon.getIconWidth(), 1);
+            int height = Math.max(icon.getIconHeight(), 1);
+            BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+            Graphics2D g2 = image.createGraphics();
+            try {
+                icon.paintIcon(paintDummy, g2, 0, 0);
+            } finally {
+                g2.dispose();
+            }
+            double sum = 0;
+            double weight = 0;
+            for (int y = 0; y < height; y++) {
+                for (int x = 0; x < width; x++) {
+                    int argb = image.getRGB(x, y);
+                    int alpha = (argb >>> 24) & 0xFF;
+                    if (alpha == 0) {
+                        continue;
+                    }
+                    int r = (argb >> 16) & 0xFF;
+                    int g = (argb >> 8) & 0xFF;
+                    int b = argb & 0xFF;
+                    sum += (r * 299 + g * 587 + b * 114) / 1000.0 * alpha;
+                    weight += alpha;
+                }
+            }
+            result = weight == 0 ? 0 : sum / weight;
+        } catch (Throwable t) {
+            DebugLog.log("TreeIconRecolorer: could not measure icon brightness.", t);
+        }
+        iconBrightness.put(icon, result);
+        return result;
+    }
+
+    /**
+     * Swap a button's enabled and disabled icon variants for dark mode.
+     *
+     * <p>On Ignition <b>8.1</b> a toolbar button carried two bitmaps — a dark
+     * one on {@code icon} meaning enabled, a light one on
+     * {@code disabledIcon}/{@code disabledSelectedIcon} meaning disabled —
+     * and on a dark background that reading inverts, so the pair has to be
+     * swapped. That is what the Exchange dark-mode script does.
+     *
+     * <p><b>On 8.3 this is nearly a no-op, and deliberately kept anyway.</b>
+     * Measured against a running 8.3.8 Designer, 32 of 34 button classes have
+     * <em>no</em> disabled icon at all: IA moved to a single {@code VectorIcon}
+     * or {@code SvgIcon} per button and lets Swing derive the disabled
+     * appearance. There is nothing to swap on those, and the smart invert in
+     * {@link #darkVariant} handles them correctly — it preserves relative
+     * contrast, so an icon that was low-contrast on white stays low-contrast
+     * on dark. The two classes that do carry a pair are handled here; see
+     * {@link #logIconPairOnce} for the per-class evidence in the debug log.
+     *
+     * <p>Assignment is by measured brightness rather than a blind swap,
+     * because a component can be processed more than once in the same mode
+     * (a rescan, or a dock panel going from docked to floating) and a blind
+     * swap would flip-flop. Choosing by brightness makes this idempotent.
+     *
+     * @return true if the button had a usable pair and was handled
+     */
+    private boolean swapEnabledDisabledIcons(javax.swing.AbstractButton button) {
+        Icon enabled = button.getIcon();
+        // IA is not consistent about which disabled slot it fills: take
+        // whichever carries a distinct icon.
+        Icon disabled = button.getDisabledSelectedIcon();
+        if (disabled == null || disabled == enabled) {
+            disabled = button.getDisabledIcon();
+        }
+        if (logIconPairOnce(button, enabled, disabled)) {
+            // first sighting of this button class — logged above
+        }
+        if (enabled == null || disabled == null || enabled == disabled) {
+            return false;
+        }
+        Icon brightest = brightness(enabled) >= brightness(disabled) ? enabled : disabled;
+        Icon dimmest = brightest == enabled ? disabled : enabled;
+
+        buttonIconPairs.putIfAbsent(button,
+            new Icon[] {enabled, button.getDisabledIcon(), button.getDisabledSelectedIcon()});
+        button.setIcon(brightest);
+        button.setDisabledIcon(dimmest);
+        button.setDisabledSelectedIcon(dimmest);
+        return true;
+    }
+
+    /**
+     * One line per button class the first time it is seen, recording which
+     * icon slots Ignition actually populated and how bright each is. Which
+     * slots carry a usable pair is an Ignition implementation detail that
+     * varies by widget, so this is the evidence for whether the swap above
+     * can do anything at all on a given surface.
+     */
+    private boolean logIconPairOnce(javax.swing.AbstractButton button, Icon enabled, Icon disabled) {
+        String key = button.getClass().getName();
+        if (!loggedIconClasses.add("pair:" + key)) {
+            return false;
+        }
+        DebugLog.log(String.format(
+            "TreeIconRecolorer: %s icon=%s(%.0f) disabledIcon=%s disabledSelected=%s -> pair=%s",
+            key,
+            enabled == null ? "-" : enabled.getClass().getSimpleName(),
+            enabled == null ? -1.0 : brightness(enabled),
+            button.getDisabledIcon() == null ? "-"
+                : button.getDisabledIcon().getClass().getSimpleName()
+                    + "(" + Math.round(brightness(button.getDisabledIcon())) + ")",
+            button.getDisabledSelectedIcon() == null ? "-"
+                : button.getDisabledSelectedIcon().getClass().getSimpleName()
+                    + "(" + Math.round(brightness(button.getDisabledSelectedIcon())) + ")",
+            (enabled != null && disabled != null && enabled != disabled) ? "YES" : "no"));
+        return true;
+    }
+
     private Icon darkVariant(Icon original) {
         Icon cached = darkVariants.get(original);
         if (cached != null) {
@@ -303,6 +439,10 @@ public class TreeIconRecolorer {
 
     /** Original icons of buttons/labels whose icon was swapped for a dark variant. */
     private final Map<Component, Icon> buttonIconOriginals = new WeakHashMap<>();
+    /** Icon -> average brightness of its visible pixels; rasterising is not free. */
+    private final Map<Icon, Double> iconBrightness = new IdentityHashMap<>();
+    /** Button -> its stock {icon, disabledIcon, disabledSelectedIcon}, for the light restore. */
+    private final Map<javax.swing.AbstractButton, Icon[]> buttonIconPairs = new WeakHashMap<>();
 
     /**
      * Toolbar/button icons (the Project Properties gear, ...) are dark glyphs
@@ -338,7 +478,13 @@ public class TreeIconRecolorer {
                 label = (javax.swing.JLabel) child;
                 icon = label.getIcon();
             }
-            if (icon != null && !variantIcons.contains(icon)) {
+            // Prefer Ignition's own light variant where the button carries a
+            // disabled/enabled pair: it is the icon IA drew for a low-contrast
+            // context, so it beats anything a filter can synthesise. Only fall
+            // back to the smart invert when there is no pair to swap.
+            boolean paired = child instanceof javax.swing.AbstractButton
+                && swapEnabledDisabledIcons((javax.swing.AbstractButton) child);
+            if (!paired && icon != null && !variantIcons.contains(icon)) {
                 Icon variant = darkVariant(icon);
                 if (variant != null) {
                     buttonIconOriginals.putIfAbsent((Component) child, icon);
