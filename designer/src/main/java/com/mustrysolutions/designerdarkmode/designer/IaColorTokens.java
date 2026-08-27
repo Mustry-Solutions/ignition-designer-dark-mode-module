@@ -147,6 +147,12 @@ final class IaColorTokens {
         originals.forEach((token, argb) -> {
             try {
                 setColorValue(token, argb);
+                if (token.getRGB() != argb) {
+                    DebugLog.log(String.format(
+                        "RESTORE MISMATCH id=%08x wanted=#%06X got=#%06X",
+                        System.identityHashCode(token), argb & 0xFFFFFF,
+                        token.getRGB() & 0xFFFFFF));
+                }
             } catch (Exception e) {
                 log.warn("Could not restore a designer color token.", e);
             }
