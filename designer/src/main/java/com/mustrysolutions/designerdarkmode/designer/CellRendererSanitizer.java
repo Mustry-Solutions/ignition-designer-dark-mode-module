@@ -177,7 +177,7 @@ public class CellRendererSanitizer {
         Color background = component.getBackground();
         if (background != null && luminance(background) > 170
                 && reportedStragglers.add(component.getClass().getName())) {
-            DebugLog.log("Renderer straggler: " + component.getClass().getName()
+            DebugLog.detail("Renderer straggler: " + component.getClass().getName()
                 + " bg=" + String.format("#%06X", background.getRGB() & 0xFFFFFF)
                 + (background instanceof UIResource ? "|uires" : "|explicit"));
         }
@@ -212,7 +212,13 @@ public class CellRendererSanitizer {
                         }
                     }
                     sanitize(c);
-                    reportLightStragglers(c);
+                    if (DebugLog.verbose()) {
+                        // A recursive walk of the renderer's own tree, on every
+                        // painted cell, for the sake of one deduplicated log
+                        // line. Worth it while hunting a light straggler; far
+                        // too expensive to leave on in an ordinary session.
+                        reportLightStragglers(c);
+                    }
                 } catch (Throwable ignored) {
                     // Never let theming break a paint.
                 }

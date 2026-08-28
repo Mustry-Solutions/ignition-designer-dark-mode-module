@@ -103,7 +103,7 @@ public class TreeIconRecolorer {
         // The component watcher re-runs install() on every UI change; only log
         // passes that actually wrapped something.
         if (wrapped > 0) {
-            DebugLog.log("TreeIconRecolorer: wrapped " + wrapped + " tree renderer(s), "
+            DebugLog.detail("TreeIconRecolorer: wrapped " + wrapped + " tree renderer(s), "
                 + wrappedTrees.size() + " total under management.");
         }
     }
@@ -144,7 +144,7 @@ public class TreeIconRecolorer {
         });
         buttonIconPairs.clear();
         iconBrightness.clear();
-        DebugLog.log("TreeIconRecolorer: uninstalled.");
+        DebugLog.detail("TreeIconRecolorer: uninstalled.");
     }
 
     private List<JTree> findAllTrees() {
@@ -236,7 +236,7 @@ public class TreeIconRecolorer {
 
     private void logIconClassOnce(Icon icon) {
         if (loggedIconClasses.add(icon.getClass().getName())) {
-            DebugLog.log("TreeIconRecolorer: encountered icon class "
+            DebugLog.detail("TreeIconRecolorer: encountered icon class "
                 + icon.getClass().getName());
         }
     }
@@ -361,7 +361,7 @@ public class TreeIconRecolorer {
         if (!loggedIconClasses.add("pair:" + key)) {
             return false;
         }
-        DebugLog.log(String.format(
+        DebugLog.detail(String.format(
             "TreeIconRecolorer: %s icon=%s(%.0f) disabledIcon=%s disabledSelected=%s -> pair=%s",
             key,
             enabled == null ? "-" : enabled.getClass().getSimpleName(),

@@ -78,6 +78,19 @@ dumped to
 - Match the surrounding code style.
 - Every theming pass runs inside `safely(...)` so one failure is logged rather
   than stranding the rest of the switch. Keep new passes isolated the same way.
+- **Log at the right level.** `DebugLog.log` always writes and is for what a
+  user — or a maintainer reading their bug report — needs: theme switches and
+  failures. Everything else is `DebugLog.detail`, which writes only under
+  `-Ddesignerdarkmode.debug=true`. The component watcher re-runs the theming
+  passes for the whole session, so anything that can fire per rescan, per
+  attached component or per painted cell **must** be `detail`. A diagnostic
+  that costs real work — a tree walk, a defaults dump — belongs inside
+  `if (DebugLog.verbose())` rather than merely being logged quietly.
+- **Say so when a pass fails.** Passes are isolated, so a failure shows up as
+  one wrong-looking surface and nothing else. `ThemeManager` collects the names
+  of failed phases and reports them in the Designer's status bar via
+  `DesignerStatus`; a new pass added through `safely(...)` is covered
+  automatically, which is another reason to add it that way.
 - Prefer fixing a color at its source — an Ignition design token in
   `IaColorTokens` — over walking the component hierarchy. One token entry
   covers every component and painter that holds it, whenever it was built.

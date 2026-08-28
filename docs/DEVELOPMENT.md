@@ -67,14 +67,21 @@ Two tools make it tractable:
 ### The debug log
 
 `~/.ignition/designer-dark-mode.log` — append-only, written by `DebugLog`.
-Theme switches, per-phase failures (with stack traces), icon classes
-encountered, popup contents, and stale-delegate refreshes all land here.
 **Timestamps are UTC** — add your local offset when correlating with the clock.
 
-The noisiest diagnostics (every dock title pane, every light `UIManager`
-default) are off unless the Designer is launched with
-`-Ddesignerdarkmode.debug=true`. Turn them on when hunting a mistyped surface;
-leave them off otherwise, or the warnings drown.
+Two levels. `DebugLog.log` always writes, and is reserved for what a user or a
+maintainer reading a bug report needs: the theme switches and the failures
+(with stack traces). `DebugLog.detail` writes only when the Designer is
+launched with `-Ddesignerdarkmode.debug=true`, and covers everything else —
+the per-pass counts, icon classes encountered, popup contents, stale-delegate
+refreshes, every dock title pane and every light `UIManager` default. The
+component watcher re-runs the theming passes for the whole session, so those
+lines are unbounded; turn them on while hunting a mistyped surface and leave
+them off otherwise, or the warnings drown.
+
+Two diagnostics that cost real time are gated on the same flag rather than
+merely silenced: the light-defaults dump, and the renderer-straggler walk that
+would otherwise run over every painted table cell.
 
 ```bash
 tail -f ~/.ignition/designer-dark-mode.log

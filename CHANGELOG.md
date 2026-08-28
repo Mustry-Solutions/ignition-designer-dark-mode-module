@@ -8,6 +8,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Note that released module versions are plain `x.y.z`: Ignition's `module.xml`
 version parser is numeric-only and rejects a prerelease suffix at install time.
 
+## [Unreleased]
+
+### Fixed
+
+- The **Tools → Dark Mode** checkmark no longer disagrees with the theme in
+  effect ([#15](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/15)).
+  It tracked the *request*: ticked the moment you clicked, whether or not the
+  switch then worked, and a failed switch left it claiming a theme the Designer
+  was not in — permanently, and retried at every launch. The checkmark and the
+  saved preference are now both set from the look and feel actually installed
+  once the switch has finished.
+- A switch no longer looks like a click that did not register. It runs one
+  event-queue turn late, behind an "Applying dark mode…" message painted
+  before the event dispatch thread blocks, with the menu item disabled so a
+  second click cannot queue an opposite toggle.
+
+### Added
+
+- A **partly-applied theme now says so**, in the Designer's status bar: which
+  passes failed, out of how many, and where to read the stack traces. Every
+  pass after the look-and-feel swap is isolated, so one that fails leaves a
+  Designer that works and is visibly wrong somewhere; the only record used to
+  be a log file nobody knows to look for.
+- The Designer's status bar stays readable under dark mode. `StatusBar
+  .setMessage` re-asserts `Color.black` on the message label on every call, so
+  its own messages were black on a dark bar.
+
+### Changed
+
+- The debug log has two levels. `DebugLog.log` (theme switches, failures) always
+  writes; the per-pass counts, icon classes, popup contents and stale-delegate
+  traces moved to `DebugLog.detail`, which writes only under
+  `-Ddesignerdarkmode.debug=true`. The component watcher re-runs the theming
+  passes for the whole session, so those lines were unbounded — and every one
+  cost a file open, write and close on the event dispatch thread. Popup state
+  was logged on **every** popup menu creation, and a renderer-straggler walk
+  ran over **every painted table cell**; both are now behind the same flag.
+- The log file is opened once and held for the session, flushed per line.
+
 ## [0.1.0] - 2026-08-28
 
 First release.

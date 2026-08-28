@@ -61,6 +61,39 @@ public class ThemeManager {
     private DesignerContext context;
     private LookAndFeel stockLaf;
 
+    private final DesignerStatus status = new DesignerStatus();
+
+    /**
+     * Told when a switch starts and when it ends, so the Tools menu can follow
+     * the theme actually in effect rather than the one that was asked for.
+     */
+    public interface ThemeStateListener {
+
+        /** A switch has started; the menu item should not take another click. */
+        void switchStarted();
+
+        /** A switch has ended; {@code darkActive} is the theme now installed. */
+        void switchFinished(boolean darkActive);
+    }
+
+    private ThemeStateListener stateListener = new ThemeStateListener() {
+        @Override
+        public void switchStarted() {
+        }
+
+        @Override
+        public void switchFinished(boolean darkActive) {
+        }
+    };
+
+    /**
+     * Phases that failed during the current {@link #apply(boolean)}, and how
+     * many were attempted — the material for the one-line summary a user gets
+     * when the switch only partly worked.
+     */
+    private final java.util.List<String> failedPhases = new java.util.ArrayList<>();
+    private int attemptedPhases;
+
     /**
      * Theme changes are only allowed once the main Designer window is fully
      * built. The Tools menu checkbox calls setDark() during module startup
@@ -75,9 +108,15 @@ public class ThemeManager {
     private final ScriptEditorTheme scriptEditors = new ScriptEditorTheme();
     private final ConsoleTextTheme consoleText = new ConsoleTextTheme();
 
+    /** Register the menu's listener before {@link #startup}. */
+    public void setThemeStateListener(ThemeStateListener listener) {
+        this.stateListener = listener;
+    }
+
     /** Called once on Designer startup; re-applies dark mode once the UI is up. */
     public void startup(DesignerContext context) {
         this.context = context;
+        status.attach(context);
         // Must be set before FlatLaf ever initializes: with user scaling on,
         // FlatLaf registers a permanent UIScale listener on the UI defaults
         // that NPEs (null defaultFont) when Synthetica's uninitialize fires
@@ -107,12 +146,53 @@ public class ThemeManager {
         prefs.putBoolean(PREF_DARK_MODE, dark);
         onEdt(() -> {
             if (!uiReady) {
-                DebugLog.log("setDark(" + dark + ") before the UI is ready; "
+                DebugLog.detail("setDark(" + dark + ") before the UI is ready; "
                     + "deferred to the startup apply.");
                 return;
             }
-            apply(dark);
+            beginSwitch(dark);
         });
+    }
+
+    /**
+     * Start a switch, one event-queue turn late.
+     *
+     * <p>{@link #apply} blocks the event dispatch thread for as long as the
+     * switch takes — seconds, on a Designer with several windows open — and
+     * the click that asked for it has not finished being processed yet.
+     * Deferring one turn lets the menu close and the "applying" message paint
+     * first, so the Designer looks busy instead of hung. Without it the user
+     * sees a frozen, still-light Designer with the box already ticked, and
+     * reasonably concludes the click did not register.
+     */
+    private void beginSwitch(boolean dark) {
+        stateListener.switchStarted();
+        status.message(dark
+            ? "Applying dark mode\u2026"
+            : "Restoring the stock Designer theme\u2026");
+        SwingUtilities.invokeLater(() -> {
+            try {
+                apply(dark);
+            } finally {
+                finishSwitch();
+            }
+        });
+    }
+
+    /**
+     * Reconcile what the user can see with the theme that is actually
+     * installed. The preference follows reality rather than the request: a
+     * switch that failed must not be retried at every launch, and the Tools
+     * menu must not carry a checkmark for a theme the Designer is not in.
+     */
+    private void finishSwitch() {
+        boolean darkActive = isDarkActive();
+        prefs.putBoolean(PREF_DARK_MODE, darkActive);
+        stateListener.switchFinished(darkActive);
+    }
+
+    private static boolean isDarkActive() {
+        return UIManager.getLookAndFeel() instanceof FlatDarkLaf;
     }
 
     /**
@@ -148,12 +228,13 @@ public class ThemeManager {
             if (ready) {
                 if (++readyTicks[0] >= 4) {
                     timer.stop();
-                    DebugLog.log("Startup apply: designer UI ready after "
+                    DebugLog.detail("Startup apply: designer UI ready after "
                         + polls[0] + " polls (" + docks + " dock frame(s), "
                         + trees + " tree(s)).");
                     uiReady = true;
                     if (isDarkModeEnabled()) {
                         apply(true);
+                        finishSwitch();
                     }
                     return;
                 }
@@ -168,6 +249,7 @@ public class ThemeManager {
                 uiReady = true;
                 if (isDarkModeEnabled()) {
                     apply(true);
+                    finishSwitch();
                 }
             }
         });
@@ -201,9 +283,14 @@ public class ThemeManager {
     private void apply(boolean dark) {
         boolean darkActive = UIManager.getLookAndFeel() instanceof FlatDarkLaf;
         if (dark == darkActive) {
+            // Already there. Take down the "applying" message anyway, or it
+            // sits in the status bar describing work that never happened.
+            status.clear();
             return;
         }
         DebugLog.log("ThemeManager: switching to " + (dark ? "dark" : "light") + " mode.");
+        failedPhases.clear();
+        attemptedPhases = 0;
         // Held only for the abort path below: the exact overrides phase 0 drops,
         // so a failed swap can put them back rather than guessing at them.
         final java.util.Map<String, Object> clearedDefaults = new java.util.HashMap<>();
@@ -263,9 +350,13 @@ public class ThemeManager {
         } catch (Throwable t) {
             log.error("Failed to switch the Designer theme.", t);
             DebugLog.log("Theme switch FAILED in the look-and-feel phase.", t);
-            if (dark && !(UIManager.getLookAndFeel() instanceof FlatDarkLaf)) {
-                prefs.putBoolean(PREF_DARK_MODE, false);
-            }
+            // Say so where the user is looking. The preference is squared with
+            // what is actually installed in finishSwitch(), so a switch that
+            // failed neither persists to the next launch nor leaves the menu
+            // claiming a theme the Designer is not in.
+            status.message(dark
+                ? "Dark mode could not be applied. Details in " + DebugLog.path()
+                : "The stock theme could not be restored. Details in " + DebugLog.path());
             if (!dark && UIManager.getLookAndFeel() instanceof FlatDarkLaf) {
                 // The restore failed and we are still dark — but phase 0 has
                 // already dropped the overrides dark mode depends on. FlatLaf's
@@ -346,6 +437,7 @@ public class ThemeManager {
             safely("whiteSwap", () -> swapWhiteTokenBackgrounds(true));
             safely("scriptEditors", scriptEditors::install);
             safely("consoleText", consoleText::install);
+            safely("statusBar", status::install);
             safely("cachedPainters", () -> repointCachedThemePainters(true));
             installComponentWatcher();
             if (DebugLog.verbose()) {
@@ -361,15 +453,46 @@ public class ThemeManager {
             safely("whiteSwap", () -> swapWhiteTokenBackgrounds(false));
             safely("scriptEditors", scriptEditors::uninstall);
             safely("consoleText", consoleText::uninstall);
+            safely("statusBar", status::uninstall);
             safely("cachedPainters", () -> repointCachedThemePainters(false));
         }
         log.info(dark ? "Dark mode applied." : "Stock Designer theme restored.");
+        reportOutcome(dark);
+    }
+
+    /**
+     * Tell the user when the switch only partly worked.
+     *
+     * <p>Every pass after the look-and-feel swap runs under {@link #safely},
+     * so one that fails leaves a Designer that works but is visibly wrong
+     * somewhere: a light tree, stock icons, an unthemed console. The only
+     * record of that used to be the debug log, which nobody knows to look
+     * for — the visible result was a half-dark Designer and no explanation.
+     */
+    private void reportOutcome(boolean dark) {
+        if (failedPhases.isEmpty()) {
+            status.clear();
+            return;
+        }
+        String message = degradedMessage(dark, failedPhases, attemptedPhases);
+        log.warn(message);
+        DebugLog.log(message);
+        status.message(message);
+    }
+
+    /** One line: what worked, what did not, and where to read about it. */
+    static String degradedMessage(boolean dark, java.util.List<String> failed, int attempted) {
+        return (dark ? "Dark mode applied" : "Stock theme restored")
+            + " with " + failed.size() + " of " + attempted + " steps failing ("
+            + String.join(", ", failed) + "). Details in " + DebugLog.path();
     }
 
     private void safely(String phase, Runnable task) {
+        attemptedPhases++;
         try {
             task.run();
         } catch (Throwable t) {
+            failedPhases.add(phase);
             log.warn("Theme phase '" + phase + "' failed.", t);
             DebugLog.log("Theme phase " + phase + " FAILED.", t);
         }
@@ -585,7 +708,7 @@ public class ThemeManager {
                 }
             }
             java.util.Collections.sort(light);
-            DebugLog.log("Light UIManager colour defaults under dark ("
+            DebugLog.detail("Light UIManager colour defaults under dark ("
                 + light.size() + "): " + light);
         } catch (Throwable t) {
             DebugLog.log("Could not dump light UIManager defaults.", t);
@@ -593,11 +716,11 @@ public class ThemeManager {
     }
 
     private void debugDumpDockState() {
-        DebugLog.log("DockableFrameUI -> " + UIManager.get("DockableFrameUI"));
+        DebugLog.detail("DockableFrameUI -> " + UIManager.get("DockableFrameUI"));
         Object painter = UIManager.get("Theme.painter");
-        DebugLog.log("Theme.painter -> "
+        DebugLog.detail("Theme.painter -> "
             + (painter == null ? "null" : painter.getClass().getName()));
-        DebugLog.log("DockableFrame.inactiveTitleBackground -> "
+        DebugLog.detail("DockableFrame.inactiveTitleBackground -> "
             + UIManager.get("DockableFrame.inactiveTitleBackground"));
         for (Window window : Window.getWindows()) {
             if (window instanceof java.awt.Container) {
@@ -616,7 +739,7 @@ public class ThemeManager {
                 } catch (Exception ignored) {
                     // Not all candidates expose getUI.
                 }
-                DebugLog.log("Dock component: " + className
+                DebugLog.detail("Dock component: " + className
                     + " bg=" + child.getBackground() + " ui=" + ui);
             }
             if (child instanceof java.awt.Container) {
@@ -641,10 +764,10 @@ public class ThemeManager {
             Class<?> factory = Class.forName(JIDE_LAF_FACTORY);
             if (dark) {
                 factory.getMethod("installJideExtension", int.class).invoke(null, 1);
-                DebugLog.log("installJideExtension(VSNET_STYLE) succeeded.");
+                DebugLog.detail("installJideExtension(VSNET_STYLE) succeeded.");
             } else {
                 factory.getMethod("installJideExtension").invoke(null);
-                DebugLog.log("installJideExtension() succeeded.");
+                DebugLog.detail("installJideExtension() succeeded.");
             }
         } catch (Exception e) {
             log.warn("Could not reinstall the JIDE UI defaults after the theme change.", e);
@@ -689,7 +812,7 @@ public class ThemeManager {
     private void overrideThemePainters(boolean dark) {
         Object value = UIManager.get(THEME_PAINTER_KEY);
         if (!(value instanceof java.util.Map)) {
-            DebugLog.log("Theme.painter is " + (value == null ? "null" : value.getClass().getName())
+            DebugLog.detail("Theme.painter is " + (value == null ? "null" : value.getClass().getName())
                 + "; painter override skipped.");
             return;
         }
@@ -714,7 +837,7 @@ public class ThemeManager {
                     }
                 }
                 if (!reverted.isEmpty()) {
-                    DebugLog.log("Theme.painter: repointed " + reverted.size() + " of "
+                    DebugLog.detail("Theme.painter: repointed " + reverted.size() + " of "
                         + painters.size() + " classloader entr(ies) at BasicPainter; "
                         + "displaced: " + reverted);
                 }
@@ -766,7 +889,7 @@ public class ThemeManager {
         try {
             painterType = Class.forName(THEME_PAINTER_TYPE);
         } catch (Throwable t) {
-            DebugLog.log("ThemePainter type unavailable; cached-painter repoint skipped.", t);
+            DebugLog.detail("ThemePainter type unavailable; cached-painter repoint skipped.", t);
             return;
         }
         if (!dark) {
@@ -789,7 +912,7 @@ public class ThemeManager {
             themePainterType = null;
             basicPainterInstance = null;
             if (restored > 0) {
-                DebugLog.log("Restored " + restored + " cached ThemePainter field(s).");
+                DebugLog.detail("Restored " + restored + " cached ThemePainter field(s).");
             }
             return;
         }
@@ -797,7 +920,7 @@ public class ThemeManager {
         try {
             basicPainter = Class.forName(BASIC_PAINTER).getMethod("getInstance").invoke(null);
         } catch (Throwable t) {
-            DebugLog.log("BasicPainter unavailable; cached-painter repoint skipped.", t);
+            DebugLog.detail("BasicPainter unavailable; cached-painter repoint skipped.", t);
             return;
         }
         themePainterType = painterType;
@@ -807,7 +930,7 @@ public class ThemeManager {
             repointed += repointCachedThemePainters(window, painterType, basicPainter);
         }
         if (repointed > 0) {
-            DebugLog.log("Repointed " + repointed + " cached ThemePainter field(s) at BasicPainter.");
+            DebugLog.detail("Repointed " + repointed + " cached ThemePainter field(s) at BasicPainter.");
         }
     }
 
@@ -1182,7 +1305,7 @@ public class ThemeManager {
                 int repointed = repointCachedThemePainters(
                     (java.awt.Container) added, themePainterType, basicPainterInstance);
                 if (repointed > 0) {
-                    DebugLog.log("Repointed " + repointed + " cached ThemePainter field(s) on "
+                    DebugLog.detail("Repointed " + repointed + " cached ThemePainter field(s) on "
                         + added.getClass().getName() + " as it was attached.");
                 }
             }
@@ -1234,7 +1357,9 @@ public class ThemeManager {
                     // delegates (SyntheticaMenuItemUI cannot paint under
                     // FlatLaf -> blank context menus). Refresh before paint.
                     refreshStaleUiDelegates((javax.swing.JPopupMenu) child);
-                    logPopupState((javax.swing.JPopupMenu) child);
+                    if (DebugLog.verbose()) {
+                        logPopupState((javax.swing.JPopupMenu) child);
+                    }
                 }
                 rescanTimer.restart();
             } else if ((event.getID() == java.awt.event.WindowEvent.WINDOW_OPENED
@@ -1242,7 +1367,8 @@ public class ThemeManager {
                     && event instanceof java.awt.event.WindowEvent) {
                 Window window = ((java.awt.event.WindowEvent) event).getWindow();
                 boolean opened = event.getID() == java.awt.event.WindowEvent.WINDOW_OPENED;
-                if (opened && window.getClass().getName().toLowerCase().contains("popup")) {
+                if (DebugLog.verbose() && opened
+                        && window.getClass().getName().toLowerCase().contains("popup")) {
                     logWindowContents(window);
                 }
                 if (UIManager.getLookAndFeel() instanceof FlatDarkLaf) {
@@ -1273,7 +1399,7 @@ public class ThemeManager {
         };
         Toolkit.getDefaultToolkit().addAWTEventListener(componentWatcher,
             AWTEvent.CONTAINER_EVENT_MASK | AWTEvent.WINDOW_EVENT_MASK);
-        DebugLog.log("Component watcher installed.");
+        DebugLog.detail("Component watcher installed.");
     }
 
     /**
@@ -1401,7 +1527,7 @@ public class ThemeManager {
         boolean darkActive = UIManager.getLookAndFeel() instanceof FlatDarkLaf;
         if (hasStaleUi(root, darkActive)) {
             SwingUtilities.updateComponentTreeUI(root);
-            DebugLog.log("Refreshed stale UI delegates under "
+            DebugLog.detail("Refreshed stale UI delegates under "
                 + root.getClass().getName());
         }
     }
@@ -1440,7 +1566,7 @@ public class ThemeManager {
                 .append(window.getClass().getName()).append(" ")
                 .append(window.getWidth()).append("x").append(window.getHeight()).append(":");
             appendChildren(sb, window, 0);
-            DebugLog.log(sb.toString());
+            DebugLog.detail(sb.toString());
         });
     }
 
@@ -1476,7 +1602,7 @@ public class ThemeManager {
                 }
                 sb.append("]");
             }
-            DebugLog.log(sb.toString());
+            DebugLog.detail(sb.toString());
         });
     }
 
@@ -1499,7 +1625,7 @@ public class ThemeManager {
                 }
             }
         }
-        DebugLog.log("Captured " + flatLafDefaults.size() + " FlatLaf defaults.");
+        DebugLog.detail("Captured " + flatLafDefaults.size() + " FlatLaf defaults.");
     }
 
     /**
