@@ -99,6 +99,33 @@ component-level state (the painters JIDE caches in private fields, the white
 background swaps) is out of its reach. A Designer and a pair of eyes still
 settle those.
 
+**Validate a new invariant with a mutation.** A green test proves nothing until
+you have seen it go red for the right reason. Break the thing it claims to
+protect — reorder a phase, delete a restore call — and check that the test you
+just wrote is the one that fails. Reintroducing [#23][23]'s ordering fails three
+of the six, with 1297 of 1740 defaults left null; a test that survives the bug it
+is named after is decoration.
+
+Doing that across fifteen mutations mapped the harness's blind spots, which are
+worth knowing before you trust a pass:
+
+- **State outside `UIManager` is invisible to it.** Never uninstalling the IA
+  colour tokens, or never calling `keepSyntheticaAlive()`, both pass everything
+  here — those mutate static fields in `client-api`, not defaults.
+  `IaColorTokensTest` in the unit suite covers the first; nothing covers the
+  second.
+- **The dark half is weakly covered.** Headlessly,
+  `installJideExtension(VSNET_STYLE)` really does derive its colours from
+  FlatLaf's dark palette: skipping the module's FlatLaf re-assert entirely
+  changes exactly one value (`MenuBar.border`) and no colour at all. The white
+  search fields and invisible context menus that pass exists for do not
+  reproduce without a Designer.
+- **`Theme.painter` self-heals.** Removing the module's painter restore leaves
+  the painter test passing; removing `installJideExtension()` from the light
+  path fails it. JIDE's own reinstall is what repopulates that map here. The
+  test is an outcome check, not evidence the restore code runs — and this JVM
+  has one classloader where a Designer has several.
+
 Two notes if you extend it:
 
 - Values are compared as **text**, not by identity or `equals`. JIDE rebuilds

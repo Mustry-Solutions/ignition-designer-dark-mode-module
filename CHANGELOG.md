@@ -36,8 +36,14 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   invariants are now pinned instead: a full cycle restores every default, the
   FlatLaf overrides are cleared while FlatLaf is still installed (the ordering
   #23 got wrong), repeated cycles converge, and JIDE's `Theme.painter` map
-  comes back to its stock entries. It runs in CI. It cannot see pixels — a
-  Designer still settles "does this look right".
+  comes back to its stock entries, and the standard Swing colours actually go
+  dark. It runs in CI.
+
+  Its blind spots are mapped and documented rather than assumed: state outside
+  `UIManager` (the IA colour tokens, the Synthetica singleton) is invisible to
+  it, the dark half is weakly covered because JIDE derives dark colours
+  correctly with no Designer present, and it cannot see pixels. A Designer
+  still settles "does this look right".
 
 - A **partly-applied theme now says so**, in the Designer's status bar: which
   passes failed, out of how many, and where to read the stack traces. Every
