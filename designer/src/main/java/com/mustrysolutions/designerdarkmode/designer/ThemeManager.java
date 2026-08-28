@@ -95,6 +95,24 @@ public class ThemeManager {
     private int attemptedPhases;
 
     /**
+     * Every phase of the last switch, in the order it ran.
+     *
+     * <p>Ordering is not a detail here, it is where the bugs are. #23 was a
+     * correct set of steps in the wrong sequence: the FlatLaf overrides were
+     * cleared after the stock look and feel had come back, and since the clear
+     * is a delete rather than a revert it took the stock values with it. The
+     * result on screen — an amber property editor — is several inferential
+     * steps away from the cause, and nothing asserted at the time could see
+     * the order.
+     *
+     * <p>So the order is recorded and asserted directly. Kept even though the
+     * headless harness also checks the CONSEQUENCE (every default back to its
+     * stock value): the consequence check says something regressed, this says
+     * which step moved.
+     */
+    private final java.util.List<String> phaseTrace = new java.util.ArrayList<>();
+
+    /**
      * Theme changes are only allowed once the main Designer window is fully
      * built. The Tools menu checkbox calls setDark() during module startup
      * (setSelected fires itemStateChanged), which used to apply FlatLaf to a
@@ -124,7 +142,7 @@ public class ThemeManager {
         // system-scaled, so user scaling adds nothing here.
         System.setProperty("flatlaf.uiScale.enabled", "false");
         onEdt(() -> {
-            stockLaf = UIManager.getLookAndFeel();
+            captureStockLaf();
             inspector.install();
             applyWhenDesignerVisible();
         });
@@ -280,7 +298,18 @@ public class ThemeManager {
         return count;
     }
 
-    private void apply(boolean dark) {
+    /**
+     * Run one theme switch, start to finish.
+     *
+     * <p>Package-visible, and deliberately free of {@link DesignerContext}:
+     * every step either works on {@code UIManager} or walks
+     * {@code Window.getWindows()}, both of which are perfectly happy with no
+     * Designer around. That is what lets the headless harness
+     * ({@code src/lafHarness}) drive this exact sequence against the real
+     * Synthetica/JIDE/FlatLaf jars — the interaction where every bug in this
+     * module's history has lived — instead of against stubs.
+     */
+    void apply(boolean dark) {
         boolean darkActive = UIManager.getLookAndFeel() instanceof FlatDarkLaf;
         if (dark == darkActive) {
             // Already there. Take down the "applying" message anyway, or it
@@ -291,6 +320,7 @@ public class ThemeManager {
         DebugLog.log("ThemeManager: switching to " + (dark ? "dark" : "light") + " mode.");
         failedPhases.clear();
         attemptedPhases = 0;
+        phaseTrace.clear();
         // Held only for the abort path below: the exact overrides phase 0 drops,
         // so a failed swap can put them back rather than guessing at them.
         final java.util.Map<String, Object> clearedDefaults = new java.util.HashMap<>();
@@ -327,7 +357,9 @@ public class ThemeManager {
         // never persists into the next launch).
         try {
             if (dark) {
+                trace("painterSnapshot");
                 snapshotThemePainters();
+                trace("lookAndFeel");
                 try {
                     UIManager.setLookAndFeel(new FlatDarkLaf());
                 } catch (Throwable first) {
@@ -340,6 +372,7 @@ public class ThemeManager {
                 }
                 keepSyntheticaAlive();
             } else {
+                trace("lookAndFeel");
                 try {
                     restoreStockLaf();
                 } catch (Throwable first) {
@@ -487,8 +520,24 @@ public class ThemeManager {
             + String.join(", ", failed) + "). Details in " + DebugLog.path();
     }
 
+    /** Note a phase that does not run under {@link #safely} (it has its own guard). */
+    private void trace(String phase) {
+        phaseTrace.add(phase);
+    }
+
+    /** The phases of the last switch, in order. */
+    java.util.List<String> phaseTrace() {
+        return java.util.Collections.unmodifiableList(phaseTrace);
+    }
+
+    /** The phases of the last switch that threw. */
+    java.util.List<String> failedPhases() {
+        return java.util.Collections.unmodifiableList(failedPhases);
+    }
+
     private void safely(String phase, Runnable task) {
         attemptedPhases++;
+        trace(phase);
         try {
             task.run();
         } catch (Throwable t) {
@@ -517,6 +566,18 @@ public class ThemeManager {
         } catch (Exception e) {
             log.warn("Could not keep the Synthetica singleton alive under dark mode.", e);
         }
+    }
+
+    /**
+     * Remember the look and feel the Designer came up in, so the light restore
+     * has something to put back.
+     *
+     * <p>Its own method because {@link #startup} is not the only caller that
+     * matters: the headless harness has no Designer to start up, and this is
+     * the one piece of {@link #startup}'s state that {@link #apply} needs.
+     */
+    void captureStockLaf() {
+        stockLaf = UIManager.getLookAndFeel();
     }
 
     /**

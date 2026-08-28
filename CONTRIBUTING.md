@@ -64,6 +64,11 @@ dumped to
    but anything that is pure logic — a colour predicate, a threshold, the
    token snapshot/restore bookkeeping — should come with a unit test. Run
    them with `./gradlew test`; they need no gateway.
+   If you touched the switch sequence itself, also run `./gradlew
+   :designer:lafHarness` — it drives that sequence against the real Synthetica,
+   JIDE and FlatLaf jars headlessly, and catches the kind of `UIManager` damage
+   that is invisible on screen. See
+   [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#the-headless-look-and-feel-harness).
 3. **Verify the light restore, not just the dark result.** Toggling dark mode
    off must return the Designer exactly to stock. A change that only looks
    right in dark mode is half a change — restores iterate tracked component

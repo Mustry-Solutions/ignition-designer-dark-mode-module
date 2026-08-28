@@ -29,6 +29,7 @@ Useful variants:
 ```bash
 ./gradlew :designer:compileJava   # fast compile-only check while iterating
 ./gradlew test                    # unit tests only (no gateway needed)
+./gradlew :designer:lafHarness    # the headless look-and-feel harness (below)
 ```
 
 ## Run it against a gateway
@@ -62,7 +63,56 @@ Gateway web UI, accept the unsigned module, relaunch the Designer.
 ## The debug loop
 
 Dark-mode work is mostly a diagnose-then-fix loop against the running Designer.
-Two tools make it tractable:
+Three tools make it tractable — and reach for the first one before you build a
+`.modl`.
+
+### The headless look-and-feel harness
+
+```bash
+./gradlew :designer:lafHarness
+```
+
+Runs `ThemeManager`'s real switch sequence against the real Designer look and
+feels — Synthetica through `IgnitionLookAndFeel$LaF`, JIDE's extension on top,
+FlatLaf arriving over both — with **no gateway, no Designer and no
+screenshots**, in a couple of seconds. Source in `designer/src/lafHarness/`.
+
+This exists because looking at a Designer is a bad instrument for most of these
+bugs. A stock Designer resolves about 1,700 `UIManager` defaults and a switch
+to dark rewrites or adds roughly 2,300 entries, so most of what a switch does is
+somewhere you are not looking. When [#23][23] was finally diagnosed, **192
+defaults came back wrong after a light→dark→light cycle and exactly one of them
+was visible on screen.**
+The harness snapshots every resolvable default before and after a cycle and
+diffs them, so the other 191 are visible too.
+
+What it pins today: a full cycle returns every default to its stock value; the
+FlatLaf overrides are cleared *while FlatLaf is still installed*, which is the
+ordering [#23][23] got wrong; repeated cycles converge instead of drifting; and
+JIDE's `Theme.painter` map comes back to the Synthetica entries ([#14][14],
+[#19][19]).
+
+What it cannot see is **pixels**. It replaces the "which defaults are wrong"
+half of the loop, not the "does this look right" half — and with no windows
+open, every pass that walks the component tree runs and finds nothing, so
+component-level state (the painters JIDE caches in private fields, the white
+background swaps) is out of its reach. A Designer and a pair of eyes still
+settle those.
+
+Two notes if you extend it:
+
+- Values are compared as **text**, not by identity or `equals`. JIDE rebuilds
+  its `Border` and `Icon` instances on every `installJideExtension()`, so a
+  perfectly clean restore produces ~200 false differences otherwise. Colours are
+  rendered exactly (ARGB); borders and icons collapse to a class name.
+- The JVM args in the `lafHarness` task are **not tuning**. Synthetica fails to
+  initialise without those `--add-exports`/`--add-opens` — you get an
+  `IllegalAccessError` out of a static initialiser, not a theming difference.
+  The Designer Launcher passes the same set.
+
+[14]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/14
+[19]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/19
+[23]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/23
 
 ### The debug log
 
