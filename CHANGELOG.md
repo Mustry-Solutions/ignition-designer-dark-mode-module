@@ -36,8 +36,10 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   invariants are now pinned instead: a full cycle restores every default, the
   FlatLaf overrides are cleared while FlatLaf is still installed (the ordering
   #23 got wrong), repeated cycles converge, and JIDE's `Theme.painter` map
-  comes back to its stock entries, and the standard Swing colours actually go
-  dark. It runs in CI.
+  comes back to its stock entries, the standard Swing colours actually go dark,
+  and no `UIManager` key naming a background stays light under dark mode —
+  which is [#22](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/22)
+  turned from a manual dump into an assertion over 174 keys. It runs in CI.
 
   Its blind spots are mapped and documented rather than assumed: state outside
   `UIManager` (the IA colour tokens, the Synthetica singleton) is invisible to

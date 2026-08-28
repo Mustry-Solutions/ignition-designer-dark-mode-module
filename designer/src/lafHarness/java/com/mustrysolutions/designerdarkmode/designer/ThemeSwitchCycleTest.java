@@ -152,6 +152,94 @@ class ThemeSwitchCycleTest {
         }
     }
 
+    /**
+     * The four keys that end in "background" and are correctly LIGHT while dark
+     * mode is active. Every other one of the ~174 must be dark.
+     *
+     * <p>Not an allowlist in the maintenance-burden sense — each has a reason,
+     * and a fifth appearing is a finding rather than a chore:
+     *
+     * <ul>
+     *   <li>the three {@code CheckBox.icon[filled]} entries are the fill behind
+     *       a checkmark glyph, not a surface anything sits on: a light box with
+     *       a dark tick is what a checked FlatLaf checkbox looks like;</li>
+     *   <li>{@code ProgressBar.selectionBackground} is misnamed by Swing. It is
+     *       the colour of the TEXT drawn over the filled portion of the bar —
+     *       {@code selectionForeground} covers the unfilled part — so it has to
+     *       contrast with the fill, not match the theme.</li>
+     * </ul>
+     */
+    private static final List<String> CORRECTLY_LIGHT_BACKGROUNDS = List.of(
+        "CheckBox.icon[filled].selectedBackground",
+        "CheckBox.icon[filled].hoverSelectedBackground",
+        "CheckBox.icon[filled].pressedSelectedBackground",
+        "ProgressBar.selectionBackground");
+
+    /**
+     * The generalisation of the hand-picked list above, and the assertion that
+     * would have found #22 on its own.
+     *
+     * <p>#22 was diagnosed by dumping every {@code UIManager} colour default
+     * still light under dark mode and reading the list — which turned up
+     * {@code SidePane.background} at #E5E8ED and
+     * {@code CommandBarSeparator.background} at #DBD8D1, both thin strips
+     * painted by a JIDE delegate from a shared default that no component walk
+     * could ever have reached. That dump is still in {@code ThemeManager} as a
+     * debug aid; this is the same question asked as an assertion.
+     *
+     * <p>It is restricted to keys NAMING a background on purpose. "Light colour
+     * under a dark theme" is not a defect: 206 of the 542 colour defaults are
+     * light while dark is active, and they should be — foregrounds, carets,
+     * checkmarks, arrows, disabled text, and the semantic accent palette
+     * ({@code Objects.Red}, {@code Actions.Yellow}) all paint ON a dark
+     * surface. Narrowing to backgrounds turns a list of 206 judgment calls into
+     * a rule with four exceptions.
+     */
+    @Test
+    @DisplayName("no UIManager key naming a background stays light under dark mode (#22)")
+    void noBackgroundDefaultStaysLightUnderDarkMode() {
+        manager.apply(true);
+
+        List<String> stillLight = new java.util.ArrayList<>();
+        int examined = 0;
+        java.util.Set<String> seen = new java.util.HashSet<>();
+        java.util.Enumeration<Object> keys = UIManager.getDefaults().keys();
+        while (keys.hasMoreElements()) {
+            Object key = keys.nextElement();
+            if (!(key instanceof String) || !seen.add((String) key)) {
+                continue;
+            }
+            String name = (String) key;
+            if (!name.toLowerCase(java.util.Locale.ROOT).endsWith("background")
+                    || CORRECTLY_LIGHT_BACKGROUNDS.contains(name)) {
+                continue;
+            }
+            Object value;
+            try {
+                value = UIManager.get(key);
+            } catch (Throwable resolutionFailed) {
+                continue;
+            }
+            if (!(value instanceof Color)) {
+                continue;
+            }
+            examined++;
+            if (ThemeManager.luminance((Color) value) > MID_LUMINANCE) {
+                stillLight.add(name + " = " + String.format("#%06X",
+                    ((Color) value).getRGB() & 0xFFFFFF));
+            }
+        }
+
+        assertTrue(examined > 100,
+            "only " + examined + " background keys resolved to a colour; there should be "
+                + "~170. Far fewer means the real jars are missing and this proves nothing.");
+        assertTrue(stillLight.isEmpty(),
+            "a key naming a background is a surface something sits on, and a light one "
+                + "under dark mode is a pale strip on screen that no component walk can "
+                + "reach — #22 was exactly two of these. Still light:\n  "
+                + String.join("\n  ", stillLight));
+    }
+
     @Test
     @DisplayName("a light -> dark -> light cycle puts every resolvable default back (#23)")
     void aFullCycleLeavesEveryDefaultAsItFoundIt() {

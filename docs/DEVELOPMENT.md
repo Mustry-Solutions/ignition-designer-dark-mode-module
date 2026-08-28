@@ -111,10 +111,11 @@ worth knowing before you trust a pass:
 
 - **State outside `UIManager` is invisible to it.** Never uninstalling the IA
   colour tokens, or never calling `keepSyntheticaAlive()`, both pass everything
-  here — those mutate static fields in `client-api`, not defaults.
-  `IaColorTokensTest` in the unit suite covers the first; nothing covers the
-  second.
-- **The dark half is weakly covered.** Headlessly,
+  here — those mutate static fields outside the defaults tables.
+  `IaColorTokensTest` in the unit suite covers the first; the second is
+  [#35][35], which also has the negative control showing the test would work.
+- **The dark half is thinner than the light half**, though the background rule
+  below narrows the gap. Headlessly,
   `installJideExtension(VSNET_STYLE)` really does derive its colours from
   FlatLaf's dark palette: skipping the module's FlatLaf re-assert entirely
   changes exactly one value (`MenuBar.border`) and no colour at all. The white
@@ -137,9 +138,23 @@ Two notes if you extend it:
   `IllegalAccessError` out of a static initialiser, not a theming difference.
   The Designer Launcher passes the same set.
 
+A rule worth knowing, since it is the one assertion here that would have found a
+bug outright rather than caught a regression: **a `UIManager` key whose name ends
+in `background` must be dark while dark mode is active.** 174 of them resolve to
+a colour, 170 go dark, and the four that stay light each have a reason (three are
+the fill behind a checkmark glyph; `ProgressBar.selectionBackground` is misnamed
+by Swing and is really a text colour). Do *not* generalise it to "no light
+colour" — 206 of the 542 colour defaults are legitimately light under dark, since
+foregrounds, carets, arrows, disabled text and the accent palette all paint *on*
+a dark surface. Narrowing to keys that name a background is what turns 206
+judgment calls into a rule with four exceptions. [#22][22] was two of these
+(`SidePane.background`, `CommandBarSeparator.background`).
+
 [14]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/14
 [19]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/19
+[22]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/22
 [23]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/23
+[35]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/35
 
 ### The debug log
 
