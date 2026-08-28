@@ -58,8 +58,9 @@ pass is logged (with a stack trace, to the debug log) without stranding the rest
    property so the native title bar follows the theme.
 8. **The passes** (dark only): tree icons, button/label icons, cell-renderer
    sanitizer, collapsible title panes, white-token background and border swaps,
-   script editors, console output styles, cached JIDE painters, stale-delegate
-   refresh in secondary windows. On light, the corresponding restores.
+   script editors, console output styles, status-bar legibility, cached JIDE
+   painters, stale-delegate refresh in secondary windows. On light, the
+   corresponding restores.
 9. **Component watcher** installed (dark) / removed (light).
 
 On light mode, the restores iterate **tracked component sets**, never the live
@@ -162,10 +163,24 @@ explicit vs inherited markers, opacity, and UI delegate per level. This is the
 primary tool for diagnosing a "still light" area. See
 [DEVELOPMENT.md](DEVELOPMENT.md#the-inspector--diagnosing-a-still-light-component).
 
+### DesignerStatus
+The module's one-line channel to the user, via the Designer's own status bar
+(`DesignerContext.getStatusBar()`, reached reflectively — it is not SDK
+surface). It says a switch is under way before `apply` blocks the event
+dispatch thread, and names the passes that failed afterwards. It also keeps the
+bar legible: `StatusBar.setMessage` re-asserts `Color.black` on the message
+label on every call, so under dark mode both the Designer's messages and ours
+would be black on a dark bar — a listener lifts the foreground again each time,
+the same shape as the white-background enforcer and for the same reason.
+
 ### DebugLog
-Best-effort append-only log at `~/.ignition/designer-dark-mode-theme.log`. The
+Best-effort append-only log at `~/.ignition/designer-dark-mode.log`. The
 Designer keeps its own logs in memory only; this file is the dev-loop's eyes.
-**Timestamps are UTC.**
+**Timestamps are UTC.** Two levels: `log` always writes (switches, failures),
+`detail` only under `-Ddesignerdarkmode.debug=true` (counts, per-event traces,
+the dumps). The writer is opened once and held for the session — the detail
+lines are unbounded, and each used to cost an open/write/close on the event
+dispatch thread.
 
 ## Gotchas and hard-won facts
 
@@ -220,12 +235,18 @@ Names are resolved reflectively at runtime, and the module degrades in two
 tiers when one stops resolving:
 
 - **Phase 1 — the look-and-feel swap.** A failure here means the switch is
-  genuinely off, so it is logged, the preference is reverted (a broken dark
-  state must never persist into the next launch) and `apply` returns. The
-  Designer is left on the theme it had.
+  genuinely off, so it is logged, said in the status bar, and `apply` returns.
+  The Designer is left on the theme it had.
 - **Everything after.** Each pass runs inside `safely(...)`, so a pass that
   throws is logged with its stack and the remaining passes still run. A renamed
-  field costs one unthemed surface and a warning, not a broken switch.
+  field costs one unthemed surface and a warning, not a broken switch. The
+  failed pass names are collected and summarised in the status bar, so a
+  half-dark Designer comes with an explanation rather than only a log line.
+- **Afterwards, either way.** `finishSwitch()` squares the preference and the
+  Tools menu checkmark with the look and feel that is *actually* installed. The
+  checkmark used to track the request, so a switch that failed left it claiming
+  a theme the Designer was not in, and the preference retried it at every
+  launch.
 
 That shapes how to debug a regression after an Ignition upgrade. A surface that
 has gone light is usually a name that no longer resolves: check

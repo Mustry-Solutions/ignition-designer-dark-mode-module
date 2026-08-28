@@ -72,7 +72,7 @@ final class ConsoleTextTheme {
             }
         }
         if (restyled > 0) {
-            DebugLog.log("ConsoleTextTheme: restyled " + restyled + " console style(s).");
+            DebugLog.detail("ConsoleTextTheme: restyled " + restyled + " console style(s).");
         }
     }
 
@@ -92,7 +92,7 @@ final class ConsoleTextTheme {
             }
         });
         if (!originals.isEmpty()) {
-            DebugLog.log("ConsoleTextTheme: restored " + originals.size() + " console style(s).");
+            DebugLog.detail("ConsoleTextTheme: restored " + originals.size() + " console style(s).");
         }
         originals.clear();
         wasUndefined.clear();

@@ -75,7 +75,7 @@ final class ScriptEditorTheme {
         }
         themed.clear();
         guards.clear();
-        DebugLog.log("ScriptEditorTheme: restored the default editor theme.");
+        DebugLog.detail("ScriptEditorTheme: restored the default editor theme.");
     }
 
     private void apply(String themeName, boolean guard) {
@@ -94,7 +94,7 @@ final class ScriptEditorTheme {
             }
         }
         if (applied > 0) {
-            DebugLog.log("ScriptEditorTheme: themed " + applied + " new editor(s), "
+            DebugLog.detail("ScriptEditorTheme: themed " + applied + " new editor(s), "
                 + themed.size() + " under management.");
         }
     }

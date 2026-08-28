@@ -110,7 +110,7 @@ final class IaColorTokens {
                 }
             }
             mutated += installClassColors();
-            DebugLog.log("IaColorTokens: restyled " + mutated + " design-token color(s).");
+            DebugLog.detail("IaColorTokens: restyled " + mutated + " design-token color(s).");
         } catch (Throwable t) {
             log.warn("Could not restyle the Ignition designer color tokens.", t);
             DebugLog.log("IaColorTokens install FAILED.", t);

@@ -35,6 +35,15 @@ tasks.test {
     // rather than on anything meaningful.
     jvmArgs("--add-opens", "java.desktop/java.awt=ALL-UNNAMED")
 
+    // The same guard ThemeManager.startup sets before FlatLaf ever initializes.
+    // With user scaling on, FlatLaf registers a PERMANENT UIScale listener on
+    // the UI defaults that NPEs (null defaultFont) the next time another look
+    // and feel is installed — so one test touching FlatLaf breaks every later
+    // test that swaps the look and feel, exactly as it aborts a live theme
+    // switch. The property has to be set before the first FlatLaf class load,
+    // which is why it lives here rather than in a @BeforeAll.
+    systemProperty("flatlaf.uiScale.enabled", "false")
+
     // Keep the module's debug log out of the developer's ~/.ignition during
     // tests: some tests deliberately exercise failure paths that log a stack
     // trace, and those then read as live Designer faults.
