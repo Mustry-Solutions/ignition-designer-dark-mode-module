@@ -110,6 +110,8 @@ docs/                       Architecture and development guides
   details it depends on. Read this before changing theming code.
 - **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)** — build, run, deploy, debug, and
   sign; the diagnostic tools; how to fix a "still light" component.
+- **[docs/QA-CHECKLIST.md](docs/QA-CHECKLIST.md)** — the dark-mode sweep of
+  Designer surfaces, run before a release.
 - **[ops/README.md](ops/README.md)** — the local dev gateway.
 
 ## Prior art

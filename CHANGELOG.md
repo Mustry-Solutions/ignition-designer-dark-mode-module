@@ -103,6 +103,13 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 - The Designer's status bar stays readable under dark mode. `StatusBar
   .setMessage` re-asserts `Color.black` on the message label on every call, so
   its own messages were black on a dark bar.
+- **[docs/QA-CHECKLIST.md](docs/QA-CHECKLIST.md)** — a sweep of Designer
+  surfaces with a pass/fail per surface, so coverage gaps are found before a
+  release rather than reported as bugs
+  ([#5](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/5)).
+  The surface list is drawn from the catalogue in the MIT-licensed
+  [Exchange dark-mode script](https://inductiveautomation.com/exchange/2719/overview);
+  its 8.1 class names have shifted on 8.3, its UI locations have not.
 
 ### Changed
 
