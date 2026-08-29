@@ -52,6 +52,18 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ### Added
 
+- When `updateComponentTreeUI` fails on a window, the module now **says what
+  broke and how much of the tree went unrefreshed**
+  ([#12](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/12)).
+  The failure was already survivable and already logged with its stack, but a
+  stack names the UI delegate that threw — not the component, and not the
+  subtree the aborted update never reached, which is the part that actually
+  matters. The report names components with no font at all and the path to each,
+  any `UIManager` font key resolving to null, and every component left holding a
+  delegate from the wrong look and feel. Runs only on the failure path, so it is
+  not gated on the debug flag: that is precisely the moment nobody has verbose
+  logging on.
+
 - The harness pins that **no FlatLaf scaling listener is left registered**
   ([#12](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/12)).
   With FlatLaf user scaling on, `UIScale` registers a listener on all three
