@@ -12,6 +12,18 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ### Fixed
 
+- **Opening a Vision window no longer floods the Designer with
+  `minimumSize` errors.** Vision's `DockingInternalFrameUI.installDefaults`
+  nulls the content pane's background when it is a `UIResource`, and a Vision
+  content pane is a `BasicContainer` whose `setBackground` cannot take null —
+  so it threw three instructions before `frame.setLayout(...)`, leaving the
+  frame with no layout and every later `getMinimumSize()` NPEing, once per
+  paint and per property-table read. The condition is ours to remove: the
+  background is a `UIResource` only because a previous walk of ours put one
+  there. The walk now swaps the same colour in as a plain `Color` before
+  `updateUI()` and restores a `UIResource` afterwards, so IA's block skips
+  itself, the layout is installed, and the content pane still tracks the theme.
+
 - **One component throwing out of `updateUI()` no longer strands the rest of
   the Designer's tree.** Swing's `updateComponentTreeUI` is an unguarded
   recursion, so the first throw abandons every component after it — and the

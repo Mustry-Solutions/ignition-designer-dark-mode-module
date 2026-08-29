@@ -1,6 +1,8 @@
 package com.mustrysolutions.designerdarkmode.designer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -162,4 +164,107 @@ class ResilientTreeUpdateTest {
         assertEquals(0, failed.size());
         assertEquals(1, child.updates);
     }
+
+    // --- Vision internal frames -------------------------------------------
+
+    /** A content pane that cannot take null, the way Vision's BasicContainer cannot. */
+    private static class NullHostileContentPane extends JPanel {
+
+        @Override
+        public void setBackground(java.awt.Color bg) {
+            if (bg == null) {
+                throw new NullPointerException(
+                    "Cannot invoke \"java.awt.Color.getAlpha()\" because \"newColor\" is null");
+            }
+            super.setBackground(bg);
+        }
+    }
+
+    /**
+     * A stand-in for a Vision window that models the two things that matter.
+     *
+     * <p>First, {@code DockingInternalFrameUI.installDefaults} in the order the
+     * bytecode of {@code vision-client-12.3.6.jar} has it: null the content
+     * pane's background if it is a {@code UIResource} (offset 58-60), and only
+     * then install the layout (offset 76) — so the layout is lost when the
+     * first step throws.
+     *
+     * <p>Second, that a UI delegate installs the layout with root-pane
+     * checking off, which is what {@code JInternalFrame.setUI} arranges. With
+     * it on, {@code setLayout} forwards to the content pane and the frame's own
+     * layout is never touched — a detail that made the first version of these
+     * tests assert nothing.
+     */
+    private static class VisionLikeFrame extends javax.swing.JInternalFrame {
+
+        VisionLikeFrame() {
+            super("Main Window");
+            setContentPane(new NullHostileContentPane());
+            getContentPane().setBackground(new javax.swing.plaf.ColorUIResource(0xEEEEEE));
+            withoutRootPaneChecking(() -> setLayout(null));
+        }
+
+        void installDefaultsLikeVision() {
+            withoutRootPaneChecking(() -> {
+                java.awt.Container contentPane = getContentPane();
+                if (contentPane.getBackground() instanceof javax.swing.plaf.UIResource) {
+                    contentPane.setBackground(null);
+                }
+                setLayout(new java.awt.BorderLayout());
+            });
+        }
+
+        private void withoutRootPaneChecking(Runnable task) {
+            boolean checking = isRootPaneCheckingEnabled();
+            try {
+                setRootPaneCheckingEnabled(false);
+                task.run();
+            } finally {
+                setRootPaneCheckingEnabled(checking);
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("the shape being guarded: a throw before setLayout leaves a null layout")
+    void theUnpreventedShapeLosesTheLayout() {
+        VisionLikeFrame frame = new VisionLikeFrame();
+
+        assertThrows(NullPointerException.class, frame::installDefaultsLikeVision);
+        assertNull(frame.getLayout(),
+            "this is the state that makes every later getMinimumSize() throw");
+    }
+
+    @Test
+    @DisplayName("a plain-Color background lets installDefaults run to completion")
+    void neutralisingTheBackgroundPreventsTheThrow() {
+        VisionLikeFrame frame = new VisionLikeFrame();
+        java.awt.Color original = frame.getContentPane().getBackground();
+
+        // What the walk now does before updateUI().
+        frame.getContentPane().setBackground(new java.awt.Color(original.getRGB(), true));
+        frame.installDefaultsLikeVision();
+
+        assertNotNull(frame.getLayout(), "installDefaults should have reached setLayout");
+        assertEquals(original.getRGB(), frame.getContentPane().getBackground().getRGB(),
+            "the colour must not change, only its type");
+    }
+
+    @Test
+    @DisplayName("the walk leaves the content pane tracking the look and feel again")
+    void theBackgroundIsRestoredAsAUiResource() {
+        VisionLikeFrame frame = new VisionLikeFrame();
+        java.awt.Color before = frame.getContentPane().getBackground();
+        JPanel root = new JPanel();
+        root.add(frame);
+
+        ThemeManager.updateComponentTreeUiResiliently(root, new LinkedHashSet<>());
+
+        java.awt.Color after = frame.getContentPane().getBackground();
+        assertTrue(after instanceof javax.swing.plaf.UIResource,
+            "left as " + after.getClass().getName() + "; a plain Color would be pinned"
+                + " forever, since installColorsAndFont only replaces UIResources");
+        assertEquals(before.getRGB(), after.getRGB());
+    }
+
 }

@@ -306,7 +306,7 @@ and confirm these return to stock:
 | Dock title bars and dividers | — | |
 | Script editor and console | — | |
 | Tree and table cell colours | — | Renderers are restored from tracked sets, not the live tree |
-| **With a Vision window open** | `partial` | Phase 6 still throws, but no longer strands the rest of the frame — see below |
+| **With a Vision window open** | `fixed` | The throw is now prevented rather than contained — see below |
 
 Then relaunch the Designer and confirm it comes up stock.
 

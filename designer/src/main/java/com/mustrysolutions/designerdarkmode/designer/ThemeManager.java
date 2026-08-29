@@ -1644,11 +1644,97 @@ public class ThemeManager {
         return failures;
     }
 
+    /**
+     * Stop Vision's {@code DockingInternalFrameUI.installDefaults} from throwing
+     * part-way through, by removing the condition it throws on.
+     *
+     * <p>Containing the throw is not enough here, and the reason is in the
+     * bytecode. {@code installDefaults} does, in order:
+     *
+     * <pre>
+     * offset 58-60  if (contentPane.getBackground() instanceof UIResource)
+     *                   contentPane.setBackground(null);      // throws
+     * offset 63-76      frame.setLayout(createLayoutManager());
+     * offset 79-91      frame.setBackground(...);
+     * offset 94-105     frame.setBorder(new CustomBorder());
+     * </pre>
+     *
+     * <p>A Vision content pane is a {@code BasicContainer}, whose
+     * {@code setBackground} override dereferences its argument, so the null at
+     * offset 60 throws and the frame never gets a layout. Catching that leaves
+     * a {@code JInternalFrame} with {@code getLayout() == null}, and every
+     * later {@code BasicInternalFrameUI.getMinimumSize()} NPEs — once per
+     * paint, per validate, and once per read of the {@code minimumSize}
+     * property in the Vision property table. Containment turned one abort into
+     * a storm.
+     *
+     * <p>The condition is ours to remove. IA's block only fires when the
+     * content pane's background is a {@code UIResource}, and it is a
+     * {@code UIResource} because a previous walk of ours put one there —
+     * {@code LookAndFeel.installColorsAndFont} replaces a null or
+     * {@code UIResource} background with the new look and feel's. In a stock
+     * Designer this code runs once, at construction, against whatever
+     * background the window's own design carries, so it never fires.
+     *
+     * <p>So: swap the same colour in as a plain {@code Color} before
+     * {@code updateUI()}, and put a {@code UIResource} back afterwards. IA's
+     * block sees a non-{@code UIResource} and skips itself; the layout, the
+     * background and the border all get installed; and the content pane is
+     * left tracking the look and feel again, so the walk into its own subtree
+     * recolours it normally.
+     *
+     * @return the background to hand to {@link #restoreInternalFrameBackground},
+     *     or null when nothing was changed
+     */
+    private static java.awt.Color neutraliseInternalFrameBackground(
+            javax.swing.JComponent component) {
+        if (!(component instanceof javax.swing.JInternalFrame)) {
+            return null;
+        }
+        try {
+            java.awt.Container contentPane =
+                ((javax.swing.JInternalFrame) component).getContentPane();
+            if (!(contentPane instanceof javax.swing.JComponent)) {
+                return null;
+            }
+            java.awt.Color background = contentPane.getBackground();
+            if (!(background instanceof javax.swing.plaf.UIResource)) {
+                return null;
+            }
+            // Same colour, plain type. Alpha carried explicitly: the int
+            // constructor drops it.
+            contentPane.setBackground(new java.awt.Color(background.getRGB(), true));
+            return background;
+        } catch (Throwable t) {
+            DebugLog.log("Could not neutralise the content-pane background on "
+                + component.getClass().getName(), t);
+            return null;
+        }
+    }
+
+    /** Put the {@code UIResource} background back, so it tracks the theme again. */
+    private static void restoreInternalFrameBackground(
+            javax.swing.JComponent component, java.awt.Color background) {
+        if (background == null) {
+            return;
+        }
+        try {
+            java.awt.Container contentPane =
+                ((javax.swing.JInternalFrame) component).getContentPane();
+            contentPane.setBackground(background);
+        } catch (Throwable t) {
+            DebugLog.log("Could not restore the content-pane background on "
+                + component.getClass().getName(), t);
+        }
+    }
+
     private static int updateSubtree(
             java.awt.Component component, java.util.Set<String> failed) {
         int failures = 0;
         if (component instanceof javax.swing.JComponent) {
             javax.swing.JComponent child = (javax.swing.JComponent) component;
+            // Prevention, not containment — see the method's javadoc.
+            java.awt.Color pinned = neutraliseInternalFrameBackground(child);
             try {
                 child.updateUI();
             } catch (Throwable t) {
@@ -1657,6 +1743,8 @@ public class ThemeManager {
                     DebugLog.log("updateUI failed for " + child.getClass().getName()
                         + "; walking its subtree anyway.", t);
                 }
+            } finally {
+                restoreInternalFrameBackground(child, pinned);
             }
             javax.swing.JPopupMenu popup = child.getComponentPopupMenu();
             if (popup != null && popup.isVisible() && popup.getInvoker() == child) {
