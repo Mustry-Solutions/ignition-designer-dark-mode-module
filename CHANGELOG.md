@@ -26,6 +26,27 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ### Added
 
+- A **headless look-and-feel harness** (`./gradlew :designer:lafHarness`,
+  [#32](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/32)).
+  It drives the real switch sequence against the real Synthetica, JIDE and
+  FlatLaf jars — no gateway, no Designer, no screenshots — and diffs every
+  resolvable `UIManager` default across a light→dark→light cycle. The unit
+  tests only ever saw stub look and feels, so every bug this module has had
+  (#14, #17, #19, #22, #23) had to be found by deploying and looking. Four
+  invariants are now pinned instead: a full cycle restores every default, the
+  FlatLaf overrides are cleared while FlatLaf is still installed (the ordering
+  #23 got wrong), repeated cycles converge, and JIDE's `Theme.painter` map
+  comes back to its stock entries, the standard Swing colours actually go dark,
+  and no `UIManager` key naming a background stays light under dark mode —
+  which is [#22](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/22)
+  turned from a manual dump into an assertion over 174 keys. It runs in CI.
+
+  Its blind spots are mapped and documented rather than assumed: state outside
+  `UIManager` (the IA colour tokens, the Synthetica singleton) is invisible to
+  it, the dark half is weakly covered because JIDE derives dark colours
+  correctly with no Designer present, and it cannot see pixels. A Designer
+  still settles "does this look right".
+
 - A **partly-applied theme now says so**, in the Designer's status bar: which
   passes failed, out of how many, and where to read the stack traces. Every
   pass after the look-and-feel swap is isolated, so one that fails leaves a

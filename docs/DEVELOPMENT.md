@@ -29,6 +29,7 @@ Useful variants:
 ```bash
 ./gradlew :designer:compileJava   # fast compile-only check while iterating
 ./gradlew test                    # unit tests only (no gateway needed)
+./gradlew :designer:lafHarness    # the headless look-and-feel harness (below)
 ```
 
 ## Run it against a gateway
@@ -62,7 +63,98 @@ Gateway web UI, accept the unsigned module, relaunch the Designer.
 ## The debug loop
 
 Dark-mode work is mostly a diagnose-then-fix loop against the running Designer.
-Two tools make it tractable:
+Three tools make it tractable — and reach for the first one before you build a
+`.modl`.
+
+### The headless look-and-feel harness
+
+```bash
+./gradlew :designer:lafHarness
+```
+
+Runs `ThemeManager`'s real switch sequence against the real Designer look and
+feels — Synthetica through `IgnitionLookAndFeel$LaF`, JIDE's extension on top,
+FlatLaf arriving over both — with **no gateway, no Designer and no
+screenshots**, in a couple of seconds. Source in `designer/src/lafHarness/`.
+
+This exists because looking at a Designer is a bad instrument for most of these
+bugs. A stock Designer resolves about 1,700 `UIManager` defaults and a switch
+to dark rewrites or adds roughly 2,300 entries, so most of what a switch does is
+somewhere you are not looking. When [#23][23] was finally diagnosed, **192
+defaults came back wrong after a light→dark→light cycle and exactly one of them
+was visible on screen.**
+The harness snapshots every resolvable default before and after a cycle and
+diffs them, so the other 191 are visible too.
+
+What it pins today: a full cycle returns every default to its stock value; the
+FlatLaf overrides are cleared *while FlatLaf is still installed*, which is the
+ordering [#23][23] got wrong; repeated cycles converge instead of drifting; and
+JIDE's `Theme.painter` map comes back to the Synthetica entries ([#14][14],
+[#19][19]).
+
+What it cannot see is **pixels**. It replaces the "which defaults are wrong"
+half of the loop, not the "does this look right" half — and with no windows
+open, every pass that walks the component tree runs and finds nothing, so
+component-level state (the painters JIDE caches in private fields, the white
+background swaps) is out of its reach. A Designer and a pair of eyes still
+settle those.
+
+**Validate a new invariant with a mutation.** A green test proves nothing until
+you have seen it go red for the right reason. Break the thing it claims to
+protect — reorder a phase, delete a restore call — and check that the test you
+just wrote is the one that fails. Reintroducing [#23][23]'s ordering fails three
+of the six, with 1297 of 1740 defaults left null; a test that survives the bug it
+is named after is decoration.
+
+Doing that across fifteen mutations mapped the harness's blind spots, which are
+worth knowing before you trust a pass:
+
+- **State outside `UIManager` is invisible to it.** Never uninstalling the IA
+  colour tokens, or never calling `keepSyntheticaAlive()`, both pass everything
+  here — those mutate static fields outside the defaults tables.
+  `IaColorTokensTest` in the unit suite covers the first; the second is
+  [#35][35], which also has the negative control showing the test would work.
+- **The dark half is thinner than the light half**, though the background rule
+  below narrows the gap. Headlessly,
+  `installJideExtension(VSNET_STYLE)` really does derive its colours from
+  FlatLaf's dark palette: skipping the module's FlatLaf re-assert entirely
+  changes exactly one value (`MenuBar.border`) and no colour at all. The white
+  search fields and invisible context menus that pass exists for do not
+  reproduce without a Designer.
+- **`Theme.painter` self-heals.** Removing the module's painter restore leaves
+  the painter test passing; removing `installJideExtension()` from the light
+  path fails it. JIDE's own reinstall is what repopulates that map here. The
+  test is an outcome check, not evidence the restore code runs — and this JVM
+  has one classloader where a Designer has several.
+
+Two notes if you extend it:
+
+- Values are compared as **text**, not by identity or `equals`. JIDE rebuilds
+  its `Border` and `Icon` instances on every `installJideExtension()`, so a
+  perfectly clean restore produces ~200 false differences otherwise. Colours are
+  rendered exactly (ARGB); borders and icons collapse to a class name.
+- The JVM args in the `lafHarness` task are **not tuning**. Synthetica fails to
+  initialise without those `--add-exports`/`--add-opens` — you get an
+  `IllegalAccessError` out of a static initialiser, not a theming difference.
+  The Designer Launcher passes the same set.
+
+A rule worth knowing, since it is the one assertion here that would have found a
+bug outright rather than caught a regression: **a `UIManager` key whose name ends
+in `background` must be dark while dark mode is active.** 174 of them resolve to
+a colour, 170 go dark, and the four that stay light each have a reason (three are
+the fill behind a checkmark glyph; `ProgressBar.selectionBackground` is misnamed
+by Swing and is really a text colour). Do *not* generalise it to "no light
+colour" — 206 of the 542 colour defaults are legitimately light under dark, since
+foregrounds, carets, arrows, disabled text and the accent palette all paint *on*
+a dark surface. Narrowing to keys that name a background is what turns 206
+judgment calls into a rule with four exceptions. [#22][22] was two of these
+(`SidePane.background`, `CommandBarSeparator.background`).
+
+[14]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/14
+[19]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/19
+[22]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/22
+[23]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/23
+[35]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/35
 
 ### The debug log
 

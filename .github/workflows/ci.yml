@@ -49,6 +49,17 @@ jobs:
         env:
           ORG_GRADLE_PROJECT_org.gradle.java.installations.auto-download: "false"
 
+      # Not part of `build`: the harness resolves the whole Designer dependency
+      # tree at runtime and needs its own JDK module openings, so `check` should
+      # not drag it in by accident. It still has to run somewhere, or it rots —
+      # and it is the only check here that exercises the switch sequence against
+      # the real Synthetica/JIDE/FlatLaf interaction rather than against stubs.
+      # Headless by construction; no display is set up for it on purpose.
+      - name: Headless look-and-feel harness
+        run: ./gradlew :designer:lafHarness --no-daemon --stacktrace
+        env:
+          ORG_GRADLE_PROJECT_org.gradle.java.installations.auto-download: "false"
+
       # Cheap guard on the two things most likely to regress silently in
       # module.xml: the EULA reference and the free-module flag. Both are set
       # in build.gradle.kts and neither has a test that would catch a
