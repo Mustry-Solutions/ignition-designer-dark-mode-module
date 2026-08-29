@@ -164,6 +164,26 @@ judgment calls into a rule with four exceptions. [#22][22] was two of these
 [23]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/23
 [35]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/35
 
+### When a window fails to restyle
+
+`updateComponentTreeUI` failing on one window is isolated and survivable, but
+the module now writes a diagnostic when it happens — unconditionally, since
+nobody has `-Ddesignerdarkmode.debug=true` on at the moment a bug first appears.
+Look for `Tree-update diagnostic for` in the log. It answers the three questions
+the stack trace cannot:
+
+- **which components have no font at all**, with the ancestor path to each
+  (`getFont()` returns null only when the whole chain is unset, so the path is
+  the diagnostic, not the component);
+- **which `UIManager` font keys resolve to null** right then;
+- **how much of the tree still holds a wrong-look-and-feel delegate** — the
+  subtree the aborted update never reached, which is the actual damage.
+
+Counts are of everything found; only the first twelve of each are described. The
+two numbers are deliberately separate, because "the update skipped 12
+components" and "the update skipped 1,400, here are 12" are different bug
+reports.
+
 ### The debug log
 
 `~/.ignition/designer-dark-mode.log` — append-only, written by `DebugLog`.

@@ -449,6 +449,13 @@ public class ThemeManager {
                 } catch (Throwable t) {
                     DebugLog.log("updateComponentTreeUI failed for "
                         + window.getClass().getName() + "; continuing with the rest.", t);
+                    // The stack above names the delegate that threw; it cannot
+                    // name the component, and it cannot say how much of the tree
+                    // the aborted update never reached — which is the part #12
+                    // is actually about. Only runs when a window has genuinely
+                    // failed, so it is not gated on the verbose flag: this is
+                    // exactly the moment nobody has debug logging turned on.
+                    TreeUpdateDiagnostic.report(window, t);
                 }
             }
         });
