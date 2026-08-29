@@ -17,9 +17,13 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   recursion, so the first throw abandons every component after it — and the
   tree that aborts is usually the main frame's, leaving everything below the
   throwing component on the outgoing look and feel's delegates. Isolating per
-  window ([#11]) was not enough. The walk is now per component: a failure costs
-  that component, its siblings and its own subtree are still walked, and the
-  distinct failing classes are logged once each. Two Ignition classes are known
+  window ([#11]) was not enough. The walk is now per component, at **every**
+  call site — the switch's own pass, the component watcher's debounced rescan,
+  and the stale-delegate refresh: a failure costs that component, its siblings
+  and its own subtree are still walked, and the distinct failing classes are
+  logged once each. The rescan is a `Timer` callback, so a throw there did not
+  merely lose the tree — it reached the EDT's default handler and killed the
+  tick, including the theming passes that are the point of the rescan. Two Ignition classes are known
   to throw there on the light restore — Vision's `DockingInternalFrameUI`,
   which nulls a `BasicContainer`'s background, and the `Font.getFamily()` NPE
   in [#12](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/12)

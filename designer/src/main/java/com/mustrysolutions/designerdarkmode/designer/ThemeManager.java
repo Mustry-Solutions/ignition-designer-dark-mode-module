@@ -1423,6 +1423,8 @@ public class ThemeManager {
             if (!(UIManager.getLookAndFeel() instanceof FlatDarkLaf)) {
                 return;
             }
+            java.util.Set<String> failed = new java.util.LinkedHashSet<>();
+            int failures = 0;
             for (java.lang.ref.WeakReference<java.awt.Component> ref : added) {
                 java.awt.Component component = ref.get();
                 if (component == null || !component.isDisplayable()) {
@@ -1432,10 +1434,23 @@ public class ThemeManager {
                 // Synthetica delegate under FlatLaf paints broken or throws —
                 // regardless of the size heuristic below.
                 if (hasStaleUi(component, true) || worthUiRefresh(component)) {
-                    SwingUtilities.updateComponentTreeUI(component);
+                    failures += updateComponentTreeUiResiliently(component, failed);
                 }
             }
-            runThemingPasses();
+            if (failures > 0) {
+                DebugLog.log("Rescan: updateUI failed on " + failures
+                    + " component(s) across " + failed.size() + " class(es): " + failed
+                    + ". Their subtrees were still walked.", null);
+            }
+            // Outside the loop and outside any early return: this is a Timer
+            // callback, so anything that escapes it reaches the EDT's default
+            // handler and the tick dies where it stands — including the passes
+            // below, which are the whole point of the rescan.
+            try {
+                runThemingPasses();
+            } catch (Throwable t) {
+                DebugLog.log("Rescan: theming passes failed for this tick.", t);
+            }
         });
         rescanTimer.setRepeats(false);
         componentWatcher = event -> {
@@ -1707,9 +1722,15 @@ public class ThemeManager {
     static void refreshStaleUiDelegates(javax.swing.JComponent root) {
         boolean darkActive = UIManager.getLookAndFeel() instanceof FlatDarkLaf;
         if (hasStaleUi(root, darkActive)) {
-            SwingUtilities.updateComponentTreeUI(root);
+            java.util.Set<String> failed = new java.util.LinkedHashSet<>();
+            int failures = updateComponentTreeUiResiliently(root, failed);
             DebugLog.detail("Refreshed stale UI delegates under "
                 + root.getClass().getName());
+            if (failures > 0) {
+                DebugLog.log("Stale-delegate refresh under " + root.getClass().getName()
+                    + ": updateUI failed on " + failures + " component(s): " + failed
+                    + ". Their subtrees were still walked.", null);
+            }
         }
     }
 
