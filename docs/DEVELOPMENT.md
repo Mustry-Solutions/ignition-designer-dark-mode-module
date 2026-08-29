@@ -112,8 +112,10 @@ worth knowing before you trust a pass:
 - **State outside `UIManager` is invisible to it.** Never uninstalling the IA
   colour tokens, or never calling `keepSyntheticaAlive()`, both pass everything
   here — those mutate static fields outside the defaults tables.
-  `IaColorTokensTest` in the unit suite covers the first; the second is
-  [#35][35], which also has the negative control showing the test would work.
+  `IaColorTokensTest` in the unit suite covers the first. The second was
+  [#35][35] — now covered, but only because the harness asks Synthetica for its
+  singleton directly rather than looking for it in the defaults. Anything else
+  living in a static field is still invisible here.
 - **The dark half is thinner than the light half**, though the background rule
   below narrows the gap. Headlessly,
   `installJideExtension(VSNET_STYLE)` really does derive its colours from

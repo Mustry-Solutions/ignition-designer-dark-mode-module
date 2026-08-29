@@ -240,6 +240,65 @@ class ThemeSwitchCycleTest {
                 + String.join("\n  ", stillLight));
     }
 
+    /**
+     * Installing FlatLaf runs Synthetica's {@code uninitialize()}, which nulls
+     * its {@code activeInstance} singleton — and the Designer goes on calling
+     * {@code SyntheticaLookAndFeel.getInstance()} the whole time dark mode is
+     * active. Every such call is then an NPE out of Ignition's own code, with
+     * nothing to connect it to the theme switch.
+     *
+     * <p>Invisible to the defaults snapshot, because a private static field in
+     * a third-party jar is not a {@code UIManager} default. That is why
+     * deleting {@code keepSyntheticaAlive()} used to pass every test in this
+     * class and the whole unit suite (#35).
+     */
+    @Test
+    @DisplayName("the Synthetica singleton survives dark mode and the restore (#35)")
+    void theSyntheticaSingletonSurvivesTheSwitch() {
+        assertNotNull(DesignerLookAndFeel.syntheticaSingleton(),
+            "sanity: a stock Designer owns this singleton before anything happens");
+
+        manager.apply(true);
+        assertNotNull(DesignerLookAndFeel.syntheticaSingleton(),
+            "FlatLaf's install ran Synthetica's uninitialize() and nulled the singleton. "
+                + "The Designer keeps calling getInstance() under dark mode, so leaving it "
+                + "null turns every one of those calls into an NPE.");
+
+        manager.apply(false);
+        assertNotNull(DesignerLookAndFeel.syntheticaSingleton(),
+            "the restore reinstalls Synthetica through its own entry point, which should "
+                + "leave it owning its singleton again");
+    }
+
+    /**
+     * The reporting half of #35. Before it, the singleton repair logged a
+     * warning and returned: the phase never reached {@code failedPhases}, so a
+     * failure showed up in neither the status bar nor the "N of M steps
+     * failing" count, and the switch claimed complete success while the
+     * Designer NPE'd.
+     *
+     * <p>Being in the trace is the observable proxy for that, since everything
+     * traced under a phase name goes through {@code safely(...)} — which is
+     * what records a failure. Forcing the reflection itself to fail would mean
+     * renaming a field inside Synthetica, which is not worth the machinery.
+     */
+    @Test
+    @DisplayName("the singleton repair reports failure like every other pass (#35)")
+    void theSingletonRepairIsAReportedPhase() {
+        manager.apply(true);
+
+        assertTrue(manager.phaseTrace().contains("syntheticaSingleton"),
+            "the repair has to run under safely(), or a failure is logged and nothing "
+                + "else — which is how it could break for everyone on a Synthetica "
+                + "upgrade with the switch still reporting success. Phases were: "
+                + manager.phaseTrace());
+        assertTrue(manager.phaseTrace().indexOf("syntheticaSingleton")
+                < manager.phaseTrace().indexOf("tokens"),
+            "and it has to run FIRST among the styling passes: until the singleton is "
+                + "back, anything calling into Synthetica NPEs. Phases were: "
+                + manager.phaseTrace());
+    }
+
     @Test
     @DisplayName("a light -> dark -> light cycle puts every resolvable default back (#23)")
     void aFullCycleLeavesEveryDefaultAsItFoundIt() {

@@ -52,6 +52,18 @@ final class DesignerLookAndFeel {
     }
 
     /**
+     * Synthetica's {@code activeInstance} singleton, or {@code null}.
+     *
+     * <p>Read through the public {@code getInstance()} rather than the private
+     * field the module writes: what matters is what the DESIGNER sees when it
+     * calls this — which it does while dark mode is active, for UI scaling
+     * among other things — not that a particular field got assigned.
+     */
+    static Object syntheticaSingleton() {
+        return de.javasoft.plaf.synthetica.SyntheticaLookAndFeel.getInstance();
+    }
+
+    /**
      * The JIDE {@code Theme.painter} mapping, as classloader &rarr; painter
      * class name.
      *

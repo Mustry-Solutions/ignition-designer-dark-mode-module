@@ -40,11 +40,13 @@ orchestrator; the other classes are the fronts.
 the switch aborts. Phases 2+ are each wrapped in `safely(...)` so one failing
 pass is logged (with a stack trace, to the debug log) without stranding the rest.
 
-1. **Look and feel swap.** Dark: `UIManager.setLookAndFeel(new FlatDarkLaf())`,
-   then `keepSyntheticaAlive()`. Light: reinstall the stock theme through
-   Synthetica's own entry point. Wrapped in a one-shot retry (see
-   [Gotchas](#gotchas-and-hard-won-facts)).
-2. **Color tokens** — `IaColorTokens.install()` (dark) / `.uninstall()` (light).
+1. **Look and feel swap.** Dark: `UIManager.setLookAndFeel(new FlatDarkLaf())`.
+   Light: reinstall the stock theme through Synthetica's own entry point.
+   Wrapped in a one-shot retry (see [Gotchas](#gotchas-and-hard-won-facts)).
+2. **Synthetica singleton** — `keepSyntheticaAlive()`, first of the `safely(...)`
+   passes on the dark switch, because nothing else may call into Synthetica
+   until it is back.
+3. **Color tokens** — `IaColorTokens.install()` (dark) / `.uninstall()` (light).
 3. **JIDE extension** — `installJideExtension(dark)`. FlatLaf isn't a look and
    feel JIDE recognizes, so under dark it must be told the VSNET style
    explicitly: `installJideExtension(1)`.
@@ -199,7 +201,12 @@ dispatch thread.
   `uninitialize()`, which nulls its private static `activeInstance`; the Designer
   still calls `SyntheticaLookAndFeel.getInstance()` at runtime (UI scaling). We
   reflectively re-point `activeInstance` at the stock instance under dark to keep
-  those calls alive.
+  those calls alive. It is matched **by name** in a jar we do not control, so the
+  way it breaks is a Synthetica upgrade renaming it — for everyone at once, on
+  one release. That is why the repair runs under `safely(...)` and **rethrows**
+  rather than logging: a swallowed failure left the switch reporting complete
+  success while every `getInstance()` call NPE'd ([#35][35]). The harness pins
+  both halves.
 - **JIDE `Theme.painter` map** is per-classloader; snapshot it **before** the
   JIDE reinstall (snapshotting after captures our own `BasicPainter` entries and
   the light restore then reinstalls the wrong painters).
@@ -223,6 +230,8 @@ dispatch thread.
 - **Restores must iterate tracked sets, not the hierarchy** (see above).
 - **macOS native title bar** stays dark after a light switch unless the root
   pane's `apple.awt.windowAppearance` client property is explicitly cleared.
+
+[35]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/35
 
 ## When Ignition changes underneath us
 
