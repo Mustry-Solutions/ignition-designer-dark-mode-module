@@ -110,6 +110,14 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   The surface list is drawn from the catalogue in the MIT-licensed
   [Exchange dark-mode script](https://inductiveautomation.com/exchange/2719/overview);
   its 8.1 class names have shifted on 8.3, its UI locations have not.
+- `LookAndFeelDefaultsTableTest` (`./gradlew :designer:lafHarness`) pins the
+  gap between the developer defaults table and the look-and-feel table: 109
+  colour keys resolve through `UIManager` but not through
+  `getLookAndFeelDefaults()` under the stock look and feel, and the restore
+  leaves that set exactly as it found it. Ignition code reading a colour
+  that way gets null in a stock Designer and a real colour under dark mode,
+  which is the opposite of the intuitive direction and has already caused
+  one stack trace to be misread.
 
 ### Changed
 

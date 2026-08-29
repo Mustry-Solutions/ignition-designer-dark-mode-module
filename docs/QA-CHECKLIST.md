@@ -305,18 +305,36 @@ Then relaunch the Designer and confirm it comes up stock.
 > light restore's phase-6 `updateComponentTreeUI` throws
 > `NullPointerException: Cannot invoke "java.awt.Color.getAlpha()" because
 > "newColor" is null` and abandons the walk for the entire main frame.
-> `DockingInternalFrameUI.installDefaults` does
-> `frame.setBackground(UIManager.getLookAndFeelDefaults().getColor("control"))`
-> — the **look-and-feel** defaults table, which `UIManager.put` never writes to
-> — and `BasicContainer.adjustOpacityBasedOnBackgroundColor` dereferences the
-> result without a null check. Observed at Designer shutdown; the same phase
-> runs on a user toggle.
 >
-> **But not every light switch throws.** The toggle at 13:48:56, in the same
-> Designer, completed clean. The difference between the two is not yet known —
-> a Vision *window* open versus only the Vision workspace is the obvious
-> candidate, and the shutdown path is the other. Establish which before
-> writing a fix.
+> `DockingInternalFrameUI.installDefaults` line 68 — bytecode offset 58 of
+> `vision-client-12.3.6.jar` — is an explicit null:
+>
+> ```java
+> if (contentPane != null && contentPane.getBackground() instanceof UIResource) {
+>     contentPane.setBackground(null);   // line 68 — throws
+> }
+> frame.setBackground(UIManager.getLookAndFeelDefaults().getColor("control"));  // line 71
+> ```
+>
+> A Vision window's content pane is a `BasicContainer`, whose `setBackground`
+> override calls `adjustOpacityBasedOnBackgroundColor(newColor, old)` and
+> dereferences `newColor` without a null check. So the trigger is **the content
+> pane's background being a `UIResource` when `installDefaults` re-runs** — the
+> state a preceding `updateComponentTreeUI` leaves behind. A stock Designer
+> never hits it because `installDefaults` runs once, at construction.
+>
+> The `control` lookup on line 71 is a red herring: it is after the throw point
+> and never executes. It *is* null under stock — `LookAndFeelDefaultsTableTest`
+> pins that, along with 109 colour keys reachable through `UIManager` but not
+> through `getLookAndFeelDefaults()` — but it is not this bug, and the restore
+> leaves that gap exactly as it found it.
+>
+> **Not every light switch throws.** The toggle at 13:48:56, in the same
+> Designer, completed clean — consistent with no Vision *window* being open at
+> the time, only the Vision workspace.
+>
+> The harm is the abort, not the null: one throwing component strands the rest
+> of the main frame's tree. A per-subtree walk would contain it.
 
 ## Out of scope
 
