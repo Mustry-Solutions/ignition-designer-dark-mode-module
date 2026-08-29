@@ -306,7 +306,7 @@ and confirm these return to stock:
 | Dock title bars and dividers | — | |
 | Script editor and console | — | |
 | Tree and table cell colours | — | Renderers are restored from tracked sets, not the live tree |
-| **With a Vision window open** | `light` | Phase 6 throws — see below |
+| **With a Vision window open** | `partial` | Phase 6 still throws, but no longer strands the rest of the frame — see below |
 
 Then relaunch the Designer and confirm it comes up stock.
 
@@ -342,8 +342,11 @@ Then relaunch the Designer and confirm it comes up stock.
 > Designer, completed clean — consistent with no Vision *window* being open at
 > the time, only the Vision workspace.
 >
-> The harm is the abort, not the null: one throwing component strands the rest
-> of the main frame's tree. A per-subtree walk would contain it.
+> The harm is the abort, not the null: one throwing component stranded the rest
+> of the main frame's tree. **Contained** — the phase-6 walk is now per
+> component, so a throw costs only that component while its siblings and its
+> own subtree are still walked. The NPE itself is Ignition's and still fires;
+> what it no longer does is take the frame with it.
 
 ## Out of scope
 

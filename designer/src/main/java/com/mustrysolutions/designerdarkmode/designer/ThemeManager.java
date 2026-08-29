@@ -438,6 +438,8 @@ public class ThemeManager {
             safely("jideOverrides", () -> applyJideDarkOverrides(true));
         }
         safely("updateComponentTrees", () -> {
+            java.util.Set<String> failed = new java.util.LinkedHashSet<>();
+            int failures = 0;
             for (Window window : Window.getWindows()) {
                 // Isolate per WINDOW, not per phase. Synthetica can NPE out of
                 // updateComponentTreeUI on a window holding a stale delegate
@@ -446,7 +448,7 @@ public class ThemeManager {
                 // every window after it, leaving the light restore visibly
                 // half-applied — some panels light, others still dark.
                 try {
-                    SwingUtilities.updateComponentTreeUI(window);
+                    failures += updateComponentTreeUiResiliently(window, failed);
                 } catch (Throwable t) {
                     DebugLog.log("updateComponentTreeUI failed for "
                         + window.getClass().getName() + "; continuing with the rest.", t);
@@ -458,6 +460,11 @@ public class ThemeManager {
                     // exactly the moment nobody has debug logging turned on.
                     TreeUpdateDiagnostic.report(window, t);
                 }
+            }
+            if (failures > 0) {
+                DebugLog.log("updateUI failed on " + failures + " component(s) across "
+                    + failed.size() + " class(es): " + failed
+                    + ". Their subtrees were still walked.", null);
             }
         });
         safely("cachedPopups", this::refreshCachedPopups);
@@ -1559,6 +1566,86 @@ public class ThemeManager {
      * hasStaleUi short-circuits on the first stale delegate, so this is cheap
      * when nothing is stale.
      */
+    /**
+     * {@code SwingUtilities.updateComponentTreeUI}, but a component that throws
+     * loses only itself.
+     *
+     * <p>Swing's own walk is one recursion with no guard, so the first
+     * {@code updateUI()} that throws abandons every component after it. That is
+     * a real loss and not a hypothetical one: isolating per window (#11) was
+     * not enough, because the window that aborts is usually the MAIN one, and
+     * everything below the throwing component in its tree keeps the delegates
+     * of the outgoing look and feel.
+     *
+     * <p>Two Ignition classes are known to throw here, both on the light
+     * restore and both for reasons outside this module:
+     *
+     * <ul>
+     *   <li>Vision's {@code DockingInternalFrameUI.installDefaults} nulls the
+     *       content pane's background when it is a {@code UIResource} — the
+     *       state the preceding walk leaves behind — and a Vision content pane
+     *       is a {@code BasicContainer}, whose {@code setBackground} override
+     *       dereferences its argument;</li>
+     *   <li>the {@code Font.getFamily()} NPE recorded in #12.</li>
+     * </ul>
+     *
+     * <p>Neither is fixable from here. What is fixable is the blast radius.
+     *
+     * <p>The failures are logged but deliberately do <em>not</em> mark the phase
+     * degraded in the status bar: a Designer with a Vision window open would
+     * then warn on every single switch, and a warning that always fires stops
+     * being read. If a future failure turns out to be ours rather than
+     * Ignition's, that is the line to reconsider.
+     *
+     * @param failed collects the distinct classes that threw, so a tree with
+     *     two hundred of one broken component logs one line rather than two
+     *     hundred
+     * @return how many components threw
+     */
+    static int updateComponentTreeUiResiliently(
+            java.awt.Component component, java.util.Set<String> failed) {
+        int failures = updateSubtree(component, failed);
+        // What SwingUtilities does after its own walk.
+        component.invalidate();
+        component.validate();
+        component.repaint();
+        return failures;
+    }
+
+    private static int updateSubtree(
+            java.awt.Component component, java.util.Set<String> failed) {
+        int failures = 0;
+        if (component instanceof javax.swing.JComponent) {
+            javax.swing.JComponent child = (javax.swing.JComponent) component;
+            try {
+                child.updateUI();
+            } catch (Throwable t) {
+                failures++;
+                if (failed.add(child.getClass().getName())) {
+                    DebugLog.log("updateUI failed for " + child.getClass().getName()
+                        + "; walking its subtree anyway.", t);
+                }
+            }
+            javax.swing.JPopupMenu popup = child.getComponentPopupMenu();
+            if (popup != null && popup.isVisible() && popup.getInvoker() == child) {
+                failures += updateSubtree(popup, failed);
+            }
+        }
+        // A JMenu's items hang off its popup, not off getComponents().
+        java.awt.Component[] children =
+            component instanceof javax.swing.JMenu
+                ? ((javax.swing.JMenu) component).getMenuComponents()
+                : component instanceof java.awt.Container
+                    ? ((java.awt.Container) component).getComponents()
+                    : null;
+        if (children != null) {
+            for (java.awt.Component each : children) {
+                failures += updateSubtree(each, failed);
+            }
+        }
+        return failures;
+    }
+
     private void refreshStaleInSecondaryWindows() {
         for (Window window : Window.getWindows()) {
             if (!window.isShowing() || (context != null && window == context.getFrame())) {

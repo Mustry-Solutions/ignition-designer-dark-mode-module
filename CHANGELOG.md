@@ -12,6 +12,19 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ### Fixed
 
+- **One component throwing out of `updateUI()` no longer strands the rest of
+  the Designer's tree.** Swing's `updateComponentTreeUI` is an unguarded
+  recursion, so the first throw abandons every component after it — and the
+  tree that aborts is usually the main frame's, leaving everything below the
+  throwing component on the outgoing look and feel's delegates. Isolating per
+  window ([#11]) was not enough. The walk is now per component: a failure costs
+  that component, its siblings and its own subtree are still walked, and the
+  distinct failing classes are logged once each. Two Ignition classes are known
+  to throw there on the light restore — Vision's `DockingInternalFrameUI`,
+  which nulls a `BasicContainer`'s background, and the `Font.getFamily()` NPE
+  in [#12](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/12)
+  — and neither is fixable from this module. The blast radius is.
+
 - **Alarm pipeline and SFC blocks are legible under dark mode.** A block paints
   itself from `Color` fields assigned literals in `BasicBlockUI`'s constructor
   — `#B0D8EA` connected, `#EEEEEE` unconnected — which no look-and-feel swap
