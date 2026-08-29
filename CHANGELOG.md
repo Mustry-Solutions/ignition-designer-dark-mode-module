@@ -39,6 +39,16 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ### Added
 
+- The harness pins that **no FlatLaf scaling listener is left registered**
+  ([#12](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/12)).
+  With FlatLaf user scaling on, `UIScale` registers a listener on all three
+  defaults tables that is still there after the stock theme is back, reacting to
+  another look and feel's font changes. The module's only defence is one
+  ordering-sensitive line setting `flatlaf.uiScale.enabled=false` before FlatLaf
+  loads, and nothing guarded it. Measured both ways: as shipped no such listener
+  appears anywhere; flip the property and all three tables carry one after a
+  restore.
+
 - A **headless look-and-feel harness** (`./gradlew :designer:lafHarness`,
   [#32](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/32)).
   It drives the real switch sequence against the real Synthetica, JIDE and

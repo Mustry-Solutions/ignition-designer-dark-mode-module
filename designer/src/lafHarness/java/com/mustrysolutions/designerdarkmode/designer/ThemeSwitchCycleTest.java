@@ -1,6 +1,7 @@
 package com.mustrysolutions.designerdarkmode.designer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -297,6 +298,62 @@ class ThemeSwitchCycleTest {
             "and it has to run FIRST among the styling passes: until the singleton is "
                 + "back, anything calling into Synthetica NPEs. Phases were: "
                 + manager.phaseTrace());
+    }
+
+    /**
+     * FlatLaf's user scaling must stay off, because the listener it installs
+     * outlives the theme it belongs to.
+     *
+     * <p>With scaling enabled, {@code UIScale} registers a
+     * {@code PropertyChangeListener} on all three tables — {@code UIManager},
+     * the developer defaults and the look-and-feel defaults — and, measured
+     * across a full cycle, it is <em>still on all three after the stock look
+     * and feel is back</em>. It then keeps reacting to font changes made by a
+     * look and feel it has nothing to do with, and its handler takes a
+     * {@code Font} parameter it does not null-check.
+     *
+     * <p>The module's entire defence is one line in {@link ThemeManager#startup}
+     * setting {@code flatlaf.uiScale.enabled=false} before FlatLaf can load —
+     * ordering-sensitive, easy to move, and until now guarded by nothing. This
+     * is that guard. Measured both ways: with the property at its shipped value
+     * no FlatLaf listener appears on any table at any stage; flip it to true and
+     * all three carry one after the restore.
+     *
+     * <p>Note for #12, whose stated likely cause is this listener: it is NOT
+     * the cause. With the property as shipped the listener is never registered
+     * at all, so there is nothing to fire and nothing to unregister. That NPE
+     * has a different source.
+     */
+    @Test
+    @DisplayName("no FlatLaf scaling listener is left behind on any defaults table (#12)")
+    void theFlatLafScalingListenerIsNeverRegistered() {
+        assertNoFlatLafListener("stock");
+        manager.apply(true);
+        assertNoFlatLafListener("under dark");
+        manager.apply(false);
+        assertNoFlatLafListener("after the restore");
+    }
+
+    private static void assertNoFlatLafListener(String stage) {
+        java.util.Map<String, java.beans.PropertyChangeListener[]> tables =
+            new java.util.LinkedHashMap<>();
+        tables.put("UIManager", UIManager.getPropertyChangeListeners());
+        tables.put("developer defaults", UIManager.getDefaults().getPropertyChangeListeners());
+        tables.put("look-and-feel defaults",
+            UIManager.getLookAndFeelDefaults().getPropertyChangeListeners());
+
+        tables.forEach((table, listeners) -> {
+            for (java.beans.PropertyChangeListener listener : listeners) {
+                assertFalse(listener.getClass().getName().startsWith("com.formdev.flatlaf"),
+                    "a FlatLaf listener is registered on the " + table + " " + stage
+                        + " (" + listener.getClass().getName() + "). It outlives the look and "
+                        + "feel that installed it, so it goes on reacting to another one's "
+                        + "font changes. Something has stopped "
+                        + "flatlaf.uiScale.enabled=false from being set before FlatLaf loads "
+                        + "— check the ordering in ThemeManager.startup and the harness's own "
+                        + "Gradle systemProperty.");
+            }
+        });
     }
 
     @Test
