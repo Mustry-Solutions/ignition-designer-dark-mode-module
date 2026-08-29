@@ -193,6 +193,20 @@ dispatch thread.
   `System.setProperty("flatlaf.uiScale.enabled", "false")` before FlatLaf ever
   initializes (macOS is system-scaled, so this costs nothing), plus a one-shot
   retry around `setLookAndFeel`.
+
+  Measured since, both ways. With scaling on, `UIScale$1` lands on **all three**
+  tables — `UIManager`, the developer defaults and the look-and-feel defaults —
+  and is still on all three *after* the stock look and feel is back: "permanent"
+  is literal. With the property as shipped it is never registered at all. The
+  whole defence is therefore one ordering-sensitive line in `startup()`, so the
+  harness now pins it (`theFlatLafScalingListenerIsNeverRegistered`).
+
+  **This is not the cause of [#12][12].** That NPE was attributed to this
+  listener; with the property as shipped there is no listener to fire and none
+  to unregister, so both fixes suggested there aim at the wrong thing. No
+  `UIManager` font default is null at any point in a cycle either (36 under
+  stock, 72 under dark, none null). See the issue for what the evidence does
+  point at.
 - **Broken first launch.** The Tools menu checkbox's `setSelected(...)` fires
   `itemStateChanged` during module startup, which used to apply the theme to a
   half-built Designer. All applies are gated behind a `uiReady` flag set once the
@@ -232,6 +246,8 @@ dispatch thread.
   pane's `apple.awt.windowAppearance` client property is explicitly cleared.
 
 [35]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/35
+
+[12]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/12
 
 ## When Ignition changes underneath us
 

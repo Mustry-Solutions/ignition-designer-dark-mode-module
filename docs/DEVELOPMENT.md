@@ -129,6 +129,12 @@ worth knowing before you trust a pass:
   test is an outcome check, not evidence the restore code runs — and this JVM
   has one classloader where a Designer has several.
 
+It can also drive **components**, which is easy to forget given it has no
+windows. 17 of 19 common Swing types build headlessly (`JSlider` and
+`JSplitPane` are the two that throw), so a component tree can be built, put
+through a full cycle and handed to `updateComponentTreeUI`. Windows are the hard
+limit, not components.
+
 Two notes if you extend it:
 
 - Values are compared as **text**, not by identity or `equals`. JIDE rebuilds
