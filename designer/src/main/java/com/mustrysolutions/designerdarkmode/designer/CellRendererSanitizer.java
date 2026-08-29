@@ -69,7 +69,8 @@ public class CellRendererSanitizer {
         }
     }
 
-    private void installIn(Container container) {
+    /** Package-private so tests can drive the walk without a real Window. */
+    void installIn(Container container) {
         for (Component child : container.getComponents()) {
             if (child instanceof JTable) {
                 wrapTable((JTable) child);
@@ -269,14 +270,98 @@ public class CellRendererSanitizer {
 
     @SuppressWarnings({"unchecked", "rawtypes"})
     private void wrapList(JList<?> list) {
-        ListCellRenderer<?> renderer = list.getCellRenderer();
-        if (renderer == null || renderer instanceof SanitizingListRenderer
-                || wrappedLists.containsKey(list)) {
+        if (wrappedLists.containsKey(list) || skippedLists.containsKey(list)) {
+            return;
+        }
+        ListCellRenderer<?> renderer = installedRenderer(list);
+        if (renderer == null) {
+            skippedLists.put(list, Boolean.TRUE);
+            return;
+        }
+        if (renderer instanceof SanitizingListRenderer) {
             return;
         }
         wrappedLists.put(list, renderer);
         list.setCellRenderer(new SanitizingListRenderer(renderer));
         list.repaint();
+    }
+
+    /** Lists skipped by installedRenderer, to log each class once. */
+    private static final java.util.Set<String> reportedDecoratingLists =
+        new java.util.HashSet<>();
+
+    /**
+     * Lists installedRenderer has already declined. The watcher re-walks every
+     * window on a 150ms debounce, and a declined list never lands in
+     * wrappedLists — without this it would pay for the reflective lookup on
+     * every pass, forever.
+     */
+    private final Map<JList<?>, Boolean> skippedLists = new WeakHashMap<>();
+
+    /**
+     * Accessors a decorating list uses to publish the renderer it really
+     * delegates to: JIDE's CheckBoxList family, and SwingX's JXList. Between
+     * them these cover every decorating JList on the Designer's classpath
+     * (a census of it found 32 JList subclasses, 9 of them decorating, all
+     * reachable through one of these two names).
+     */
+    private static final String[] DELEGATE_ACCESSORS = {
+        "getActualCellRenderer", "getWrappedCellRenderer",
+    };
+
+    /**
+     * The renderer {@code setCellRenderer} replaces — which is not always the
+     * one {@code getCellRenderer()} hands back.
+     *
+     * <p>JIDE's {@code CheckBoxList} (Vision's list-style property editors,
+     * among others) returns a {@code CheckBoxListCellRenderer} decorator that
+     * it re-points at JList's own renderer field on <em>every</em>
+     * {@code getCellRenderer()} call; SwingX's {@code JXList} keeps a
+     * {@code DelegatingRenderer} in that field and pushes what you set into
+     * <em>it</em>. Either way, wrapping what {@code getCellRenderer()} returned
+     * builds a cycle: the list hands out the decorator, the decorator delegates
+     * to our wrapper, our wrapper delegates back to the decorator, and the
+     * first paint recurses until the stack overflows. Both publish the real
+     * renderer separately; wrapping that puts the wrapper <em>under</em> the
+     * decorator, where it belongs.
+     *
+     * <p>Some other JList subclass could decorate without publishing anything,
+     * and there is no safe way to reach the real renderer there — nor to put
+     * one back afterwards, since the probe that would detect the cycle also
+     * overwrites what the decorator was delegating to. Return null and leave
+     * such a list unsanitized: a light cell is a blemish, a StackOverflowError
+     * takes the Designer down.
+     */
+    private static ListCellRenderer<?> installedRenderer(JList<?> list) {
+        try {
+            if (list.getClass().getMethod("getCellRenderer").getDeclaringClass()
+                    == JList.class) {
+                return list.getCellRenderer();
+            }
+            for (String accessor : DELEGATE_ACCESSORS) {
+                java.lang.reflect.Method method = findMethod(list.getClass(), accessor);
+                if (method != null
+                        && ListCellRenderer.class.isAssignableFrom(method.getReturnType())) {
+                    return (ListCellRenderer<?>) method.invoke(list);
+                }
+            }
+        } catch (Throwable t) {
+            DebugLog.log("Cell renderer lookup failed for " + list.getClass().getName(), t);
+            return null;
+        }
+        if (reportedDecoratingLists.add(list.getClass().getName())) {
+            DebugLog.detail("List renderer left unwrapped (decorating list): "
+                + list.getClass().getName());
+        }
+        return null;
+    }
+
+    private static java.lang.reflect.Method findMethod(Class<?> type, String name) {
+        try {
+            return type.getMethod(name);
+        } catch (NoSuchMethodException absent) {
+            return null;
+        }
     }
 
     /** Restore every original renderer. */
@@ -310,6 +395,7 @@ public class CellRendererSanitizer {
         wrappedHeaders.clear();
         wrappedLists.forEach(this::restoreList);
         wrappedLists.clear();
+        skippedLists.clear();
         // The panes themselves are discarded when updateComponentTreeUI
         // rebuilds the table UIs; just forget them so a later dark install
         // re-intercepts the fresh ones.
@@ -324,7 +410,10 @@ public class CellRendererSanitizer {
 
     @SuppressWarnings({"unchecked", "rawtypes"})
     private void restoreList(JList<?> list, ListCellRenderer<?> original) {
-        if (list.getCellRenderer() instanceof SanitizingListRenderer) {
+        // installedRenderer, not getCellRenderer: on a decorating list the
+        // wrapper sits under the decorator, so getCellRenderer() reports the
+        // decorator and the restore would silently be skipped.
+        if (installedRenderer(list) instanceof SanitizingListRenderer) {
             list.setCellRenderer((ListCellRenderer) original);
             list.repaint();
         }
@@ -394,6 +483,14 @@ public class CellRendererSanitizer {
 
         private final ListCellRenderer<E> delegate;
 
+        /**
+         * Backstop for a delegate that renders back through us. installedRenderer
+         * keeps the known decorating list out of that shape; if some other list
+         * still manages it, one blank-ish fallback cell beats a StackOverflowError
+         * in the paint loop.
+         */
+        private boolean rendering;
+
         SanitizingListRenderer(ListCellRenderer<E> delegate) {
             this.delegate = delegate;
         }
@@ -401,8 +498,23 @@ public class CellRendererSanitizer {
         @Override
         public Component getListCellRendererComponent(JList<? extends E> list, E value,
                 int index, boolean isSelected, boolean cellHasFocus) {
-            Component component = delegate.getListCellRendererComponent(
-                list, value, index, isSelected, cellHasFocus);
+            if (rendering) {
+                if (reportedDecoratingLists.add(delegate.getClass().getName())) {
+                    DebugLog.log("Cell renderer recursion broken at "
+                        + delegate.getClass().getName() + "; list left unstyled.");
+                }
+                return new javax.swing.DefaultListCellRenderer()
+                    .getListCellRendererComponent(list, value, index, isSelected,
+                        cellHasFocus);
+            }
+            Component component;
+            rendering = true;
+            try {
+                component = delegate.getListCellRendererComponent(
+                    list, value, index, isSelected, cellHasFocus);
+            } finally {
+                rendering = false;
+            }
             sanitize(component);
             return component;
         }

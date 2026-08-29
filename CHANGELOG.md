@@ -12,6 +12,19 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ### Fixed
 
+- Opening a Vision window no longer crashes the Designer's event thread with a
+  `StackOverflowError` out of `CellRendererSanitizer`. JIDE's `CheckBoxList`
+  does not return the renderer `setCellRenderer` replaces — it hands back a
+  decorator that it re-points at the list's own renderer field on every call,
+  and SwingX's `JXList` does the same thing with a `DelegatingRenderer` — so
+  wrapping what `getCellRenderer()` returned left the wrapper and the decorator
+  delegating to each other, and the first painted cell recursed until the stack
+  ran out. The wrapper now goes *under* such a decorator (both publish the real
+  renderer, and between them that covers every decorating list on the
+  Designer's classpath), a list that hides its real renderer is left unwrapped
+  rather than risked, and the wrapper breaks any remaining cycle instead of
+  overflowing. Those lists are dark-adapted as they always should have been.
+
 - A failure to keep the **Synthetica singleton** alive is no longer silent
   ([#35](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/35)).
   Installing FlatLaf nulls Synthetica's private `activeInstance`, and the

@@ -118,6 +118,18 @@ mechanism. On each renderer paint it darkens light backgrounds and, if the
 renderer component's UI delegate has gone stale (Synthetica under FlatLaf),
 refreshes it. Undoes color mutations and restores original renderers on light.
 
+Wrapping a **list** renderer has one rule that is not obvious:
+`getCellRenderer()` is not always the renderer `setCellRenderer()` replaces.
+JIDE's `CheckBoxList` returns a `CheckBoxListCellRenderer` it re-points at
+JList's own renderer field on every call, and SwingX's `JXList` keeps a
+`DelegatingRenderer` in that field and pushes what you set into *it*. Wrapping
+what came back therefore built a delegation cycle and overflowed the stack on
+the first painted cell. Both publish the real renderer separately
+(`getActualCellRenderer`, `getWrappedCellRenderer`), so the wrapper goes *under*
+the decorator; a decorating list that publishes nothing is left unwrapped, since
+there is no way to reach its renderer or to put one back. A census in the
+look-and-feel harness pins the assumption to the Designer's actual classpath.
+
 ### ScriptEditorTheme
 The code editors — script console, project library, Vision component scripts,
 Perspective transforms, Named Query editor — are `RSyntaxTextArea`s. They own
