@@ -12,6 +12,19 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ### Fixed
 
+- **Alarm pipeline and SFC blocks are legible under dark mode.** A block paints
+  itself from `Color` fields assigned literals in `BasicBlockUI`'s constructor
+  — `#B0D8EA` connected, `#EEEEEE` unconnected — which no look-and-feel swap
+  and no `UIManager` override can reach, while its title label is a plain
+  `new JLabel` that inherits FlatLaf's light `Label.foreground`. Light text on
+  a pale fill. The fills are now darkened instead of the labels corrected,
+  since pale blocks on a dark canvas would be a different kind of wrong. Each
+  colour is judged on its own luminance rather than by which field holds it:
+  `StartBlock$UI` pushes IA's `#F7901E` orange through the same public setters,
+  and the START block was the one thing on that canvas that already read
+  correctly.
+
+
 - Opening a Vision window no longer crashes the Designer's event thread with a
   `StackOverflowError` out of `CellRendererSanitizer`. JIDE's `CheckBoxList`
   does not return the renderer `setCellRenderer` replaces — it hands back a

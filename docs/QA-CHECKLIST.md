@@ -147,16 +147,25 @@ Not on the Exchange list — added from the 2026-08-29 run.
 |---|---|---|---|
 | Pipeline Blocks palette | Top dock with a pipeline open | `pass` | |
 | Pipeline canvas background | `BlockDesignableContainer` | `pass` | |
-| **Pipeline blocks themselves** | Blocks on the canvas | `light` | Pale-blue block fill with near-white text — title, port labels (`IN`/`OUT`) and body text (`5 seconds`) are all low-contrast. The `START` block is fine (orange). See below |
+| **Pipeline blocks themselves** | Blocks on the canvas | `fixed` | Was: pale-blue fill with near-white text. `START` was unaffected. See below |
 | Pipeline Block Editor panel | Left dock | `pass` | |
 
-> **Open defect.** The blocks are drawn onto a `BlockDesignableContainer`, so
-> this is renderer/paint-side, not a component background — the inspector will
-> bottom out at the container. The fill stays at its stock light blue while the
-> text picks up a light foreground, giving light-on-light. Whether the text
-> colour comes from a `UIManager` key the alarming module reads or from
-> something the module mutates is **not yet established**; decompile the block
-> painter before writing a fix.
+> **Fixed by `BlockWorkspaceTheme`.** A block *is* a component —
+> `BasicBlockUI extends JPanel` — but it does not paint from its own
+> background, so the inspector would have shown nothing light in the chain.
+> `paintComponent` fills a shape with one of two `Color` fields and strokes it
+> with one of three others, all assigned literals in the constructor
+> (`#B0D8EA` connected, `#EEEEEE` unconnected, `DARK_GRAY` /`#CFCAC6`/`#F7901E`
+> borders). No look-and-feel swap reaches a literal. Meanwhile `initHeader`
+> builds a plain `new JLabel(getTitle())` and never sets a foreground, so the
+> title inherits FlatLaf's light `Label.foreground` — light text, pale fill.
+>
+> The pass darkens the fills rather than correcting the labels; the other way
+> round would leave pale blocks on a dark canvas. It judges each colour on its
+> own luminance rather than by which field holds it, because
+> `StartBlock$UI` sets its fill *and* all three borders to IA's `#F7901E`
+> through the same public setters — a per-field table would have repainted the
+> one block that already reads correctly.
 
 ## H. Reporting
 

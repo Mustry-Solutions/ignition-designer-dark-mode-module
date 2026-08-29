@@ -125,6 +125,7 @@ public class ThemeManager {
     private final ComponentInspector inspector = new ComponentInspector();
     private final ScriptEditorTheme scriptEditors = new ScriptEditorTheme();
     private final ConsoleTextTheme consoleText = new ConsoleTextTheme();
+    private final BlockWorkspaceTheme blockWorkspaces = new BlockWorkspaceTheme();
 
     /** Register the menu's listener before {@link #startup}. */
     public void setThemeStateListener(ThemeStateListener listener) {
@@ -479,6 +480,7 @@ public class ThemeManager {
             safely("whiteSwap", () -> swapWhiteTokenBackgrounds(true));
             safely("scriptEditors", scriptEditors::install);
             safely("consoleText", consoleText::install);
+            safely("blockWorkspaces", blockWorkspaces::install);
             safely("statusBar", status::install);
             safely("cachedPainters", () -> repointCachedThemePainters(true));
             installComponentWatcher();
@@ -495,6 +497,7 @@ public class ThemeManager {
             safely("whiteSwap", () -> swapWhiteTokenBackgrounds(false));
             safely("scriptEditors", scriptEditors::uninstall);
             safely("consoleText", consoleText::uninstall);
+            safely("blockWorkspaces", blockWorkspaces::uninstall);
             safely("statusBar", status::uninstall);
             safely("cachedPainters", () -> repointCachedThemePainters(false));
         }
@@ -1534,6 +1537,10 @@ public class ThemeManager {
         swapWhiteTokenBackgrounds(true);
         scriptEditors.install();
         consoleText.install();
+        // Blocks are built when a pipeline or chart workspace is first
+        // opened, which is long after the switch — so this pass earns its
+        // place in the rescan rather than only in apply().
+        blockWorkspaces.install();
         // Before the cached-field pass: if JIDE has put its own painter back
         // in the map, fix the map first so anything built next reads the right
         // one, then correct the instances that already read the wrong one.
