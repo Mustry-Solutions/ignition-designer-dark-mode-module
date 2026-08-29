@@ -31,6 +31,21 @@ class DebugLogLevelsTest {
     }
 
     @Test
+    @DisplayName("a null throwable logs the message instead of throwing")
+    void aNullThrowableIsTolerated() throws IOException {
+        long before = size();
+
+        // Not a hypothetical: a summary line that passed null here escaped to
+        // the event dispatch thread out of the rescan timer and killed the
+        // tick. A logger that throws turns a contained failure into an
+        // uncaught one, which is the opposite of its job.
+        DebugLog.log("a failure with no throwable to attach", null);
+
+        assertTrue(size() > before, "the message should still have been written");
+        assertTrue(tail().contains("a failure with no throwable to attach"), tail());
+    }
+
+    @Test
     @DisplayName("detail writes nothing unless the debug flag is set")
     void detailIsSilentByDefault() throws IOException {
         System.clearProperty(VERBOSE);
@@ -80,4 +95,15 @@ class DebugLogLevelsTest {
         return new String(Files.readAllBytes(new File(DebugLog.path()).toPath()),
             StandardCharsets.UTF_8);
     }
+
+    /** The last of the log, for asserting a line reached it. */
+    private static String tail() throws IOException {
+        File file = new File(DebugLog.path());
+        if (!file.isFile()) {
+            return "";
+        }
+        String all = new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8);
+        return all.length() > 2000 ? all.substring(all.length() - 2000) : all;
+    }
+
 }

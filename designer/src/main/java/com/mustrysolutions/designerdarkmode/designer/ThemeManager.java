@@ -464,7 +464,7 @@ public class ThemeManager {
             if (failures > 0) {
                 DebugLog.log("updateUI failed on " + failures + " component(s) across "
                     + failed.size() + " class(es): " + failed
-                    + ". Their subtrees were still walked.", null);
+                    + ". Their subtrees were still walked.");
             }
         });
         safely("cachedPopups", this::refreshCachedPopups);
@@ -1417,42 +1417,59 @@ public class ThemeManager {
             return;
         }
         rescanTimer = new Timer(150, e -> {
-            java.util.List<java.lang.ref.WeakReference<java.awt.Component>> added =
-                new java.util.ArrayList<>(pendingAdded);
-            pendingAdded.clear();
-            if (!(UIManager.getLookAndFeel() instanceof FlatDarkLaf)) {
-                return;
-            }
-            java.util.Set<String> failed = new java.util.LinkedHashSet<>();
-            int failures = 0;
-            for (java.lang.ref.WeakReference<java.awt.Component> ref : added) {
-                java.awt.Component component = ref.get();
-                if (component == null || !component.isDisplayable()) {
-                    continue;
-                }
-                // Stale (wrong-LaF) delegates always warrant a refresh — a
-                // Synthetica delegate under FlatLaf paints broken or throws —
-                // regardless of the size heuristic below.
-                if (hasStaleUi(component, true) || worthUiRefresh(component)) {
-                    failures += updateComponentTreeUiResiliently(component, failed);
-                }
-            }
-            if (failures > 0) {
-                DebugLog.log("Rescan: updateUI failed on " + failures
-                    + " component(s) across " + failed.size() + " class(es): " + failed
-                    + ". Their subtrees were still walked.", null);
-            }
-            // Outside the loop and outside any early return: this is a Timer
-            // callback, so anything that escapes it reaches the EDT's default
-            // handler and the tick dies where it stands — including the passes
-            // below, which are the whole point of the rescan.
+            // The ENTIRE body is guarded, not just the passes. This is a Timer
+            // callback: anything that escapes reaches the EDT's default handler
+            // and the tick dies where it stands. It has happened twice — once
+            // on an Ignition NPE out of the tree walk, once on a logging call
+            // of ours in the summary that reports it.
             try {
-                runThemingPasses();
+                rescanTick();
             } catch (Throwable t) {
-                DebugLog.log("Rescan: theming passes failed for this tick.", t);
+                DebugLog.log("Rescan tick failed.", t);
             }
         });
         rescanTimer.setRepeats(false);
+        installAwtEventListener();
+    }
+
+    /**
+     * One debounced rescan: refresh anything attached with a wrong-look-and-feel
+     * delegate, then re-run the idempotent passes over the new components.
+     *
+     * <p>Extracted from the timer so the callback is nothing but a guard. Note
+     * the early return when dark mode is no longer active — it must skip the
+     * passes too, which is why this is a method and not an inlined try block.
+     */
+    private void rescanTick() {
+        java.util.List<java.lang.ref.WeakReference<java.awt.Component>> added =
+            new java.util.ArrayList<>(pendingAdded);
+        pendingAdded.clear();
+        if (!(UIManager.getLookAndFeel() instanceof FlatDarkLaf)) {
+            return;
+        }
+        java.util.Set<String> failed = new java.util.LinkedHashSet<>();
+        int failures = 0;
+        for (java.lang.ref.WeakReference<java.awt.Component> ref : added) {
+            java.awt.Component component = ref.get();
+            if (component == null || !component.isDisplayable()) {
+                continue;
+            }
+            // Stale (wrong-LaF) delegates always warrant a refresh — a
+            // Synthetica delegate under FlatLaf paints broken or throws —
+            // regardless of the size heuristic below.
+            if (hasStaleUi(component, true) || worthUiRefresh(component)) {
+                failures += updateComponentTreeUiResiliently(component, failed);
+            }
+        }
+        if (failures > 0) {
+            DebugLog.log("Rescan: updateUI failed on " + failures
+                + " component(s) across " + failed.size() + " class(es): " + failed
+                + ". Their subtrees were still walked.");
+        }
+        runThemingPasses();
+    }
+
+    private void installAwtEventListener() {
         componentWatcher = event -> {
             if (event.getID() == ContainerEvent.COMPONENT_ADDED) {
                 java.awt.Component child = ((ContainerEvent) event).getChild();
@@ -1729,7 +1746,7 @@ public class ThemeManager {
             if (failures > 0) {
                 DebugLog.log("Stale-delegate refresh under " + root.getClass().getName()
                     + ": updateUI failed on " + failures + " component(s): " + failed
-                    + ". Their subtrees were still walked.", null);
+                    + ". Their subtrees were still walked.");
             }
         }
     }
