@@ -370,7 +370,6 @@ public class ThemeManager {
                     DebugLog.log("setLookAndFeel(FlatDarkLaf) failed once; retrying.", first);
                     UIManager.setLookAndFeel(new FlatDarkLaf());
                 }
-                keepSyntheticaAlive();
             } else {
                 trace("lookAndFeel");
                 try {
@@ -420,6 +419,9 @@ public class ThemeManager {
         // Phase 2 — styling passes. Each is isolated: one failure is logged
         // with its stack and must not strand the rest of the switch.
         if (dark) {
+            // First, and before anything else can call into Synthetica: the
+            // FlatLaf install above has just nulled its singleton.
+            safely("syntheticaSingleton", this::keepSyntheticaAlive);
             safely("snapshotDefaults", this::snapshotMenuDefaults);
             safely("tokens", tokens::install);
         } else {
@@ -552,6 +554,11 @@ public class ThemeManager {
      * nulled its activeInstance singleton — but the Designer keeps calling
      * SyntheticaLookAndFeel.getInstance() while dark mode is active. Point the
      * singleton back at the stock instance so those calls keep working.
+     *
+     * <p>Runs under {@link #safely} as the first phase-2 pass on the dark
+     * switch: first because nothing else may call into Synthetica before the
+     * singleton is back, and under {@code safely} because a failure here has to
+     * be reported rather than logged (#35).
      */
     private void keepSyntheticaAlive() {
         try {
@@ -564,7 +571,19 @@ public class ThemeManager {
                 }
             }
         } catch (Exception e) {
-            log.warn("Could not keep the Synthetica singleton alive under dark mode.", e);
+            // Rethrown rather than logged, which is the whole point of #35.
+            // This reaches into a PRIVATE STATIC FIELD OF A THIRD-PARTY JAR
+            // ("activeInstance", by name, in a jar we do not control), so the
+            // way it breaks is a Synthetica upgrade renaming it — and it breaks
+            // for everyone at once, on the next release, silently.
+            //
+            // Swallowed here, the switch reported complete success while every
+            // Designer call to SyntheticaLookAndFeel.getInstance() NPE'd. Under
+            // safely() the phase lands in failedPhases instead, so the user gets
+            // the same status-bar line as any other partial failure and the log
+            // gets the stack.
+            throw new IllegalStateException(
+                "Could not keep the Synthetica singleton alive under dark mode.", e);
         }
     }
 

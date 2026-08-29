@@ -12,6 +12,19 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ### Fixed
 
+- A failure to keep the **Synthetica singleton** alive is no longer silent
+  ([#35](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/35)).
+  Installing FlatLaf nulls Synthetica's private `activeInstance`, and the
+  Designer keeps calling `getInstance()` the whole time dark mode is active, so
+  the module reflectively points it back. That repair swallowed its own
+  exceptions and logged a warning: it never reached the failed-phase count, so
+  the switch reported complete success while every such call NPE'd out of
+  Ignition's own code. It now runs as a reported pass like every other, first on
+  the dark switch since nothing may call into Synthetica before it. The field is
+  matched by name in a third-party jar, so the failure that matters is a
+  Synthetica upgrade renaming it — which would otherwise have broken dark mode
+  for everyone on one release, silently.
+
 - The **Tools → Dark Mode** checkmark no longer disagrees with the theme in
   effect ([#15](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/15)).
   It tracked the *request*: ticked the moment you clicked, whether or not the
