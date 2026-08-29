@@ -267,4 +267,33 @@ class ResilientTreeUpdateTest {
         assertEquals(before.getRGB(), after.getRGB());
     }
 
+
+    /** The FilterablePalette shape: reading the children throws. */
+    private static class HostileContainer extends JPanel {
+
+        @Override
+        public java.awt.Component[] getComponents() {
+            throw new UnsupportedOperationException("components is write-only");
+        }
+    }
+
+    @Test
+    @DisplayName("a container that throws when read costs only its own subtree")
+    void aContainerThatCannotBeReadDoesNotAbortTheWalk() {
+        JPanel root = new JPanel();
+        CountingPanel before = new CountingPanel();
+        CountingPanel after = new CountingPanel();
+        root.add(before);
+        root.add(new HostileContainer());
+        root.add(after);
+
+        Set<String> failed = new LinkedHashSet<>();
+        ThemeManager.updateComponentTreeUiResiliently(root, failed);
+
+        assertEquals(1, before.updates);
+        assertEquals(1, after.updates,
+            "the Exchange script records FilterablePalette as throwing on component"
+                + " access, and this walk reaches the Perspective palette");
+    }
+
 }

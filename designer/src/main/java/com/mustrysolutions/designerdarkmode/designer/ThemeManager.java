@@ -450,14 +450,12 @@ public class ThemeManager {
                 try {
                     failures += updateComponentTreeUiResiliently(window, failed);
                 } catch (Throwable t) {
+                    // The outer net. Since the walk contains a throwing
+                    // component itself, reaching here means something failed
+                    // that is not a single component's updateUI — so the whole
+                    // window is the right thing to report on.
                     DebugLog.log("updateComponentTreeUI failed for "
                         + window.getClass().getName() + "; continuing with the rest.", t);
-                    // The stack above names the delegate that threw; it cannot
-                    // name the component, and it cannot say how much of the tree
-                    // the aborted update never reached — which is the part #12
-                    // is actually about. Only runs when a window has genuinely
-                    // failed, so it is not gated on the verbose flag: this is
-                    // exactly the moment nobody has debug logging turned on.
                     TreeUpdateDiagnostic.report(window, t);
                 }
             }
@@ -1742,28 +1740,71 @@ public class ThemeManager {
                 if (failed.add(child.getClass().getName())) {
                     DebugLog.log("updateUI failed for " + child.getClass().getName()
                         + "; walking its subtree anyway.", t);
+                    // The diagnostic from #39, at the level the failure now
+                    // actually lands. It was written against the window-level
+                    // catch, which containing the throw per component made
+                    // nearly unreachable — and the question it answers ("how
+                    // much of the tree did this cost?") is better asked of the
+                    // component that threw than of the whole window. Once per
+                    // distinct class: a tree with two hundred of one broken
+                    // component should not produce two hundred reports.
+                    TreeUpdateDiagnostic.report(child, t);
                 }
             } finally {
                 restoreInternalFrameBackground(child, pinned);
             }
-            javax.swing.JPopupMenu popup = child.getComponentPopupMenu();
-            if (popup != null && popup.isVisible() && popup.getInvoker() == child) {
-                failures += updateSubtree(popup, failed);
+            try {
+                javax.swing.JPopupMenu popup = child.getComponentPopupMenu();
+                if (popup != null && popup.isVisible() && popup.getInvoker() == child) {
+                    failures += updateSubtree(popup, failed);
+                }
+            } catch (Throwable t) {
+                if (failed.add(child.getClass().getName() + "#getComponentPopupMenu")) {
+                    DebugLog.log("Could not reach the popup menu on "
+                        + child.getClass().getName(), t);
+                }
             }
         }
-        // A JMenu's items hang off its popup, not off getComponents().
-        java.awt.Component[] children =
-            component instanceof javax.swing.JMenu
-                ? ((javax.swing.JMenu) component).getMenuComponents()
-                : component instanceof java.awt.Container
-                    ? ((java.awt.Container) component).getComponents()
-                    : null;
+        java.awt.Component[] children = childrenOf(component, failed);
         if (children != null) {
             for (java.awt.Component each : children) {
                 failures += updateSubtree(each, failed);
             }
         }
         return failures;
+    }
+
+    /**
+     * The children to walk, or null if there are none to be had.
+     *
+     * <p>A {@code JMenu}'s items hang off its popup rather than off
+     * {@code getComponents()}, hence the first branch.
+     *
+     * <p>Guarded because reading a container's children is not always safe.
+     * The Exchange dark-mode script records {@code FilterablePalette} as
+     * having a write-only {@code components} attribute that throws on access,
+     * and this walk reaches the Perspective palette. Outside the guard, one
+     * such container would abort the whole walk — the exact failure the
+     * per-component containment exists to prevent, reintroduced one line
+     * below it.
+     */
+    private static java.awt.Component[] childrenOf(
+            java.awt.Component component, java.util.Set<String> failed) {
+        try {
+            if (component instanceof javax.swing.JMenu) {
+                return ((javax.swing.JMenu) component).getMenuComponents();
+            }
+            if (component instanceof java.awt.Container) {
+                return ((java.awt.Container) component).getComponents();
+            }
+            return null;
+        } catch (Throwable t) {
+            if (failed.add(component.getClass().getName() + "#getComponents")) {
+                DebugLog.log("Could not read the children of "
+                    + component.getClass().getName() + "; its subtree is skipped.", t);
+            }
+            return null;
+        }
     }
 
     private void refreshStaleInSecondaryWindows() {
