@@ -125,6 +125,7 @@ public class ThemeManager {
     private final ComponentInspector inspector = new ComponentInspector();
     private final ScriptEditorTheme scriptEditors = new ScriptEditorTheme();
     private final ConsoleTextTheme consoleText = new ConsoleTextTheme();
+    private final BlockWorkspaceTheme blockWorkspaces = new BlockWorkspaceTheme();
 
     /** Register the menu's listener before {@link #startup}. */
     public void setThemeStateListener(ThemeStateListener listener) {
@@ -437,6 +438,8 @@ public class ThemeManager {
             safely("jideOverrides", () -> applyJideDarkOverrides(true));
         }
         safely("updateComponentTrees", () -> {
+            java.util.Set<String> failed = new java.util.LinkedHashSet<>();
+            int failures = 0;
             for (Window window : Window.getWindows()) {
                 // Isolate per WINDOW, not per phase. Synthetica can NPE out of
                 // updateComponentTreeUI on a window holding a stale delegate
@@ -445,18 +448,21 @@ public class ThemeManager {
                 // every window after it, leaving the light restore visibly
                 // half-applied — some panels light, others still dark.
                 try {
-                    SwingUtilities.updateComponentTreeUI(window);
+                    failures += updateComponentTreeUiResiliently(window, failed);
                 } catch (Throwable t) {
+                    // The outer net. Since the walk contains a throwing
+                    // component itself, reaching here means something failed
+                    // that is not a single component's updateUI — so the whole
+                    // window is the right thing to report on.
                     DebugLog.log("updateComponentTreeUI failed for "
                         + window.getClass().getName() + "; continuing with the rest.", t);
-                    // The stack above names the delegate that threw; it cannot
-                    // name the component, and it cannot say how much of the tree
-                    // the aborted update never reached — which is the part #12
-                    // is actually about. Only runs when a window has genuinely
-                    // failed, so it is not gated on the verbose flag: this is
-                    // exactly the moment nobody has debug logging turned on.
                     TreeUpdateDiagnostic.report(window, t);
                 }
+            }
+            if (failures > 0) {
+                DebugLog.log("updateUI failed on " + failures + " component(s) across "
+                    + failed.size() + " class(es): " + failed
+                    + ". Their subtrees were still walked.");
             }
         });
         safely("cachedPopups", this::refreshCachedPopups);
@@ -479,6 +485,7 @@ public class ThemeManager {
             safely("whiteSwap", () -> swapWhiteTokenBackgrounds(true));
             safely("scriptEditors", scriptEditors::install);
             safely("consoleText", consoleText::install);
+            safely("blockWorkspaces", blockWorkspaces::install);
             safely("statusBar", status::install);
             safely("cachedPainters", () -> repointCachedThemePainters(true));
             installComponentWatcher();
@@ -495,6 +502,7 @@ public class ThemeManager {
             safely("whiteSwap", () -> swapWhiteTokenBackgrounds(false));
             safely("scriptEditors", scriptEditors::uninstall);
             safely("consoleText", consoleText::uninstall);
+            safely("blockWorkspaces", blockWorkspaces::uninstall);
             safely("statusBar", status::uninstall);
             safely("cachedPainters", () -> repointCachedThemePainters(false));
         }
@@ -1407,27 +1415,59 @@ public class ThemeManager {
             return;
         }
         rescanTimer = new Timer(150, e -> {
-            java.util.List<java.lang.ref.WeakReference<java.awt.Component>> added =
-                new java.util.ArrayList<>(pendingAdded);
-            pendingAdded.clear();
-            if (!(UIManager.getLookAndFeel() instanceof FlatDarkLaf)) {
-                return;
+            // The ENTIRE body is guarded, not just the passes. This is a Timer
+            // callback: anything that escapes reaches the EDT's default handler
+            // and the tick dies where it stands. It has happened twice — once
+            // on an Ignition NPE out of the tree walk, once on a logging call
+            // of ours in the summary that reports it.
+            try {
+                rescanTick();
+            } catch (Throwable t) {
+                DebugLog.log("Rescan tick failed.", t);
             }
-            for (java.lang.ref.WeakReference<java.awt.Component> ref : added) {
-                java.awt.Component component = ref.get();
-                if (component == null || !component.isDisplayable()) {
-                    continue;
-                }
-                // Stale (wrong-LaF) delegates always warrant a refresh — a
-                // Synthetica delegate under FlatLaf paints broken or throws —
-                // regardless of the size heuristic below.
-                if (hasStaleUi(component, true) || worthUiRefresh(component)) {
-                    SwingUtilities.updateComponentTreeUI(component);
-                }
-            }
-            runThemingPasses();
         });
         rescanTimer.setRepeats(false);
+        installAwtEventListener();
+    }
+
+    /**
+     * One debounced rescan: refresh anything attached with a wrong-look-and-feel
+     * delegate, then re-run the idempotent passes over the new components.
+     *
+     * <p>Extracted from the timer so the callback is nothing but a guard. Note
+     * the early return when dark mode is no longer active — it must skip the
+     * passes too, which is why this is a method and not an inlined try block.
+     */
+    private void rescanTick() {
+        java.util.List<java.lang.ref.WeakReference<java.awt.Component>> added =
+            new java.util.ArrayList<>(pendingAdded);
+        pendingAdded.clear();
+        if (!(UIManager.getLookAndFeel() instanceof FlatDarkLaf)) {
+            return;
+        }
+        java.util.Set<String> failed = new java.util.LinkedHashSet<>();
+        int failures = 0;
+        for (java.lang.ref.WeakReference<java.awt.Component> ref : added) {
+            java.awt.Component component = ref.get();
+            if (component == null || !component.isDisplayable()) {
+                continue;
+            }
+            // Stale (wrong-LaF) delegates always warrant a refresh — a
+            // Synthetica delegate under FlatLaf paints broken or throws —
+            // regardless of the size heuristic below.
+            if (hasStaleUi(component, true) || worthUiRefresh(component)) {
+                failures += updateComponentTreeUiResiliently(component, failed);
+            }
+        }
+        if (failures > 0) {
+            DebugLog.log("Rescan: updateUI failed on " + failures
+                + " component(s) across " + failed.size() + " class(es): " + failed
+                + ". Their subtrees were still walked.");
+        }
+        runThemingPasses();
+    }
+
+    private void installAwtEventListener() {
         componentWatcher = event -> {
             if (event.getID() == ContainerEvent.COMPONENT_ADDED) {
                 java.awt.Component child = ((ContainerEvent) event).getChild();
@@ -1534,6 +1574,10 @@ public class ThemeManager {
         swapWhiteTokenBackgrounds(true);
         scriptEditors.install();
         consoleText.install();
+        // Blocks are built when a pipeline or chart workspace is first
+        // opened, which is long after the switch — so this pass earns its
+        // place in the rescan rather than only in apply().
+        blockWorkspaces.install();
         // Before the cached-field pass: if JIDE has put its own painter back
         // in the map, fix the map first so anything built next reads the right
         // one, then correct the instances that already read the wrong one.
@@ -1552,6 +1596,217 @@ public class ThemeManager {
      * hasStaleUi short-circuits on the first stale delegate, so this is cheap
      * when nothing is stale.
      */
+    /**
+     * {@code SwingUtilities.updateComponentTreeUI}, but a component that throws
+     * loses only itself.
+     *
+     * <p>Swing's own walk is one recursion with no guard, so the first
+     * {@code updateUI()} that throws abandons every component after it. That is
+     * a real loss and not a hypothetical one: isolating per window (#11) was
+     * not enough, because the window that aborts is usually the MAIN one, and
+     * everything below the throwing component in its tree keeps the delegates
+     * of the outgoing look and feel.
+     *
+     * <p>Two Ignition classes are known to throw here, both on the light
+     * restore and both for reasons outside this module:
+     *
+     * <ul>
+     *   <li>Vision's {@code DockingInternalFrameUI.installDefaults} nulls the
+     *       content pane's background when it is a {@code UIResource} — the
+     *       state the preceding walk leaves behind — and a Vision content pane
+     *       is a {@code BasicContainer}, whose {@code setBackground} override
+     *       dereferences its argument;</li>
+     *   <li>the {@code Font.getFamily()} NPE recorded in #12.</li>
+     * </ul>
+     *
+     * <p>Neither is fixable from here. What is fixable is the blast radius.
+     *
+     * <p>The failures are logged but deliberately do <em>not</em> mark the phase
+     * degraded in the status bar: a Designer with a Vision window open would
+     * then warn on every single switch, and a warning that always fires stops
+     * being read. If a future failure turns out to be ours rather than
+     * Ignition's, that is the line to reconsider.
+     *
+     * @param failed collects the distinct classes that threw, so a tree with
+     *     two hundred of one broken component logs one line rather than two
+     *     hundred
+     * @return how many components threw
+     */
+    static int updateComponentTreeUiResiliently(
+            java.awt.Component component, java.util.Set<String> failed) {
+        int failures = updateSubtree(component, failed);
+        // What SwingUtilities does after its own walk.
+        component.invalidate();
+        component.validate();
+        component.repaint();
+        return failures;
+    }
+
+    /**
+     * Stop Vision's {@code DockingInternalFrameUI.installDefaults} from throwing
+     * part-way through, by removing the condition it throws on.
+     *
+     * <p>Containing the throw is not enough here, and the reason is in the
+     * bytecode. {@code installDefaults} does, in order:
+     *
+     * <pre>
+     * offset 58-60  if (contentPane.getBackground() instanceof UIResource)
+     *                   contentPane.setBackground(null);      // throws
+     * offset 63-76      frame.setLayout(createLayoutManager());
+     * offset 79-91      frame.setBackground(...);
+     * offset 94-105     frame.setBorder(new CustomBorder());
+     * </pre>
+     *
+     * <p>A Vision content pane is a {@code BasicContainer}, whose
+     * {@code setBackground} override dereferences its argument, so the null at
+     * offset 60 throws and the frame never gets a layout. Catching that leaves
+     * a {@code JInternalFrame} with {@code getLayout() == null}, and every
+     * later {@code BasicInternalFrameUI.getMinimumSize()} NPEs — once per
+     * paint, per validate, and once per read of the {@code minimumSize}
+     * property in the Vision property table. Containment turned one abort into
+     * a storm.
+     *
+     * <p>The condition is ours to remove. IA's block only fires when the
+     * content pane's background is a {@code UIResource}, and it is a
+     * {@code UIResource} because a previous walk of ours put one there —
+     * {@code LookAndFeel.installColorsAndFont} replaces a null or
+     * {@code UIResource} background with the new look and feel's. In a stock
+     * Designer this code runs once, at construction, against whatever
+     * background the window's own design carries, so it never fires.
+     *
+     * <p>So: swap the same colour in as a plain {@code Color} before
+     * {@code updateUI()}, and put a {@code UIResource} back afterwards. IA's
+     * block sees a non-{@code UIResource} and skips itself; the layout, the
+     * background and the border all get installed; and the content pane is
+     * left tracking the look and feel again, so the walk into its own subtree
+     * recolours it normally.
+     *
+     * @return the background to hand to {@link #restoreInternalFrameBackground},
+     *     or null when nothing was changed
+     */
+    private static java.awt.Color neutraliseInternalFrameBackground(
+            javax.swing.JComponent component) {
+        if (!(component instanceof javax.swing.JInternalFrame)) {
+            return null;
+        }
+        try {
+            java.awt.Container contentPane =
+                ((javax.swing.JInternalFrame) component).getContentPane();
+            if (!(contentPane instanceof javax.swing.JComponent)) {
+                return null;
+            }
+            java.awt.Color background = contentPane.getBackground();
+            if (!(background instanceof javax.swing.plaf.UIResource)) {
+                return null;
+            }
+            // Same colour, plain type. Alpha carried explicitly: the int
+            // constructor drops it.
+            contentPane.setBackground(new java.awt.Color(background.getRGB(), true));
+            return background;
+        } catch (Throwable t) {
+            DebugLog.log("Could not neutralise the content-pane background on "
+                + component.getClass().getName(), t);
+            return null;
+        }
+    }
+
+    /** Put the {@code UIResource} background back, so it tracks the theme again. */
+    private static void restoreInternalFrameBackground(
+            javax.swing.JComponent component, java.awt.Color background) {
+        if (background == null) {
+            return;
+        }
+        try {
+            java.awt.Container contentPane =
+                ((javax.swing.JInternalFrame) component).getContentPane();
+            contentPane.setBackground(background);
+        } catch (Throwable t) {
+            DebugLog.log("Could not restore the content-pane background on "
+                + component.getClass().getName(), t);
+        }
+    }
+
+    private static int updateSubtree(
+            java.awt.Component component, java.util.Set<String> failed) {
+        int failures = 0;
+        if (component instanceof javax.swing.JComponent) {
+            javax.swing.JComponent child = (javax.swing.JComponent) component;
+            // Prevention, not containment — see the method's javadoc.
+            java.awt.Color pinned = neutraliseInternalFrameBackground(child);
+            try {
+                child.updateUI();
+            } catch (Throwable t) {
+                failures++;
+                if (failed.add(child.getClass().getName())) {
+                    DebugLog.log("updateUI failed for " + child.getClass().getName()
+                        + "; walking its subtree anyway.", t);
+                    // The diagnostic from #39, at the level the failure now
+                    // actually lands. It was written against the window-level
+                    // catch, which containing the throw per component made
+                    // nearly unreachable — and the question it answers ("how
+                    // much of the tree did this cost?") is better asked of the
+                    // component that threw than of the whole window. Once per
+                    // distinct class: a tree with two hundred of one broken
+                    // component should not produce two hundred reports.
+                    TreeUpdateDiagnostic.report(child, t);
+                }
+            } finally {
+                restoreInternalFrameBackground(child, pinned);
+            }
+            try {
+                javax.swing.JPopupMenu popup = child.getComponentPopupMenu();
+                if (popup != null && popup.isVisible() && popup.getInvoker() == child) {
+                    failures += updateSubtree(popup, failed);
+                }
+            } catch (Throwable t) {
+                if (failed.add(child.getClass().getName() + "#getComponentPopupMenu")) {
+                    DebugLog.log("Could not reach the popup menu on "
+                        + child.getClass().getName(), t);
+                }
+            }
+        }
+        java.awt.Component[] children = childrenOf(component, failed);
+        if (children != null) {
+            for (java.awt.Component each : children) {
+                failures += updateSubtree(each, failed);
+            }
+        }
+        return failures;
+    }
+
+    /**
+     * The children to walk, or null if there are none to be had.
+     *
+     * <p>A {@code JMenu}'s items hang off its popup rather than off
+     * {@code getComponents()}, hence the first branch.
+     *
+     * <p>Guarded because reading a container's children is not always safe.
+     * The Exchange dark-mode script records {@code FilterablePalette} as
+     * having a write-only {@code components} attribute that throws on access,
+     * and this walk reaches the Perspective palette. Outside the guard, one
+     * such container would abort the whole walk — the exact failure the
+     * per-component containment exists to prevent, reintroduced one line
+     * below it.
+     */
+    private static java.awt.Component[] childrenOf(
+            java.awt.Component component, java.util.Set<String> failed) {
+        try {
+            if (component instanceof javax.swing.JMenu) {
+                return ((javax.swing.JMenu) component).getMenuComponents();
+            }
+            if (component instanceof java.awt.Container) {
+                return ((java.awt.Container) component).getComponents();
+            }
+            return null;
+        } catch (Throwable t) {
+            if (failed.add(component.getClass().getName() + "#getComponents")) {
+                DebugLog.log("Could not read the children of "
+                    + component.getClass().getName() + "; its subtree is skipped.", t);
+            }
+            return null;
+        }
+    }
+
     private void refreshStaleInSecondaryWindows() {
         for (Window window : Window.getWindows()) {
             if (!window.isShowing() || (context != null && window == context.getFrame())) {
@@ -1613,9 +1868,15 @@ public class ThemeManager {
     static void refreshStaleUiDelegates(javax.swing.JComponent root) {
         boolean darkActive = UIManager.getLookAndFeel() instanceof FlatDarkLaf;
         if (hasStaleUi(root, darkActive)) {
-            SwingUtilities.updateComponentTreeUI(root);
+            java.util.Set<String> failed = new java.util.LinkedHashSet<>();
+            int failures = updateComponentTreeUiResiliently(root, failed);
             DebugLog.detail("Refreshed stale UI delegates under "
                 + root.getClass().getName());
+            if (failures > 0) {
+                DebugLog.log("Stale-delegate refresh under " + root.getClass().getName()
+                    + ": updateUI failed on " + failures + " component(s): " + failed
+                    + ". Their subtrees were still walked.");
+            }
         }
     }
 

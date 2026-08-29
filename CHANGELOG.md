@@ -12,6 +12,55 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ### Fixed
 
+- **Opening a Vision window no longer floods the Designer with
+  `minimumSize` errors.** Vision's `DockingInternalFrameUI.installDefaults`
+  nulls the content pane's background when it is a `UIResource`, and a Vision
+  content pane is a `BasicContainer` whose `setBackground` cannot take null —
+  so it threw three instructions before `frame.setLayout(...)`, leaving the
+  frame with no layout and every later `getMinimumSize()` NPEing, once per
+  paint and per property-table read. The condition is ours to remove: the
+  background is a `UIResource` only because a previous walk of ours put one
+  there. The walk now swaps the same colour in as a plain `Color` before
+  `updateUI()` and restores a `UIResource` afterwards, so IA's block skips
+  itself, the layout is installed, and the content pane still tracks the theme.
+
+- **One component throwing out of `updateUI()` no longer strands the rest of
+  the Designer's tree.** Swing's `updateComponentTreeUI` is an unguarded
+  recursion, so the first throw abandons every component after it — and the
+  tree that aborts is usually the main frame's, leaving everything below the
+  throwing component on the outgoing look and feel's delegates. Isolating per
+  window
+  ([#11](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/11))
+  was not enough. The walk is now per component, at **every**
+  call site — the switch's own pass, the component watcher's debounced rescan,
+  and the stale-delegate refresh: a failure costs that component, its siblings
+  and its own subtree are still walked, and the distinct failing classes are
+  logged once each. The rescan is a `Timer` callback, so a throw there did not
+  merely lose the tree — it reached the EDT's default handler and killed the
+  tick, including the theming passes that are the point of the rescan.
+
+  Containment is the net, not the cure — where the throw leaves a component
+  half-configured, it has to be prevented instead, as the Vision entry above
+  does. What containment is right for is the case this module cannot reach at
+  all: the `Font.getFamily()` NPE in
+  [#12](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/12),
+  whose cause is still open. The diagnostic added for that issue now also runs
+  on the per-component failure path, since containing the throw made the
+  window-level path it was written against nearly unreachable.
+
+- **Alarm pipeline and SFC blocks are legible under dark mode.** A block paints
+  itself from `Color` fields assigned literals in `BasicBlockUI`'s constructor
+  — `#B0D8EA` connected, `#EEEEEE` unconnected — which no look-and-feel swap
+  and no `UIManager` override can reach, while its title label is a plain
+  `new JLabel` that inherits FlatLaf's light `Label.foreground`. Light text on
+  a pale fill. The fills are now darkened instead of the labels corrected,
+  since pale blocks on a dark canvas would be a different kind of wrong. Each
+  colour is judged on its own luminance rather than by which field holds it:
+  `StartBlock$UI` pushes IA's `#F7901E` orange through the same public setters,
+  and the START block was the one thing on that canvas that already read
+  correctly.
+
+
 - Opening a Vision window no longer crashes the Designer's event thread with a
   `StackOverflowError` out of `CellRendererSanitizer`. JIDE's `CheckBoxList`
   does not return the renderer `setCellRenderer` replaces — it hands back a
@@ -103,6 +152,21 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 - The Designer's status bar stays readable under dark mode. `StatusBar
   .setMessage` re-asserts `Color.black` on the message label on every call, so
   its own messages were black on a dark bar.
+- **[docs/QA-CHECKLIST.md](docs/QA-CHECKLIST.md)** — a sweep of Designer
+  surfaces with a pass/fail per surface, so coverage gaps are found before a
+  release rather than reported as bugs
+  ([#5](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/5)).
+  The surface list is drawn from the catalogue in the MIT-licensed
+  [Exchange dark-mode script](https://inductiveautomation.com/exchange/2719/overview);
+  its 8.1 class names have shifted on 8.3, its UI locations have not.
+- `LookAndFeelDefaultsTableTest` (`./gradlew :designer:lafHarness`) pins the
+  gap between the developer defaults table and the look-and-feel table: 109
+  colour keys resolve through `UIManager` but not through
+  `getLookAndFeelDefaults()` under the stock look and feel, and the restore
+  leaves that set exactly as it found it. Ignition code reading a colour
+  that way gets null in a stock Designer and a real colour under dark mode,
+  which is the opposite of the intuitive direction and has already caused
+  one stack trace to be misread.
 
 ### Changed
 

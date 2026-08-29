@@ -71,7 +71,22 @@ public final class DebugLog {
         write(message);
     }
 
+    /**
+     * A message and the throwable behind it.
+     *
+     * <p>A null throwable is tolerated rather than rejected. Logging exists to
+     * report that something went wrong; a logger that itself throws turns a
+     * contained failure into an uncaught one, and on the event dispatch thread
+     * that kills whatever was running. That is not hypothetical — a summary
+     * line passed {@code null} here escaped to the EDT out of the rescan
+     * timer. Callers with nothing to attach should use {@link #log(String)},
+     * but getting that wrong must not cost more than a missing stack trace.
+     */
     public static void log(String message, Throwable error) {
+        if (error == null) {
+            write(message);
+            return;
+        }
         StringWriter stack = new StringWriter();
         error.printStackTrace(new PrintWriter(stack));
         write(message + System.lineSeparator() + stack);
