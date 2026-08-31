@@ -12,6 +12,15 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ### Fixed
 
+- The **tree-update diagnostic now reports null backgrounds and foregrounds**,
+  not only fonts. It was written against the description in
+  [#12](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/12),
+  which named a `Font.getFamily()` NPE. The failure actually caught in the wild
+  was `Color.getAlpha()` on a null background, so the instrument was looking at
+  the wrong property and would have reported `no font at all: 0` while saying
+  nothing about the cause. Its `UIManager` sweep now covers every key rather
+  than font-ish ones too.
+
 - **Opening a Vision window no longer floods the Designer with
   `minimumSize` errors.** Vision's `DockingInternalFrameUI.installDefaults`
   nulls the content pane's background when it is a `UIResource`, and a Vision
