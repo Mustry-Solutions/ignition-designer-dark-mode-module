@@ -12,6 +12,68 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ### Fixed
 
+- **The Output Console's log text is readable**
+  ([#52](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/52)).
+  Two consoles in the Designer are coloured two different ways, and only one of
+  them was covered. The Script Console uses named document styles; the Output
+  Console dock registers appenders on the bifurcated `System.out` / `System.err`
+  holding `Color.black` and `Color.red` and stamps that colour onto *every
+  inserted run* — and since the Designer's logging goes through stdout, that is
+  the entire console. Neither colour may be mutated (they are the JDK globals,
+  the same rule that protects `Base000`), so the pass rewrites the runs already
+  in the document and repoints the appenders for lines still to come. The
+  restore maps back by colour rather than by offset, which is what makes it
+  survive the console being trimmed as it grows.
+
+- **The Diagnostics performance charts' axes are readable**
+  ([#50](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/50)).
+  IA colours the plot background and gridlines from its own design tokens, which
+  this module already restyles — but never sets the axis paints, so those kept
+  JFreeChart's `Color.black` defaults and the axis numbers and titles sat black
+  on dark. A new pass sets the label, tick-label, axis-line and tick-mark paints
+  and restores them. Targeted at `DynamicTimeSeriesChart` by name rather than at
+  any chart: Vision windows render *user* charts, and repainting those would
+  misrepresent what an operator sees.
+
+- **The Query Browser's result-table buttons no longer show pale boxes**
+  ([#51](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/51)).
+  `ResultTable$EditButton` paints its own gradient behind the label from eight
+  literal colours, the first of which is plain white. The button component
+  itself is correctly dark, which is why inspecting it came back clean while the
+  screen showed the problem. The seven fills join the class constants
+  `IaColorTokens` darkens; the two amber focus/hover accents are left alone.
+
+### Changed
+
+- **The headless harness runs against the current Ignition, not the support
+  floor** ([#53](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/53)).
+  `sdk_version` stays at 8.3.0 — it is what the module compiles against and what
+  `module.xml` claims as the minimum — but the harness now resolves
+  `harness_sdk_version` (8.3.8 by default, `-Pharness.sdk=8.3.6` to pin). The
+  module reaches Ignition and JIDE internals by name, and none of that is
+  compile-checked, so testing it against jars nobody runs was the weakest part
+  of the setup. The full suite passes against 8.3.8.
+
+- **Inline tip banners are readable under dark mode again**
+  ([#47](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/47)).
+  `InlineTipLabel.paintComponent` fills with a literal `#D6E4ED`, so no
+  look-and-feel swap reaches it — while its text is IA's `Base900` token, which
+  this module lightens. The result was light-on-pale: not merely wrong but
+  *illegible*, in eleven places including Help → Diagnostics, the permissions
+  configurator and the UDT multi-instance wizard. The fill now darkens with the
+  other class constants and restores with them.
+
+- **SQL and expression editors are themed**
+  ([#48](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/48)).
+  "The script editor" is two components: the Python editors are
+  `RSyntaxTextArea` and were already covered, while JIDE's `CodeEditor` — the
+  Database Query Browser and **every expression editor in the Designer**, 46
+  classes' worth — was not. Under dark mode it kept a cream `#FFFFD7` band
+  across the current line, a **black caret on dark chrome**, and syntax tokens
+  at `#000000`, `#000080`, `#650099`. A new `CodeEditorTheme` lifts each syntax
+  colour to a readable luminance while keeping its hue, so a keyword still reads
+  as a keyword, and restores every value on the way back to light.
+
 - **The Tag Browser's `Value` header and the Perspective property editor's
   filter now come back when dark mode is switched off**
   ([#45](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/45)). Two different

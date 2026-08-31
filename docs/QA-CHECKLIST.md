@@ -20,6 +20,7 @@ value is knowing *where to look*.
 | Date | Ignition | Vision | Module | Scope covered |
 |---|---|---|---|---|
 | 2026-08-29 | 8.3.6 | 12.3.6 | `f4104b54`, built at `33cf8c7` — **10 commits behind `main`**, so without #36/#37/#38 | Three Designer sittings (13:22, 13:40, 14:15 UTC): §L popups, Alarm Pipeline Editor, Translation Manager, dataset editor, named-query selector |
+| 2026-08-31 (evening) | 8.3.6 | 12.3.6 | `b510440` | Verification pass by eye in a real Designer for #47, #48, #50, #51, #52 and the late-attach fix. All confirmed. Two rounds: the first found #50 only half-fixed (chart background still white) and the Vision filters dark in light mode |
 | 2026-08-31 | 8.3.6 | 12.3.6 | `76c4600` (`main`, release candidate) | Driven with computer use, 12:01–12:13 UTC. §A, §B (Properties, Export, Diagnostics), §C, §D console + autocomplete, §E property editor, §F palette/inspector, §J Image Management, §K Query Browser, toggle-off. **Two new `light` results — see [Diagnostics](#b-menus-dialogs-project-settings) and [Query Browser](#k-database-and-queries).** §L not re-verified (see [Note on this run](#note-on-the-2026-08-31-run)) |
 
 ## Running the sweep
@@ -79,7 +80,7 @@ point of the first run.
 | Section headers / collapsible title panes | Left and right docks | `pass` | `2026-08-31` | `SESSION PROPS` |
 | Project Browser tree | Left dock | `pass` | `2026-08-31` | |
 | Status bar | Bottom of the frame | `pass` | `2026-08-31` | |
-| Output Console | Bottom dock | — | — | |
+| Output Console | Bottom dock | `fixed` | `2026-08-31` | [#52](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/52). Check BOTH halves: text already on screen when the switch happens, and lines that arrive afterwards — they are different mechanisms |
 | Tab strips (open resource tabs) | Above the workspace | — | — | |
 
 ## B. Menus, dialogs, project settings
@@ -102,7 +103,8 @@ point of the first run.
 | Project Export dialog (`CheckBoxTree`) | File → Export | `pass` | `2026-08-31` | tri-state checkboxes legible |
 | Project Import dialog (`CheckBoxTree`) | File → Import | — | — | |
 | Keyboard Layout | ~~Tools → Keyboard Layout~~ | `n/a` | `2026-08-31` | : **no such item on 8.3.6.** The Tools menu is Console, Image Management, Script Console, Database Query Browser, Translation Manager, Symbol Factory, Dark Mode, Launch Perspective |
-| Diagnostics dialog | Help → Diagnostics | **`light`** | `2026-08-31` | Location confirmed. Tip banner illegible — [#47](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/47), and [Inline tip banners](#inline-tip-banners-inlinetiplabel) |
+| Diagnostics dialog | Help → Diagnostics | `fixed` | `2026-08-31` | Tip banner [#47](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/47) and chart axes [#50](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/50), both confirmed by eye |
+| Diagnostics performance charts | Help → Diagnostics → Performance | `fixed` | `2026-08-31` | Axis paints AND the chart's own background — [#50](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/50). The first fix did only the axes and the label margin stayed white |
 | About dialog | Help → About | — | — | |
 
 ## C. Tags
@@ -225,7 +227,7 @@ Reporting module required; mark the whole section `n/a` if it is not installed.
 
 | Surface | Where | Result | Last checked | Notes |
 |---|---|---|---|---|
-| Query Browser | Tools → Database Query Browser | **`light`** | `2026-08-31` | SQL editor keeps the light syntax theme — [#48](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/48), and [SQL editors](#sql-editors-jide-codeeditor) |
+| Query Browser | Tools → Database Query Browser | `fixed` | `2026-08-31` | SQL editor [#48](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/48) and the action buttons [#51](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/51) |
 | Query Browser result table | After running a query | — | — | No datasource on the dev gateway, so no result set |
 | Named Query editor | Project Browser → Named Queries | `pass` | `2026-08-29` | selector only |
 | Named Query parameter table | Inside the Named Query editor | — | — | |
@@ -369,6 +371,30 @@ own style registry that nothing in this module touches.
 Filed as [#48](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/48),
 which also carries the census still to do: the Named Query editor and
 Transaction Group SQL fields are the likely other sites.
+
+### Subtrees detached during a theme switch
+
+Found 2026-08-31 by eye: after switching back to light, the Vision component
+palette's and property editor's filter fields stayed dark, and the Query Browser
+looked dark too.
+
+The restore is not at fault. It walks what is attached and fixes it, and the
+debug log says so (`Light restore: re-ran updateUI on 1 component(s)`). The gap
+is subtrees that are **detached while it runs** — switching workspaces detaches
+the Vision docks. The restore never sees them, and when they are attached again
+`updateComponentTreeUI` runs over them parent first, JIDE's `LabeledTextField`
+copies its still-dark child's background onto itself, and the child goes light a
+step later. That is exactly [#45](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/45),
+on a subtree the restore could not have reached.
+
+The dark-mode component watcher is uninstalled on the light path, so nothing was
+left running to notice. There is now a light-mode counterpart that re-runs the
+dark-leftover pass on a debounce when something is attached.
+
+**Worth checking in every future sweep**, because it is invisible if you only
+toggle while looking at one workspace: toggle to light, then visit each
+workspace in turn — Vision, Perspective, SFC, pipelines — and look at the filter
+fields and dock chrome in each.
 
 ### Note on the 2026-08-31 run
 

@@ -13,6 +13,26 @@ plugins {
 
 val sdk_version by extra("8.3.0")
 
+/*
+ * What the HEADLESS HARNESS runs against, which is deliberately not
+ * sdk_version (#53).
+ *
+ * sdk_version is the support FLOOR: it is what the module compiles against, so
+ * that a newer API cannot creep in by accident, and it is what goes into
+ * module.xml as requiredIgnitionVersion. Neither should follow the latest
+ * release.
+ *
+ * The harness has the opposite job. It exists to catch the module's reflective
+ * reach — class, field and method names that no compiler checks — breaking
+ * against the Ignition people actually run, and pinned to the floor it was
+ * testing jars nobody has. Nothing about the floor is wrong; it is simply not
+ * evidence about 8.3.6 or 8.3.8, which is where the reports come from.
+ *
+ * Override to reproduce a specific gateway: -Pharness.sdk=8.3.6
+ */
+val harness_sdk_version by extra(
+    (project.findProperty("harness.sdk") as String?) ?: "8.3.8")
+
 allprojects {
     // The release workflow passes -PreleaseVersion=<tag> (the git tag drives the
     // module version — see .github/workflows/release.yml). Local and main-branch

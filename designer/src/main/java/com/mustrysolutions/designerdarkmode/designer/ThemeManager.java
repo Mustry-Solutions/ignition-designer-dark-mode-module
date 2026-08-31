@@ -124,6 +124,8 @@ public class ThemeManager {
 
     private final ComponentInspector inspector = new ComponentInspector();
     private final ScriptEditorTheme scriptEditors = new ScriptEditorTheme();
+    private final CodeEditorTheme codeEditors = new CodeEditorTheme();
+    private final DiagnosticsChartTheme charts = new DiagnosticsChartTheme();
     private final ConsoleTextTheme consoleText = new ConsoleTextTheme();
     private final BlockWorkspaceTheme blockWorkspaces = new BlockWorkspaceTheme();
 
@@ -492,10 +494,13 @@ public class ThemeManager {
             safely("collapsibles", () -> recolorCollapsibleTitlePanes(true));
             safely("whiteSwap", () -> swapWhiteTokenBackgrounds(true));
             safely("scriptEditors", scriptEditors::install);
+            safely("codeEditors", codeEditors::install);
+            safely("charts", charts::install);
             safely("consoleText", consoleText::install);
             safely("blockWorkspaces", blockWorkspaces::install);
             safely("statusBar", status::install);
             safely("cachedPainters", () -> repointCachedThemePainters(true));
+            uninstallLightLeftoverWatcher();
             installComponentWatcher();
             if (DebugLog.verbose()) {
                 debugDumpDockState();
@@ -509,7 +514,10 @@ public class ThemeManager {
             safely("collapsibles", () -> recolorCollapsibleTitlePanes(false));
             safely("whiteSwap", () -> swapWhiteTokenBackgrounds(false));
             safely("darkLeftovers", this::refreshComponentsLeftDark);
+            safely("lightWatcher", this::installLightLeftoverWatcher);
             safely("scriptEditors", scriptEditors::uninstall);
+            safely("codeEditors", codeEditors::uninstall);
+            safely("charts", charts::uninstall);
             safely("consoleText", consoleText::uninstall);
             safely("blockWorkspaces", blockWorkspaces::uninstall);
             safely("statusBar", status::uninstall);
@@ -1418,6 +1426,60 @@ public class ThemeManager {
         return refreshed;
     }
 
+    /**
+     * Watches for subtrees ATTACHED AFTER the light restore, which is the one
+     * case {@link #refreshComponentsLeftDark} on its own cannot cover.
+     *
+     * <p>A dock panel that was detached while the restore ran — the Vision
+     * component palette and property editor are the ones this was found on, and
+     * a floating Query Browser behaves the same way — keeps the whole subtree's
+     * dark state. Nothing is wrong with it until it is attached, and then
+     * {@code updateComponentTreeUI} runs over it PARENT FIRST and JIDE's
+     * {@code LabeledTextField} copies its still-dark child's background onto
+     * itself, exactly as in #45. The child goes light a step later; the wrapper
+     * does not.
+     *
+     * <p>The dark-mode watcher is deliberately uninstalled on the light path,
+     * so there was nothing left running to notice. This is its light-mode
+     * counterpart, and it is deliberately much smaller: it re-runs one cheap
+     * predicate and touches only components still wearing a dark look-and-feel
+     * colour. It exists because the state it cleans up is OURS — a Designer
+     * that never went dark never has it.
+     */
+    private AWTEventListener lightWatcher;
+    private Timer lightWatcherTimer;
+
+    private void installLightLeftoverWatcher() {
+        if (lightWatcher != null) {
+            return;
+        }
+        lightWatcherTimer = new Timer(150, e -> {
+            if (!isDarkActive()) {
+                refreshComponentsLeftDark();
+            }
+        });
+        lightWatcherTimer.setRepeats(false);
+        lightWatcher = event -> {
+            if (event.getID() == ContainerEvent.COMPONENT_ADDED) {
+                lightWatcherTimer.restart();
+            }
+        };
+        Toolkit.getDefaultToolkit().addAWTEventListener(
+            lightWatcher, AWTEvent.CONTAINER_EVENT_MASK);
+        DebugLog.detail("Light restore: watching for subtrees attached later.");
+    }
+
+    private void uninstallLightLeftoverWatcher() {
+        if (lightWatcher != null) {
+            Toolkit.getDefaultToolkit().removeAWTEventListener(lightWatcher);
+            lightWatcher = null;
+        }
+        if (lightWatcherTimer != null) {
+            lightWatcherTimer.stop();
+            lightWatcherTimer = null;
+        }
+    }
+
     private static boolean isDarkLeftover(java.awt.Component component) {
         if (!(component instanceof javax.swing.JComponent) || !component.isBackgroundSet()) {
             return false;
@@ -1696,6 +1758,12 @@ public class ThemeManager {
         recolorCollapsibleTitlePanes(true);
         swapWhiteTokenBackgrounds(true);
         scriptEditors.install();
+        // Expression editors are built when a binding dialog is opened, long
+        // after the switch — so this belongs in the rescan, not only apply().
+        codeEditors.install();
+        // The Diagnostics dialog is opened long after any switch, so its charts
+        // are only ever reachable from the rescan.
+        charts.install();
         consoleText.install();
         // Blocks are built when a pipeline or chart workspace is first
         // opened, which is long after the switch — so this pass earns its
