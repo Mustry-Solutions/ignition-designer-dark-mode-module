@@ -121,6 +121,32 @@ from the tree's width). And only the **dark** half can be rendered headlessly:
 Synthetica's `ImagePainter` asks for a default screen device and throws
 `HeadlessException`, so a light-theme render needs `java.awt.headless=false`.
 
+**The light half does render on a machine with a display** — worth knowing,
+because a before/after of the light theme is the most direct evidence there is
+that a restore works, and it is what settled the Tag Browser header and the
+property-editor filter. It is a local-only trick until [#42][42] gives the
+harness a proper windowed mode, and it has two traps:
+
+- Not from a Gradle test worker. JIDE pops a modal *"Unauthorized usage of JIDE
+  products"* dialog the first time it is used unlicensed outside headless mode,
+  and inside the worker that dialog blocks forever — the task simply hangs with
+  no output, on the user's screen rather than yours. Run the probe with a plain
+  `java` off `sourceSets["lafHarness"].runtimeClasspath` instead.
+- One more opening than the task passes: `--add-opens
+  java.desktop/javax.swing.tree=ALL-UNNAMED`. Synthetica's `LabelPainter`
+  reflects into `DefaultTreeCellRenderer.selected` while painting a tree row,
+  and without it the render dies with an `InaccessibleObjectException` that
+  looks nothing like a theming problem.
+
+**Component state is its own instrument, separate from the defaults diff.**
+`LightRestoreComponentStateTest` ([#45][45]) snapshots what components and cell renderers
+actually hold — background, foreground, border, UI delegate — before and after a
+cycle. Both bugs it was written for were invisible to `UiDefaultsSnapshot`: every
+default came back correct while a Designer showed a dark `Value` header and a
+dark filter field, because the wrong colour was sitting on a component (and, in
+the header's case, on a renderer that is not in the hierarchy at all). Reach for
+this shape whenever a restore is right in `UIManager` and wrong on screen.
+
 **Validate a new invariant with a mutation.** A green test proves nothing until
 you have seen it go red for the right reason. Break the thing it claims to
 protect — reorder a phase, delete a restore call — and check that the test you
@@ -180,6 +206,8 @@ a dark surface. Narrowing to keys that name a background is what turns 206
 judgment calls into a rule with four exceptions. [#22][22] was two of these
 (`SidePane.background`, `CommandBarSeparator.background`).
 
+[42]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/42
+[45]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/45
 [14]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/14
 [19]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/19
 [21]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/21
