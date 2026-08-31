@@ -105,7 +105,9 @@ final class ConsoleTextTheme {
         themeOutputConsole(false);
     }
 
-    private static final String OUTPUT_CONSOLE =
+    // Package-private so ReflectiveSurfaceTest can assert this name still
+    // resolves against the Ignition the harness runs.
+    static final String OUTPUT_CONSOLE =
         "com.inductiveautomation.ignition.client.util.gui.OutputConsole";
 
     /**

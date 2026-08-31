@@ -10,6 +10,21 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ## [Unreleased]
 
+### Added
+
+- **A test for everything the module reaches by name**
+  ([#53](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/53)).
+  This module works by reaching into Ignition, JIDE and JFreeChart internals as
+  strings — a class called `InlineTipLabel`, a field called `COLOR`, a method
+  called `setLineHighlightColor` — none of which the compiler checks, and every
+  pass that uses one is deliberately guarded so a failure costs a surface rather
+  than the Designer. Together that means an IA rename stops a pass working
+  *silently*. `ReflectiveSurfaceTest` enumerates the whole surface (about 40
+  names) and asserts each still resolves, and CI now runs the harness at both
+  the 8.3.0 support floor and the current release. It cannot tell you a class
+  still behaves the same — that is what the QA checklist is for — but it turns
+  a silent regression into a red build.
+
 ### Fixed
 
 - **The Output Console's log text is readable**

@@ -40,7 +40,9 @@ import org.slf4j.LoggerFactory;
  */
 final class ScriptEditorTheme {
 
-    private static final String NAMED_THEME =
+    // Package-private so ReflectiveSurfaceTest can assert this name still
+    // resolves against the Ignition the harness runs.
+    static final String NAMED_THEME =
         "com.inductiveautomation.ignition.common.gui.NamedTheme";
 
     private final Logger log = LoggerFactory.getLogger(ScriptEditorTheme.class);

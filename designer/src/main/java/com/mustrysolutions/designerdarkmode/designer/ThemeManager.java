@@ -42,11 +42,17 @@ import org.slf4j.LoggerFactory;
 public class ThemeManager {
 
     private static final String PREF_DARK_MODE = "darkMode";
-    private static final String STOCK_LAF_CLASS =
+    // Package-private so ReflectiveSurfaceTest can assert this name still
+    // resolves against the Ignition the harness runs.
+    static final String STOCK_LAF_CLASS =
         "com.inductiveautomation.ignition.client.IgnitionLookAndFeel$LaF";
-    private static final String SYNTHETICA_LAF =
+    // Package-private so ReflectiveSurfaceTest can assert this name still
+    // resolves against the Ignition the harness runs.
+    static final String SYNTHETICA_LAF =
         "de.javasoft.plaf.synthetica.SyntheticaLookAndFeel";
-    private static final String JIDE_LAF_FACTORY = "com.jidesoft.plaf.LookAndFeelFactory";
+    // Package-private so ReflectiveSurfaceTest can assert this name still
+    // resolves against the Ignition the harness runs.
+    static final String JIDE_LAF_FACTORY = "com.jidesoft.plaf.LookAndFeelFactory";
 
     /** Give up waiting for the main window after ~2 minutes (250ms ticks). */
     /** 250ms per poll. A silent two-minute wait was far worse than applying early. */
@@ -888,8 +894,12 @@ public class ThemeManager {
     }
 
     private static final String THEME_PAINTER_KEY = "Theme.painter";
-    private static final String BASIC_PAINTER = "com.jidesoft.plaf.basic.BasicPainter";
-    private static final String THEME_PAINTER_TYPE = "com.jidesoft.plaf.basic.ThemePainter";
+    // Package-private so ReflectiveSurfaceTest can assert this name still
+    // resolves against the Ignition the harness runs.
+    static final String BASIC_PAINTER = "com.jidesoft.plaf.basic.BasicPainter";
+    // Package-private so ReflectiveSurfaceTest can assert this name still
+    // resolves against the Ignition the harness runs.
+    static final String THEME_PAINTER_TYPE = "com.jidesoft.plaf.basic.ThemePainter";
 
     private final java.util.Map<Object, Object> painterSnapshot = new java.util.HashMap<>();
     /** Resolved once per dark switch so the synchronous add-hook stays cheap. */

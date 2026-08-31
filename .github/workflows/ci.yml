@@ -55,8 +55,19 @@ jobs:
       # and it is the only check here that exercises the switch sequence against
       # the real Synthetica/JIDE/FlatLaf interaction rather than against stubs.
       # Headless by construction; no display is set up for it on purpose.
-      - name: Headless look-and-feel harness
+      # Twice, on purpose (#53). The module reaches Ignition and JIDE internals
+      # by NAME — classes, fields, methods that no compiler checks — so it has
+      # to be exercised against both ends of what it claims to support:
+      # 8.3.0 is the floor in requiredIgnitionVersion, and the default is the
+      # current release, which is what people actually run. A rename in a
+      # recent 8.3.x is invisible if you only ever test the floor.
+      - name: Headless look-and-feel harness (current Ignition)
         run: ./gradlew :designer:lafHarness --no-daemon --stacktrace
+        env:
+          ORG_GRADLE_PROJECT_org.gradle.java.installations.auto-download: "false"
+
+      - name: Headless look-and-feel harness (support floor)
+        run: ./gradlew :designer:lafHarness -Pharness.sdk=8.3.0 --no-daemon --stacktrace
         env:
           ORG_GRADLE_PROJECT_org.gradle.java.installations.auto-download: "false"
 

@@ -27,7 +27,9 @@ import org.slf4j.LoggerFactory;
  */
 final class IaColorTokens {
 
-    private static final String COLORS_CLASS =
+    // Package-private so ReflectiveSurfaceTest can assert this name still
+    // resolves against the Ignition the harness runs.
+    static final String COLORS_CLASS =
         "com.inductiveautomation.ignition.client.IgnitionLookAndFeel$Colors";
 
     /**
@@ -38,7 +40,9 @@ final class IaColorTokens {
      * covers them. The neutral ramp is inverted: light surfaces become dark
      * surfaces, near-black text becomes near-white text.
      */
-    private static final Map<String, Integer> DARK = Map.ofEntries(
+    // Package-private so ReflectiveSurfaceTest can assert this name still
+    // resolves against the Ignition the harness runs.
+    static final Map<String, Integer> DARK = Map.ofEntries(
         Map.entry("Base100", 0x46494B),
         Map.entry("Base300", 0x3F4346),
         Map.entry("Base400", 0x4E5254),
@@ -62,7 +66,9 @@ final class IaColorTokens {
      * HOVER_BACKGROUND the row-hover tint, and paintFauxGutter paints with
      * these directly — unreachable by any component-level fix.
      */
-    private static final Map<String, Map<String, Integer>> CLASS_DARK = Map.of(
+    // Package-private so ReflectiveSurfaceTest can assert this name still
+    // resolves against the Ignition the harness runs.
+    static final Map<String, Map<String, Integer>> CLASS_DARK = Map.of(
         // The pale band behind an inline tip ("These diagnostics apply to the
         // Designer only..."), #D6E4ED, painted by
         // InlineTipLabel.paintComponent straight onto the Graphics — so no

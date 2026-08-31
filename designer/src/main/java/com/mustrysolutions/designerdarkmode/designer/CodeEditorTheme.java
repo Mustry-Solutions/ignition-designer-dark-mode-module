@@ -56,7 +56,9 @@ import java.util.Map;
  */
 final class CodeEditorTheme {
 
-    private static final String CODE_EDITOR = "com.jidesoft.editor.CodeEditor";
+    // Package-private so ReflectiveSurfaceTest can assert this name still
+    // resolves against the Ignition the harness runs.
+    static final String CODE_EDITOR = "com.jidesoft.editor.CodeEditor";
 
     /** Just above the editor's own background, so the current line reads. */
     private static final Color LINE_HIGHLIGHT = new Color(0x45494B);
