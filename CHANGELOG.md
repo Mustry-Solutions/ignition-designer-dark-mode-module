@@ -12,6 +12,35 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ### Fixed
 
+- **The Diagnostics performance charts' axes are readable**
+  ([#50](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/50)).
+  IA colours the plot background and gridlines from its own design tokens, which
+  this module already restyles — but never sets the axis paints, so those kept
+  JFreeChart's `Color.black` defaults and the axis numbers and titles sat black
+  on dark. A new pass sets the label, tick-label, axis-line and tick-mark paints
+  and restores them. Targeted at `DynamicTimeSeriesChart` by name rather than at
+  any chart: Vision windows render *user* charts, and repainting those would
+  misrepresent what an operator sees.
+
+- **The Query Browser's result-table buttons no longer show pale boxes**
+  ([#51](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/51)).
+  `ResultTable$EditButton` paints its own gradient behind the label from eight
+  literal colours, the first of which is plain white. The button component
+  itself is correctly dark, which is why inspecting it came back clean while the
+  screen showed the problem. The seven fills join the class constants
+  `IaColorTokens` darkens; the two amber focus/hover accents are left alone.
+
+### Changed
+
+- **The headless harness runs against the current Ignition, not the support
+  floor** ([#53](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/53)).
+  `sdk_version` stays at 8.3.0 — it is what the module compiles against and what
+  `module.xml` claims as the minimum — but the harness now resolves
+  `harness_sdk_version` (8.3.8 by default, `-Pharness.sdk=8.3.6` to pin). The
+  module reaches Ignition and JIDE internals by name, and none of that is
+  compile-checked, so testing it against jars nobody runs was the weakest part
+  of the setup. The full suite passes against 8.3.8.
+
 - **Inline tip banners are readable under dark mode again**
   ([#47](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/47)).
   `InlineTipLabel.paintComponent` fills with a literal `#D6E4ED`, so no

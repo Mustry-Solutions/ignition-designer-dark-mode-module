@@ -73,6 +73,21 @@ final class IaColorTokens {
         // kept, so a tip still reads as a tip against #3C3F41 chrome.
         "com.inductiveautomation.ignition.client.util.gui.InlineTipLabel", Map.of(
             "COLOR", 0x2F3D48),
+        // The Query Browser's result-table buttons (Auto Refresh / Edit / Apply /
+        // Discard) paint their own vertical gradient behind the label, from
+        // eight literal Colors — GRADIENT1 is plain white (#51). The component
+        // itself is correctly dark, which is why an inspection of the chain
+        // came back clean while the buttons showed pale boxes on screen. The
+        // two BORDER_COLOR_* ambers are deliberately left alone: they are
+        // focus/hover accents and read correctly against dark chrome.
+        "com.inductiveautomation.ignition.designer.querybrowser.ResultTable$EditButton", Map.of(
+            "GRADIENT1_COLOR", 0x55595B,
+            "GRADIENT2_COLOR", 0x46494B,
+            "GRADIENT1_COLOR_DOWN", 0x3A3D3F,
+            "GRADIENT2_COLOR_DOWN", 0x4A4E50,
+            "GRADIENT1_COLOR_TOGGLE", 0x4E5254,
+            "GRADIENT2_COLOR_TOGGLE", 0x5F6467,
+            "DISABLED_COLOR", 0x3F4346),
         "com.inductiveautomation.ignition.client.jsonedit.NodeEditor", Map.of(
             "GUTTER_BACKGROUND", 0x3F4244,
             "GUTTER_BORDER", 0x55595B,
@@ -144,7 +159,17 @@ final class IaColorTokens {
                     setColorValue(color, 0xFF000000 | colorEntry.getValue());
                     mutated++;
                 }
+            } catch (ClassNotFoundException absent) {
+                // Expected, not a fault: these are version-specific classes.
+                // ResultTable$EditButton (#51) arrived in 8.3.6 and is simply
+                // not there on the 8.3.0 floor the module still supports, and
+                // warning about it on every switch would train people to
+                // ignore the log.
+                DebugLog.detail("IaColorTokens: " + entry.getKey()
+                    + " is not present on this Ignition version; skipped.");
             } catch (Throwable t) {
+                // A class that IS present but whose field has moved is a real
+                // problem — that pass has silently stopped working.
                 log.warn("Could not restyle colors in " + entry.getKey(), t);
                 DebugLog.log("IaColorTokens class colors FAILED for " + entry.getKey(), t);
             }

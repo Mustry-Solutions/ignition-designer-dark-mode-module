@@ -90,8 +90,8 @@ dependencies {
     // run against the real Synthetica/JIDE/ignition-laf jars rather than stubs.
     // `designer-api` is a BOM-style pom that drags in the Designer's own
     // dependency tree, which is where those look and feels come from.
-    "lafHarnessImplementation"("com.inductiveautomation.ignitionsdk:designer-api:${rootProject.extra["sdk_version"]}")
-    "lafHarnessImplementation"("com.inductiveautomation.ignitionsdk:ignition-common:${rootProject.extra["sdk_version"]}")
+    "lafHarnessImplementation"("com.inductiveautomation.ignitionsdk:designer-api:${rootProject.extra["harness_sdk_version"]}")
+    "lafHarnessImplementation"("com.inductiveautomation.ignitionsdk:ignition-common:${rootProject.extra["harness_sdk_version"]}")
     "lafHarnessImplementation"("com.formdev:flatlaf:3.7.2")
 
     "lafHarnessImplementation"("org.junit.jupiter:junit-jupiter:5.11.4")
