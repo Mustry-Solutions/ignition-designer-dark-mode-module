@@ -12,6 +12,19 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ### Fixed
 
+- **The Output Console's log text is readable**
+  ([#52](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/52)).
+  Two consoles in the Designer are coloured two different ways, and only one of
+  them was covered. The Script Console uses named document styles; the Output
+  Console dock registers appenders on the bifurcated `System.out` / `System.err`
+  holding `Color.black` and `Color.red` and stamps that colour onto *every
+  inserted run* — and since the Designer's logging goes through stdout, that is
+  the entire console. Neither colour may be mutated (they are the JDK globals,
+  the same rule that protects `Base000`), so the pass rewrites the runs already
+  in the document and repoints the appenders for lines still to come. The
+  restore maps back by colour rather than by offset, which is what makes it
+  survive the console being trimmed as it grows.
+
 - **The Diagnostics performance charts' axes are readable**
   ([#50](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/50)).
   IA colours the plot background and gridlines from its own design tokens, which
