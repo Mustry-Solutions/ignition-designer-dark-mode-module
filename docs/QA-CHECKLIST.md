@@ -20,15 +20,22 @@ value is knowing *where to look*.
 | Date | Ignition | Vision | Module | Scope covered |
 |---|---|---|---|---|
 | 2026-08-29 | 8.3.6 | 12.3.6 | `f4104b54`, built at `33cf8c7` — **10 commits behind `main`**, so without #36/#37/#38 | Three Designer sittings (13:22, 13:40, 14:15 UTC): §L popups, Alarm Pipeline Editor, Translation Manager, dataset editor, named-query selector |
+| 2026-08-31 | 8.3.6 | 12.3.6 | `76c4600` (`main`, release candidate) | Driven with computer use, 12:01–12:13 UTC. §A, §B (Properties, Export, Diagnostics), §C, §D console + autocomplete, §E property editor, §F palette/inspector, §J Image Management, §K Query Browser, toggle-off. **Two new `light` results — see [Diagnostics](#b-menus-dialogs-project-settings) and [Query Browser](#k-database-and-queries).** §L not re-verified (see [Note on this run](#note-on-the-2026-08-31-run)) |
 
 ## Running the sweep
 
 1. Launch the Designer with the debug flag so popup and window contents are
-   logged with their **real 8.3 class names**:
-   `-Ddesignerdarkmode.debug=true` (see
-   [DEVELOPMENT.md](DEVELOPMENT.md#the-debug-log)).
+   logged with their **real 8.3 class names**: `-Ddesignerdarkmode.debug=true`
+   (see [DEVELOPMENT.md](DEVELOPMENT.md#the-debug-log)). It goes in the Designer
+   Launcher, per gateway: select the gateway → **Edit** → *Additional JVM
+   Arguments*. It survives relaunches, so this is a one-time setup.
 2. **Tools → Dark Mode** on.
-3. Walk the sections below. Open each surface, look at it, record a result.
+3. Walk the sections below. Open each surface, look at it, record a result and
+   the date.
+   **Judge colour at 100%, never on a scaled screenshot.** On a Retina display a
+   downscaled capture washes #3C3F41 out until it reads as light grey: two
+   surfaces on the 2026-08-31 run looked like bugs at full-screen scale and were
+   perfectly dark when zoomed. Both would have been false reports.
 4. For anything light, hover it and press **Cmd+Shift+I** (or Ctrl+Shift+I) to
    dump the component chain to `~/.ignition/designer-dark-mode.log`, and put the
    deepest offending class in the Notes column. A chain dump is worth more than
@@ -48,7 +55,12 @@ is only meaningful against a specific pair.
 | `light` | Leaks light; file or reference an issue |
 | `n/a` | Surface does not exist on this version / module not installed |
 | `skip` | Deliberately not themed (see [Out of scope](#out-of-scope)) |
+| `fixed` | Was `light` or `partial` on an earlier run and has since been fixed in the module. Keeps the history visible; re-check it like any other row |
 | — | Not yet checked |
+
+**`Last checked` is not decoration.** A result is only true of the module
+version that produced it, so a row whose date predates the release you are about
+to cut has not been checked for that release. Fill it in on every row you touch.
 
 Locations marked **(unverified)** are inferred from the 8.1 class names and have
 not been confirmed on 8.3. Correct them in place as you go — that is half the
@@ -58,97 +70,107 @@ point of the first run.
 
 ## A. Main shell
 
-| Surface | Where | Result | Notes |
-|---|---|---|---|
-| Menu bar and menus | Top of the main frame | — | |
-| Toolbars | Below the menu bar | — | |
-| Dock title bars, grippers, split dividers | Any docked panel | — | |
-| Section headers / collapsible title panes | Left and right docks | — | |
-| Project Browser tree | Left dock | — | |
-| Status bar | Bottom of the frame | — | |
-| Output Console | Bottom dock | — | |
-| Tab strips (open resource tabs) | Above the workspace | — | |
+| Surface | Where | Result | Last checked | Notes |
+|---|---|---|---|---|
+| Menus and menu popups | Top of the main frame | `pass` | `2026-08-31` | File / Project / Tools / Help popups |
+| macOS system menu bar | Top of the screen | `skip` | `2026-08-31` | Drawn by the OS and following the system appearance — not reachable from a Swing look and feel. Neither is the search field inside the Help menu |
+| Toolbars | Below the menu bar | `pass` | `2026-08-31` | incl. the Vision workspace's extra toolbars |
+| Dock title bars, grippers, split dividers | Any docked panel | `pass` | `2026-08-31` | |
+| Section headers / collapsible title panes | Left and right docks | `pass` | `2026-08-31` | `SESSION PROPS` |
+| Project Browser tree | Left dock | `pass` | `2026-08-31` | |
+| Status bar | Bottom of the frame | `pass` | `2026-08-31` | |
+| Output Console | Bottom dock | — | — | |
+| Tab strips (open resource tabs) | Above the workspace | — | — | |
 
 ## B. Menus, dialogs, project settings
 
-| Surface | Where | Result | Notes |
-|---|---|---|---|
-| Project → Properties: Project General | Project → Properties | — | |
-| Project → Properties: Project Permissions | " | — | |
-| Project → Properties: Project Designer | " | — | |
-| Project → Properties: Vision General | " | — | Vision module required |
-| Project → Properties: Vision Launching | " | — | |
-| Project → Properties: Vision Login | " | — | |
-| Project → Properties: Vision Timing | " | — | |
-| Project → Properties: Vision UI | " | — | |
-| Project → Properties: Perspective General | " | — | Perspective module required |
-| Project → Properties: Perspective Permissions | " | — | |
-| Project → Properties: Perspective Inactivity | " | — | |
-| Project → Properties: Perspective Tag Drop | " | — | |
-| Project Export dialog (`CheckBoxTree`) | File → Export | — | Check the tri-state checkboxes, not just the panel |
-| Project Import dialog (`CheckBoxTree`) | File → Import | — | |
-| Keyboard Layout | Tools → Keyboard Layout **(unverified)** | — | |
-| Diagnostics dialog | Help → Diagnostics **(unverified)** | — | Known cached-panel path; see ARCHITECTURE gotchas |
-| About dialog | Help → About | — | |
+| Surface | Where | Result | Last checked | Notes |
+|---|---|---|---|---|
+| Project → Properties: Project General | Project → Properties | `pass` | `2026-08-31` | incl. the nav list, combos, checkboxes and OK/Apply/Cancel |
+| Project → Properties: Project Permissions | " | — | — | |
+| Project → Properties: Project Designer | " | — | — | |
+| Project → Properties: Vision General | " | — | — | Vision module required |
+| Project → Properties: Vision Launching | " | — | — | |
+| Project → Properties: Vision Login | " | — | — | |
+| Project → Properties: Vision Timing | " | — | — | |
+| Project → Properties: Vision UI | " | `pass` | `2026-08-31` | The Client Background Color swatch stays light — that is a colour *value*, correctly left alone |
+| Project → Properties: Perspective General | " | — | — | Perspective module required |
+| Project → Properties: Perspective Permissions | " | — | — | |
+| Project → Properties: Perspective Inactivity | " | — | — | |
+| Project → Properties: Perspective Tag Drop | " | — | — | |
+| Project → Properties: Perspective Symbols | " | `pass` | `2026-08-31` | |
+| Project Export dialog (`CheckBoxTree`) | File → Export | `pass` | `2026-08-31` | tri-state checkboxes legible |
+| Project Import dialog (`CheckBoxTree`) | File → Import | — | — | |
+| Keyboard Layout | ~~Tools → Keyboard Layout~~ | `n/a` | `2026-08-31` | : **no such item on 8.3.6.** The Tools menu is Console, Image Management, Script Console, Database Query Browser, Translation Manager, Symbol Factory, Dark Mode, Launch Perspective |
+| Diagnostics dialog | Help → Diagnostics | **`light`** | `2026-08-31` | Location confirmed. Tip banner illegible — [#47](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/47), and [Inline tip banners](#inline-tip-banners-inlinetiplabel) |
+| About dialog | Help → About | — | — | |
 
 ## C. Tags
 
-| Surface | Where | Result | Notes |
-|---|---|---|---|
-| Tag Browser tree | Tag Browser dock | — | Known pale band under the `Tag \| Value` header ([#21](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/21)) |
-| Tag Browser filter field | Top of the Tag Browser | — | |
-| Tag Editor | Double-click a tag | — | |
-| Tag data type / binding sub-editors | Inside the Tag Editor | — | |
-| UDT definition editor | Tag Browser → UDT Definitions | — | |
-| Tag import/export dialogs | Tag Browser hamburger menu | — | |
+| Surface | Where | Result | Last checked | Notes |
+|---|---|---|---|---|
+| Tag Browser tree | Tag Browser dock | `pass` | `2026-08-31` | The pale band under `Tag \| Value` ([#21](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/21)) is gone, both header cells |
+| Tag Browser filter field | Top of the Tag Browser | `pass` | `2026-08-31` | |
+| Tag Editor | Double-click a tag | `pass` | `2026-08-31` | incl. the JIDE property table and category list |
+| Tag data type / binding sub-editors | Inside the Tag Editor | `pass` | `2026-08-31` | |
+| UDT definition editor | Tag Browser → UDT Definitions | — | — | |
+| Tag import/export dialogs | Tag Browser hamburger menu | — | — | |
 
 ## D. Scripting
 
-| Surface | Where | Result | Notes |
-|---|---|---|---|
-| Project Library editor | Project Browser → Scripting → Project Library | — | |
-| Project Library nav tree | Left of that editor | — | Source of a `JTree` popup in §K |
-| Script editor gutter, autocomplete popup | Type inside any script editor | — | Autocomplete is its own popup window |
-| Script Console | Tools → Script Console | — | Input and output panes |
-| Gateway Events editor | Project Browser → Scripting → Gateway Events | — | |
-| Client/Session Events editor | Project Browser → Scripting → … Events | — | |
+**Two different editors live behind the word "editor", and they need separate
+checks.** The Python editors (Script Console, Project Library, event scripts)
+are `RSyntaxTextArea`, themed by `ScriptEditorTheme`. The SQL editors (Query
+Browser, and probably the Named Query editor and Transaction Groups) are JIDE's
+`com.jidesoft.editor.CodeEditor`, with their own style registry that nothing in
+this module touches — [#48](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/48).
+A `pass` on one says nothing about the other.
+
+| Surface | Where | Result | Last checked | Notes |
+|---|---|---|---|---|
+| Project Library editor | Project Browser → Scripting → Project Library | — | — | |
+| Project Library nav tree | Left of that editor | — | — | Source of a `JTree` popup in §K |
+| Script editor gutter, autocomplete popup | Type inside any script editor | `pass` | `2026-08-31` | `system.` + Ctrl+Space in the Script Console. The list and the attribute pane are dark; the enclosing `AutoCompletePopupWindow` window is still `#EEEEEE` explicit, which does not show at this size |
+| Script Console | Tools → Script Console | `pass` | `2026-08-31` | both panes |
+| Gateway Events editor | Project Browser → Scripting → Gateway Events | — | — | |
+| Client/Session Events editor | Project Browser → Scripting → … Events | — | — | |
 
 ## E. Perspective
 
-| Surface | Where | Result | Notes |
-|---|---|---|---|
-| View editor canvas | Open any view | — | |
-| Component palette | Right dock | — | Guard hierarchy walks against `FilterablePalette` (see [Out of scope](#out-of-scope)) |
-| Property editor tree | Right dock, view open | — | Property tables deliberately untouched — see [Out of scope](#out-of-scope) |
-| Property key editor field | Click a property name | — | |
-| Binding editor dialog | Click a property's binding icon | — | |
-| Component scope / node picker in a binding | Inside the binding editor **(unverified)** | — | |
-| Style editor | Project Browser → Styles | — | |
-| Page Configuration | Perspective → Page Configuration | — | |
+| Surface | Where | Result | Last checked | Notes |
+|---|---|---|---|---|
+| View editor canvas | Open any view | `n/a` | `2026-08-31` | : the dev project has no views, so nothing to open. **Still unchecked in substance** |
+| Component palette | Right dock | — | — | Guard hierarchy walks against `FilterablePalette` (see [Out of scope](#out-of-scope)) |
+| Property editor tree | Right dock, view open | `pass` | `2026-08-31` | session props with no view open |
+| Property key editor field | Click a property name | — | — | |
+| Binding editor dialog | Click a property's binding icon | — | — | |
+| Component scope / node picker in a binding | Inside the binding editor **(unverified)** | — | — | |
+| Style editor | Project Browser → Styles | — | — | |
+| Page Configuration | Perspective → Page Configuration | `pass` | `2026-08-31` | |
 
 ## F. Vision
 
-| Surface | Where | Result | Notes |
-|---|---|---|---|
-| Window editor chrome | Open any Vision window | — | The canvas itself is deliberately not themed (README) |
-| Component palette | Left/right dock with a window open | — | |
-| Property Inspector | Right dock | — | |
-| Border chooser (9 sub-panels) | Property Inspector → border property | — | Check every tab of the chooser |
-| Layout dialog | Right-click a component → Layout **(unverified)** | — | |
-| Size and Position dialog | Right-click a component → Size and Position **(unverified)** | — | |
-| Dataset editor dialog | A dataset property → edit | `pass` | 2026-08-29 |
-| Custom property editor | Component → custom properties | — | |
+| Surface | Where | Result | Last checked | Notes |
+|---|---|---|---|---|
+| Window editor chrome | Open any Vision window | — | — | The canvas itself is deliberately not themed (README). 2026-08-31: the workspace home page ("Create a New Window") is `pass`, but no window was opened |
+| Component palette | Left/right dock with a window open | `pass` | `2026-08-31` | Vision workspace open (no window) |
+| Property Inspector | Right dock | `pass` | `2026-08-31` | empty but dark |
+| Border chooser (9 sub-panels) | Property Inspector → border property | — | — | Check every tab of the chooser |
+| Layout dialog | Right-click a component → Layout **(unverified)** | — | — | |
+| Size and Position dialog | Right-click a component → Size and Position **(unverified)** | — | — | |
+| Dataset editor dialog | A dataset property → edit | `pass` | `2026-08-29` | |
+| Custom property editor | Component → custom properties | — | — | |
 
 ## G. Alarm notification pipelines
 
 Not on the Exchange list — added from the 2026-08-29 run.
 
-| Surface | Where | Result | Notes |
-|---|---|---|---|
-| Pipeline Blocks palette | Top dock with a pipeline open | `pass` | |
-| Pipeline canvas background | `BlockDesignableContainer` | `pass` | |
-| **Pipeline blocks themselves** | Blocks on the canvas | `fixed` | Was: pale-blue fill with near-white text. `START` was unaffected. See below |
-| Pipeline Block Editor panel | Left dock | `pass` | |
+| Surface | Where | Result | Last checked | Notes |
+|---|---|---|---|---|
+| Pipeline Blocks palette | Top dock with a pipeline open | `pass` | `2026-08-29` | |
+| Pipeline canvas background | `BlockDesignableContainer` | `pass` | `2026-08-29` | |
+| **Pipeline blocks themselves** | Blocks on the canvas | `fixed` | `2026-08-29` | Was: pale-blue fill with near-white text. `START` was unaffected. See below |
+| Pipeline Block Editor panel | Left dock | `pass` | `2026-08-29` | |
 
 > **Fixed by `BlockWorkspaceTheme`.** A block *is* a component —
 > `BasicBlockUI extends JPanel` — but it does not paint from its own
@@ -171,43 +193,43 @@ Not on the Exchange list — added from the 2026-08-29 run.
 
 Reporting module required; mark the whole section `n/a` if it is not installed.
 
-| Surface | Where | Result | Notes |
-|---|---|---|---|
-| Report Data tab | Open a report → Data | — | |
-| Report Design tab | Open a report → Design | — | |
-| Schedule tab | Open a report → Schedule | — | |
-| Scheduled parameters panel | Schedule tab → Parameters | — | |
-| Property inspector | Design tab, right side | — | |
-| Pie chart configuration | Design tab → a pie chart | — | |
+| Surface | Where | Result | Last checked | Notes |
+|---|---|---|---|---|
+| Report Data tab | Open a report → Data | — | — | |
+| Report Design tab | Open a report → Design | — | — | |
+| Schedule tab | Open a report → Schedule | — | — | |
+| Scheduled parameters panel | Schedule tab → Parameters | — | — | |
+| Property inspector | Design tab, right side | — | — | |
+| Pie chart configuration | Design tab → a pie chart | — | — | |
 
 ## I. Search, replace, translation
 
-| Surface | Where | Result | Notes |
-|---|---|---|---|
-| Find/Replace panel | Ctrl-F / Cmd-F | — | |
-| Find/Replace provider dropdown | Inside Find/Replace | — | Dropdown *popup*, not just the closed control |
-| Find/Replace target checkboxes | Inside Find/Replace | — | |
-| Find/Replace scrollable result list | After a search | — | Result rows are renderer-painted |
-| Translation Manager | Tools → Translation Manager | `pass` | 2026-08-29 |
+| Surface | Where | Result | Last checked | Notes |
+|---|---|---|---|---|
+| Find/Replace panel | Ctrl-F / Cmd-F | — | — | |
+| Find/Replace provider dropdown | Inside Find/Replace | — | — | Dropdown *popup*, not just the closed control |
+| Find/Replace target checkboxes | Inside Find/Replace | — | — | |
+| Find/Replace scrollable result list | After a search | — | — | Result rows are renderer-painted |
+| Translation Manager | Tools → Translation Manager | `pass` | `2026-08-29` | |
 
 ## J. Images and symbols
 
-| Surface | Where | Result | Notes |
-|---|---|---|---|
-| Image Management panel | Tools → Image Management **(unverified)** | — | |
-| Symbol Factory browser | Vision palette → Symbol Factory **(unverified)** | — | Module required |
-| Symbol Factory thumbnail gallery | Inside that browser | — | |
-| SVG canvas (`JSVGCanvas`) | Symbol Factory preview | — | Third-party Batik canvas; may not honour Swing colours |
+| Surface | Where | Result | Last checked | Notes |
+|---|---|---|---|---|
+| Image Management panel | Tools → Image Management | `pass` | `2026-08-31` | location confirmed |
+| Symbol Factory browser | Vision palette → Symbol Factory **(unverified)** | — | — | Module required |
+| Symbol Factory thumbnail gallery | Inside that browser | — | — | |
+| SVG canvas (`JSVGCanvas`) | Symbol Factory preview | — | — | Third-party Batik canvas; may not honour Swing colours |
 
 ## K. Database and queries
 
-| Surface | Where | Result | Notes |
-|---|---|---|---|
-| Query Browser | Tools → Database Query Browser | — | |
-| Query Browser result table | After running a query | — | |
-| Named Query editor | Project Browser → Named Queries | `pass` | 2026-08-29, selector only |
-| Named Query parameter table | Inside the Named Query editor | — | |
-| Named Query security table | Inside the Named Query editor | — | |
+| Surface | Where | Result | Last checked | Notes |
+|---|---|---|---|---|
+| Query Browser | Tools → Database Query Browser | **`light`** | `2026-08-31` | SQL editor keeps the light syntax theme — [#48](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/48), and [SQL editors](#sql-editors-jide-codeeditor) |
+| Query Browser result table | After running a query | — | — | No datasource on the dev gateway, so no result set |
+| Named Query editor | Project Browser → Named Queries | `pass` | `2026-08-29` | selector only |
+| Named Query parameter table | Inside the Named Query editor | — | — | |
+| Named Query security table | Inside the Named Query editor | — | — | |
 
 ## L. Popup sweep
 
@@ -230,19 +252,19 @@ This section is the evidence for whether it does.
 With `-Ddesignerdarkmode.debug=true`, each popup logs its contents and class —
 so the log from this sweep also records the real 8.3 names for these sources.
 
-| 8.1 source class | Where to right-click | Result | 8.3 class from the log |
-|---|---|---|---|
-| `TagFrameTree` | Tag Browser tree | `pass` | `TagPopupMenu` — arrived **stale**, repaired before paint |
-| `NavTreePanel$1` | Project Browser tree | `pass` | `NodeContextMenu` (8 openings) |
-| `Graphics2dRenderWidget` | Perspective view editor canvas | `pass` | `JPopupMenu`, 15 items |
-| `InteractionLayer` | Vision window editor canvas | `pass` | `JPopupMenu` with a `CustomizerMenu` submenu, 17 items |
-| `BorderlessField` / `PerspectiveKeyEditor` | A text field's cut/copy/paste menu | `pass` | `JPopupMenu`, 3 items |
-| `JTree` | Project Library nav tree (Scripting) | `pass` | `NodeContextMenu`, 14 items |
-| `NodeEditor$MainEditor`, `…$1` | Perspective property editor, a property row | `pass` | `JPopupMenu`, 7 and 15 items, right after `PropertyEditorFrame` attached |
-| `ComponentScopeEditor$…$2` | Binding editor → component/property picker | `pass` | `JPopupMenu` |
-| — | UDT instance menu (Tag Browser) | `pass` | `TagActions$udtInstanceMenu$1` — arrived **stale**, repaired |
-| — | Combo dropdowns | `pass` | `FlatComboPopup` |
-| — | An IA error popup | `pass` | `DefaultPopupWindowParent` → `ErrorPanel` — **not a `JPopupMenu`**, see below |
+| 8.1 source class | Where to right-click | Result | Last checked | 8.3 class from the log |
+|---|---|---|---|---|
+| `TagFrameTree` | Tag Browser tree | `pass` | `2026-08-29` | `TagPopupMenu` — arrived **stale**, repaired before paint |
+| `NavTreePanel$1` | Project Browser tree | `pass` | `2026-08-29` | `NodeContextMenu` (8 openings) |
+| `Graphics2dRenderWidget` | Perspective view editor canvas | `pass` | `2026-08-29` | `JPopupMenu`, 15 items |
+| `InteractionLayer` | Vision window editor canvas | `pass` | `2026-08-29` | `JPopupMenu` with a `CustomizerMenu` submenu, 17 items |
+| `BorderlessField` / `PerspectiveKeyEditor` | A text field's cut/copy/paste menu | `pass` | `2026-08-29` | `JPopupMenu`, 3 items |
+| `JTree` | Project Library nav tree (Scripting) | `pass` | `2026-08-29` | `NodeContextMenu`, 14 items |
+| `NodeEditor$MainEditor`, `…$1` | Perspective property editor, a property row | `pass` | `2026-08-29` | `JPopupMenu`, 7 and 15 items, right after `PropertyEditorFrame` attached |
+| `ComponentScopeEditor$…$2` | Binding editor → component/property picker | `pass` | `2026-08-29` | `JPopupMenu` |
+| — | UDT instance menu (Tag Browser) | `pass` | `2026-08-29` | `TagActions$udtInstanceMenu$1` — arrived **stale**, repaired |
+| — | Combo dropdowns | `pass` | `2026-08-29` | `FlatComboPopup` |
+| — | An IA error popup | `pass` | `2026-08-29` | `DefaultPopupWindowParent` → `ErrorPanel` — **not a `JPopupMenu`**, see below |
 
 ### The one that is not a JPopupMenu
 
@@ -290,6 +312,80 @@ after the triggering click).
 The Exchange author's own comment: it does not trigger the dispatch event and
 badly slows the nav tree popup.
 
+## M. The module's own surfaces
+
+Everything above is Ignition's UI. These are ours, and they can be wrong in
+either theme — nothing else in this checklist would catch them.
+
+| Surface | Where | Result | Last checked | Notes |
+|---|---|---|---|---|
+| Dark Mode menu item, unchecked | Tools → Dark Mode, light theme | `pass` | `2026-08-31` | Moon icon and label legible |
+| Dark Mode menu item, checked | Tools → Dark Mode, dark theme | `pass` | `2026-08-31` | Checkmark visible against the dark popup |
+| "Applying dark mode…" status message | Status bar, during a switch | — | — | Shown by `DesignerStatus` while the switch runs |
+| Degraded-switch status message | Status bar, after a partial failure | — | — | The `N of M steps failing` line. Hard to trigger on purpose; check it is legible if you ever see it |
+| First launch, before the theme applies | Startup, with dark mode saved | `skip` | `2026-08-31` | The theme is applied only once the UI is ready, so the Designer is briefly stock-themed at launch. That is by design — applying earlier kills the launch |
+| Debug log is being written | `~/.ignition/designer-dark-mode.log` | `pass` | `2026-08-31` | Worth confirming at the start of a sweep: no log means no chain dumps when you need one |
+
+## Findings from the sweeps
+
+Surfaces that failed, with the mechanism worked out. A finding stays here until
+its issue is closed, so a re-run knows what it is re-checking.
+
+### Inline tip banners (`InlineTipLabel`)
+
+Found 2026-08-31 in **Help → Diagnostics**. The pale tip banner across the top
+of the dialog stays light while its text is lifted to a light colour, so the
+text is **illegible** — worse than a merely light panel.
+
+The component chain comes back clean: `InlineTipLabel bg=#3C3F41|uires`. The
+fill is not the background. `InlineTipLabel.paintComponent` is
+`g.setColor(COLOR); g.fillRect(...)` where `COLOR` is a `private static final`
+`new Color(14083309)` — **#D6E4ED**, a literal, so no look-and-feel swap and no
+token mutation can reach it. Its constructor then does
+`setForeground(IgnitionLookAndFeel$Colors.Base900)`, an IA token — which
+`IaColorTokens` lightens under dark mode. Pale literal fill plus lightened text
+is the illegibility, and the second half of it is ours.
+
+Same shape as the pipeline blocks in §G, and fixable the same way: darken the
+fill rather than correcting the text, judged on the literal's own luminance.
+
+Filed as [#47](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/47).
+Anywhere IA uses `InlineTipLabel` is affected; Diagnostics is just where this
+run happened to look. Note that the plain "Tip:" line at the
+bottom of **Image Management** is a different, ordinary label and is `pass`.
+
+### SQL editors (JIDE `CodeEditor`)
+
+Found 2026-08-31 in **Tools → Database Query Browser**. The editor's background
+is correctly dark, but the **current-line highlight is still the light theme's
+cream**, and the syntax token colours are the light theme's too (blue keywords).
+
+The reason is that this is not the same editor as the script editors:
+`ScriptEditorTheme` themes `org.fife.ui.rsyntaxtextarea.RSyntaxTextArea` through
+IA's `NamedTheme`, and the chain here reads
+`com.jidesoft.editor.CodeEditor` / `CodeEditorPainter` — JIDE's editor, with its
+own style registry that nothing in this module touches.
+
+Filed as [#48](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/48),
+which also carries the census still to do: the Named Query editor and
+Transaction Group SQL fields are the likely other sites.
+
+### Note on the 2026-08-31 run
+
+Driven with computer use rather than by hand, which changes what the run is
+worth in two directions:
+
+- **§L (popups) was not re-verified.** Synthetic right-clicks did not reach the
+  Designer at all — no popup opened and none was logged — so every §L result
+  below still dates from 2026-08-29. A popup sweep needs a human hand.
+- **Judge colour zoomed, never on a scaled screenshot.** Two surfaces (the
+  autocomplete popup, the whole Project Properties dialog) read as *light* on a
+  full-screen capture scaled from 3456px and turned out to be perfectly dark
+  when zoomed. Both would have been false bug reports.
+
+The Perspective view editor, binding editors and style editor are still
+unchecked in substance: the dev project has no views.
+
 ## Toggle-off spot check
 
 Reversibility is a project invariant, and restore has broken on its own before
@@ -298,17 +394,25 @@ Reversibility is a project invariant, and restore has broken on its own before
 took three wrong diagnoses). After the sweep, toggle **Tools → Dark Mode** off
 and confirm these return to stock:
 
-| Surface | Result | Notes |
-|---|---|---|
-| Perspective property editor | — | The #23 surface |
-| Menus and menu items | — | |
-| Tag Browser | — | |
-| Dock title bars and dividers | — | |
-| Script editor and console | — | |
-| Tree and table cell colours | — | Renderers are restored from tracked sets, not the live tree |
-| **With a Vision window open** | `fixed` | The throw is now prevented rather than contained — see below |
+| Surface | Result | Last checked | Notes |
+|---|---|---|---|
+| Perspective property editor | `pass` | `2026-08-31` | incl. the filter field ([#45](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/45)) — checked over four toggles, and again with the frame re-attached under dark |
+| Menus and menu items | `pass` | `2026-08-31` | |
+| Tag Browser | `pass` | `2026-08-31` | `Tag \| Value` header back to matching light grey ([#45](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/45)) |
+| Dock title bars and dividers | `pass` | `2026-08-31` | |
+| Script editor and console | — | — | |
+| Tree and table cell colours | `pass` | `2026-08-31` | Renderers are restored from tracked sets, not the live tree |
+| **With a Vision window open** | `fixed` | `2026-08-29` | The throw is now prevented rather than contained — see below |
 
-Then relaunch the Designer and confirm it comes up stock.
+Then relaunch the Designer and confirm it comes up stock. *(Not done on the
+2026-08-31 run.)*
+
+Worth reading the debug log after the restore as well as looking at the screen:
+`Light restore: re-ran updateUI on N component(s)` says whether the child-first
+refresh pass found anything. On 2026-08-31 it reported **nothing on every
+toggle**, including with the property editor re-attached under dark — so on this
+path the filter is restored by the tracked white-swap, and that pass is
+belt-and-braces rather than the thing doing the work.
 
 > **Open defect, found by the 2026-08-29 run.** With a Vision window open, the
 > light restore's phase-6 `updateComponentTreeUI` throws
