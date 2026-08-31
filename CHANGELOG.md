@@ -12,6 +12,26 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ### Fixed
 
+- **Inline tip banners are readable under dark mode again**
+  ([#47](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/47)).
+  `InlineTipLabel.paintComponent` fills with a literal `#D6E4ED`, so no
+  look-and-feel swap reaches it — while its text is IA's `Base900` token, which
+  this module lightens. The result was light-on-pale: not merely wrong but
+  *illegible*, in eleven places including Help → Diagnostics, the permissions
+  configurator and the UDT multi-instance wizard. The fill now darkens with the
+  other class constants and restores with them.
+
+- **SQL and expression editors are themed**
+  ([#48](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/48)).
+  "The script editor" is two components: the Python editors are
+  `RSyntaxTextArea` and were already covered, while JIDE's `CodeEditor` — the
+  Database Query Browser and **every expression editor in the Designer**, 46
+  classes' worth — was not. Under dark mode it kept a cream `#FFFFD7` band
+  across the current line, a **black caret on dark chrome**, and syntax tokens
+  at `#000000`, `#000080`, `#650099`. A new `CodeEditorTheme` lifts each syntax
+  colour to a readable luminance while keeping its hue, so a keyword still reads
+  as a keyword, and restores every value on the way back to light.
+
 - **The Tag Browser's `Value` header and the Perspective property editor's
   filter now come back when dark mode is switched off**
   ([#45](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/45)). Two different

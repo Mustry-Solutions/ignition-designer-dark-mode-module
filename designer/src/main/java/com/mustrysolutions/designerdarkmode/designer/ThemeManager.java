@@ -124,6 +124,7 @@ public class ThemeManager {
 
     private final ComponentInspector inspector = new ComponentInspector();
     private final ScriptEditorTheme scriptEditors = new ScriptEditorTheme();
+    private final CodeEditorTheme codeEditors = new CodeEditorTheme();
     private final ConsoleTextTheme consoleText = new ConsoleTextTheme();
     private final BlockWorkspaceTheme blockWorkspaces = new BlockWorkspaceTheme();
 
@@ -492,6 +493,7 @@ public class ThemeManager {
             safely("collapsibles", () -> recolorCollapsibleTitlePanes(true));
             safely("whiteSwap", () -> swapWhiteTokenBackgrounds(true));
             safely("scriptEditors", scriptEditors::install);
+            safely("codeEditors", codeEditors::install);
             safely("consoleText", consoleText::install);
             safely("blockWorkspaces", blockWorkspaces::install);
             safely("statusBar", status::install);
@@ -510,6 +512,7 @@ public class ThemeManager {
             safely("whiteSwap", () -> swapWhiteTokenBackgrounds(false));
             safely("darkLeftovers", this::refreshComponentsLeftDark);
             safely("scriptEditors", scriptEditors::uninstall);
+            safely("codeEditors", codeEditors::uninstall);
             safely("consoleText", consoleText::uninstall);
             safely("blockWorkspaces", blockWorkspaces::uninstall);
             safely("statusBar", status::uninstall);
@@ -1696,6 +1699,9 @@ public class ThemeManager {
         recolorCollapsibleTitlePanes(true);
         swapWhiteTokenBackgrounds(true);
         scriptEditors.install();
+        // Expression editors are built when a binding dialog is opened, long
+        // after the switch — so this belongs in the rescan, not only apply().
+        codeEditors.install();
         consoleText.install();
         // Blocks are built when a pipeline or chart workspace is first
         // opened, which is long after the switch — so this pass earns its

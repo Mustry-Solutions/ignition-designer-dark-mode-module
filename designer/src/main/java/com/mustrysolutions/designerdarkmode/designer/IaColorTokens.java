@@ -63,6 +63,16 @@ final class IaColorTokens {
      * these directly — unreachable by any component-level fix.
      */
     private static final Map<String, Map<String, Integer>> CLASS_DARK = Map.of(
+        // The pale band behind an inline tip ("These diagnostics apply to the
+        // Designer only..."), #D6E4ED, painted by
+        // InlineTipLabel.paintComponent straight onto the Graphics — so no
+        // component-level pass can reach it (#47). It has to be darkened
+        // rather than left alone: the label's constructor sets its text to
+        // Base900, which the token pass above lightens, and a pale band with
+        // light text on it is ILLEGIBLE rather than merely wrong. Blue cast
+        // kept, so a tip still reads as a tip against #3C3F41 chrome.
+        "com.inductiveautomation.ignition.client.util.gui.InlineTipLabel", Map.of(
+            "COLOR", 0x2F3D48),
         "com.inductiveautomation.ignition.client.jsonedit.NodeEditor", Map.of(
             "GUTTER_BACKGROUND", 0x3F4244,
             "GUTTER_BORDER", 0x55595B,
