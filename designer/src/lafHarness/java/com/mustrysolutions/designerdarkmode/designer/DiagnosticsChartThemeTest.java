@@ -88,6 +88,38 @@ class DiagnosticsChartThemeTest {
     }
 
     @Test
+    @DisplayName("the chart's own background goes dark and comes back (#50)")
+    void theChartBackgroundIsThemedAndRestored() throws Exception {
+        JPanel panel = panelWithChart();
+        String stockChart = chartBackground(panel);
+
+        assertTrue(ThemeManager.luminance(Color.decode(stockChart)) > 200,
+            "the stock chart background is " + stockChart + ", already dark — "
+                + "JFreeChart defaults it to white and that is what this covers");
+
+        manager.apply(true);
+        charts.installIn(panel);
+
+        assertTrue(ThemeManager.luminance(Color.decode(chartBackground(panel))) < 100,
+            "the chart's background — the margin the axis labels sit in — is still "
+                + "light: " + chartBackground(panel));
+
+        manager.apply(false);
+        charts.uninstall();
+
+        assertEquals(stockChart, chartBackground(panel),
+            "the chart background did not come back to its stock value");
+    }
+
+    /** The JFreeChart's own background, behind the axis labels. */
+    private static String chartBackground(JPanel panel) throws Exception {
+        Field field = DynamicTimeSeriesChart.class.getDeclaredField("chart");
+        field.setAccessible(true);
+        Object chart = field.get(chartIn(panel));
+        return hex((Paint) chart.getClass().getMethod("getBackgroundPaint").invoke(chart));
+    }
+
+    @Test
     @DisplayName("a chart outside the Designer's own diagnostics is left alone (#50)")
     void userChartsAreNotTouched() {
         // The pass is targeted by class name on purpose: Vision windows render

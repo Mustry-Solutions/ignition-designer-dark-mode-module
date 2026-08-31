@@ -47,6 +47,16 @@ final class DiagnosticsChartTheme {
     private static final Color AXIS_TEXT = new Color(0xC4C9CD);
     /** Axis lines and tick marks, a shade below the text so they recede. */
     private static final Color AXIS_LINE = new Color(0x5F6467);
+    /**
+     * The chart's own background — the margin the axis labels sit in.
+     *
+     * <p>JFreeChart defaults this to white and IA never sets it, so it is the
+     * one surface that stays bright after the axes are fixed. Matched to the
+     * dialog behind it so the chart does not read as a pale card.
+     */
+    private static final Color CHART_BACKGROUND = new Color(0x3C3F41);
+    /** The plot well, a shade below the chart so the data area reads as inset. */
+    private static final Color PLOT_BACKGROUND = new Color(0x35383A);
 
     /** The four paints this pass sets on each axis, in order. */
     private static final String[] AXIS_PAINTS = {
@@ -55,6 +65,8 @@ final class DiagnosticsChartTheme {
 
     /** axis -> its stock paints, in {@link #AXIS_PAINTS} order. */
     private final Map<Object, Paint[]> axisPaints = new IdentityHashMap<>();
+    /** chart -> {chart background, plot background, plot outline}, as found. */
+    private final Map<Object, Paint[]> chartPaints = new IdentityHashMap<>();
 
     private boolean unavailable;
 
@@ -82,6 +94,17 @@ final class DiagnosticsChartTheme {
 
     /** Put every recorded paint back. */
     void uninstall() {
+        chartPaints.forEach((chart, stock) -> {
+            try {
+                set(chart, "setBackgroundPaint", stock[0]);
+                Object plot = chart.getClass().getMethod("getPlot").invoke(chart);
+                set(plot, "setBackgroundPaint", stock[1]);
+                set(plot, "setOutlinePaint", stock[2]);
+            } catch (Throwable t) {
+                DebugLog.log("Could not restore a chart's background paints.", t);
+            }
+        });
+        chartPaints.clear();
         axisPaints.forEach((axis, stock) -> {
             for (int i = 0; i < AXIS_PAINTS.length; i++) {
                 try {
@@ -123,6 +146,7 @@ final class DiagnosticsChartTheme {
                 set(axis, "setAxisLinePaint", AXIS_LINE);
                 set(axis, "setTickMarkPaint", AXIS_LINE);
             }
+            themeChartBackground(chart);
             ((Component) chart).repaint();
         } catch (Throwable t) {
             // A JFreeChart or an IA class that has moved fails identically on
@@ -130,6 +154,32 @@ final class DiagnosticsChartTheme {
             unavailable = true;
             DebugLog.log("Diagnostics chart axes could not be themed.", t);
         }
+    }
+
+    /**
+     * The chart's own background, the plot well and the plot outline.
+     *
+     * <p>The axes alone are not enough: JFreeChart's default chart background
+     * is white and IA never overrides it, so fixing only the axis paints left
+     * the label margin bright — which is what a Designer showed after the first
+     * cut of this pass.
+     */
+    private void themeChartBackground(Object panel) throws Exception {
+        Field field = panel.getClass().getDeclaredField("chart");
+        field.setAccessible(true);
+        Object chart = field.get(panel);
+        if (chart == null || chartPaints.containsKey(chart)) {
+            return;
+        }
+        Object plot = chart.getClass().getMethod("getPlot").invoke(chart);
+        chartPaints.put(chart, new Paint[] {
+            (Paint) chart.getClass().getMethod("getBackgroundPaint").invoke(chart),
+            (Paint) plot.getClass().getMethod("getBackgroundPaint").invoke(plot),
+            (Paint) plot.getClass().getMethod("getOutlinePaint").invoke(plot),
+        });
+        set(chart, "setBackgroundPaint", CHART_BACKGROUND);
+        set(plot, "setBackgroundPaint", PLOT_BACKGROUND);
+        set(plot, "setOutlinePaint", AXIS_LINE);
     }
 
     /**
