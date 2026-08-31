@@ -59,6 +59,16 @@ public class CellRendererSanitizer {
      */
     private final Map<Component, Color> mutatedBackgrounds = new WeakHashMap<>();
     private final Map<Component, Color> mutatedForegrounds = new WeakHashMap<>();
+    /**
+     * Borders sanitize() replaced, per renderer component (#21).
+     *
+     * <p>Most renderers re-set their border on every call, so the swap has to
+     * happen per render rather than once. Some set it only in the constructor,
+     * though, and those would keep a dark line through light mode — hence the
+     * restore, the same bargain as the colours above.
+     */
+    private final Map<javax.swing.JComponent, javax.swing.border.Border> mutatedBorders =
+        new WeakHashMap<>();
 
     /** Wrap the renderers of every table, header, and list currently in the UI. */
     public void install() {
@@ -406,6 +416,8 @@ public class CellRendererSanitizer {
         mutatedBackgrounds.clear();
         mutatedForegrounds.forEach(Component::setForeground);
         mutatedForegrounds.clear();
+        mutatedBorders.forEach(javax.swing.JComponent::setBorder);
+        mutatedBorders.clear();
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
@@ -446,11 +458,59 @@ public class CellRendererSanitizer {
             }
             component.setForeground(lightForeground);
         }
+        sanitizeBorder(component);
         if (component instanceof Container) {
             for (Component child : ((Container) component).getComponents()) {
                 sanitize(child);
             }
         }
+    }
+
+    /**
+     * Redraw a light line in a renderer's border (#21).
+     *
+     * <p>The pale band under the Tag Browser's {@code Tag | Value} header is
+     * this: {@code SimpleTreeTable$SimpleHeaderRenderer} gives every header
+     * cell a compound border whose bottom is 8px of {@code Color.WHITE} over
+     * 1px of {@code Table.gridColor}, and the grid colour is a {@code static
+     * final} captured at class-init, so it stays the light theme's #C0C5CA for
+     * the life of the Designer. Neither is reachable from the component
+     * hierarchy — a header cell is a rubber stamp, stamped through a
+     * CellRendererPane — which is why every inspection of that panel came back
+     * clean while the band stayed on screen.
+     *
+     * <p>The identical border on {@code SimpleTreeTable$TreeHeader}, the corner
+     * above the row header, IS a real component and has been darkened by the
+     * hierarchy walk since #20. That is why the band starts at the tree's right
+     * edge rather than at the panel's: the same 8px, half of it already fixed.
+     *
+     * <p>Anything light qualifies here, not just {@code Color.WHITE}: a
+     * renderer is chrome by definition, so there is no user content to
+     * misidentify. The threshold matches the stale-UIResource background rule
+     * above.
+     */
+    private void sanitizeBorder(Component component) {
+        if (!(component instanceof javax.swing.JComponent)) {
+            return;
+        }
+        javax.swing.JComponent target = (javax.swing.JComponent) component;
+        javax.swing.border.Border border = target.getBorder();
+        javax.swing.border.Border darkened = ThemeManager.darkenBorder(border,
+            colour -> colour == Color.WHITE
+                || luminance(colour) > ThemeManager.LIGHT_LINE_LUMINANCE);
+        if (darkened == null) {
+            // Nothing light in it — including a border this pass already
+            // darkened, since DARK_BORDER_LINE fails the same test. That is
+            // what makes re-running this on every paint free.
+            return;
+        }
+        // Record the original once, but re-darken every time: the renderer
+        // re-sets its border on each getTableCellRendererComponent call, so a
+        // one-shot swap is undone before the cell is ever painted.
+        if (!mutatedBorders.containsKey(target)) {
+            mutatedBorders.put(target, border);
+        }
+        target.setBorder(darkened);
     }
 
     private static int luminance(Color color) {

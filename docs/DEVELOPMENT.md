@@ -92,12 +92,34 @@ ordering [#23][23] got wrong; repeated cycles converge instead of drifting; and
 JIDE's `Theme.painter` map comes back to the Synthetica entries ([#14][14],
 [#19][19]).
 
-What it cannot see is **pixels**. It replaces the "which defaults are wrong"
-half of the loop, not the "does this look right" half — and with no windows
-open, every pass that walks the component tree runs and finds nothing, so
-component-level state (the painters JIDE caches in private fields, the white
-background swaps) is out of its reach. A Designer and a pair of eyes still
-settle those.
+Mostly it replaces the "which defaults are wrong" half of the loop, not the
+"does this look right" half: with no windows open, every pass that walks the
+component tree runs and finds nothing, so component-level state (the painters
+JIDE caches in private fields, the white background swaps) is out of reach of
+the defaults diff. A Designer and a pair of eyes still settle those.
+
+**One test does read pixels.** `TagBrowserHeaderBandTest` builds the real
+`SimpleTreeTable` by hand, drives the dark passes over it, and paints it into a
+`BufferedImage`. That is not a screenshot test — there is no reference image, so
+it cannot fail on a font or a one-pixel shift. It asserts a single property: no
+long run of light pixels in a dark panel.
+
+Reach for that shape only when the wrong colour never passes through any state
+an assertion could read. [#21][21] was exactly that. The pale band under the Tag
+Browser's `Tag | Value` header comes from
+`SimpleTreeTable$SimpleHeaderRenderer`, whose header cells carry a compound
+border of 8px `Color.WHITE` over 1px of `Table.gridColor` — and `GRID_COLOR` is
+a `static final` read once at class-init, so it keeps the light theme's
+`#C0C5CA` forever. A header cell is a rubber stamp: configured, painted through
+a `CellRendererPane`, never added to anything. Thirty component inspections
+across several sessions all came back dark because there was nothing in the
+hierarchy to find. Rendering found it in one run.
+
+Two mechanics matter if you write another one. `validate()` is a no-op on a tree
+with no peer, so lay out by hand (twice — the scroll pane sizes its row header
+from the tree's width). And only the **dark** half can be rendered headlessly:
+Synthetica's `ImagePainter` asks for a default screen device and throws
+`HeadlessException`, so a light-theme render needs `java.awt.headless=false`.
 
 **Validate a new invariant with a mutation.** A green test proves nothing until
 you have seen it go red for the right reason. Break the thing it claims to
@@ -160,6 +182,7 @@ judgment calls into a rule with four exceptions. [#22][22] was two of these
 
 [14]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/14
 [19]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/19
+[21]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/21
 [22]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/22
 [23]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/23
 [35]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/35

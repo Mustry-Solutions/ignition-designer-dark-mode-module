@@ -67,9 +67,11 @@ tasks.test {
  * They all reproduce HEADLESSLY, though, against the real jars. This source
  * set drives ThemeManager's own switch sequence with the Designer's real look
  * and feel installed, and diffs `UIManager` before and after a toggle cycle.
- * No gateway, no Designer, no screenshots. What it cannot see is pixels: it
- * replaces the "which defaults are wrong" half of the loop, not the "does this
- * look right" half.
+ * No gateway, no Designer, no screenshots. Mostly it replaces the "which
+ * defaults are wrong" half of the loop rather than the "does this look right"
+ * half — but one test (#21) paints a real Ignition scroll pane into a
+ * BufferedImage and reads the pixels, for a bug whose wrong colour never
+ * reaches UIManager at all. See docs/DEVELOPMENT.md before writing another.
  *
  * Kept out of `test` deliberately. It resolves the whole Designer dependency
  * tree at RUNTIME (the module itself only compiles against it), it needs the
