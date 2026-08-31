@@ -83,6 +83,27 @@ class TreeUpdateDiagnosticTest {
     }
 
     @Test
+    @DisplayName("reports a null background, which is what the real crash was")
+    void reportsComponentsWithNoBackground() {
+        // The failure seen in the wild: DockingInternalFrameUI.installDefaults
+        // assigned a background from a key resolving to nothing, and Vision's
+        // BasicContainer.setBackground then called newColor.getAlpha().
+        JPanel root = new JPanel();
+        JLabel victim = new JLabel("no background");
+        victim.setBackground(null);
+        root.setBackground(null);
+        root.add(victim);
+
+        String report = TreeUpdateDiagnostic.describe(root, new NullPointerException(
+            "Cannot invoke \"java.awt.Color.getAlpha()\" because \"newColor\" is null"));
+
+        assertTrue(report.contains("getBackground() == null): 2"),
+            "both the label and its parent have no background: " + report);
+        assertTrue(report.contains("JPanel > JLabel"),
+            "with the path to each: " + report);
+    }
+
+    @Test
     @DisplayName("never throws, whatever it is handed")
     void neverThrows() {
         // Every awkward input at once: an empty container, a null throwable, and
