@@ -437,6 +437,14 @@ public class ThemeManager {
             safely("flatDefaults", () -> applyMenuDefaults(true));
             safely("jideOverrides", () -> applyJideDarkOverrides(true));
         }
+        if (dark) {
+            // Before the tree update, not after: JTableHeader.updateUI() calls
+            // updateComponentTreeUI on its default renderer, and updateUI() on
+            // a DefaultTableCellRenderer nulls both of its colours. A renderer
+            // that colours itself in its constructor never gets them back, so
+            // the only chance to record them is now.
+            safely("captureRenderers", cellRenderers::captureStockColors);
+        }
         safely("updateComponentTrees", () -> {
             java.util.Set<String> failed = new java.util.LinkedHashSet<>();
             int failures = 0;
@@ -500,6 +508,7 @@ public class ThemeManager {
             safely("cellRenderers", cellRenderers::uninstall);
             safely("collapsibles", () -> recolorCollapsibleTitlePanes(false));
             safely("whiteSwap", () -> swapWhiteTokenBackgrounds(false));
+            safely("darkLeftovers", this::refreshComponentsLeftDark);
             safely("scriptEditors", scriptEditors::uninstall);
             safely("consoleText", consoleText::uninstall);
             safely("blockWorkspaces", blockWorkspaces::uninstall);
@@ -1341,6 +1350,82 @@ public class ThemeManager {
                 swapWhiteTokenBackgrounds((java.awt.Container) child);
             }
         }
+    }
+
+    /**
+     * A UIResource background this dark cannot be the light theme's — it is a
+     * dark-mode value the restore did not reach.
+     */
+    private static final int DARK_LEFTOVER_LUMINANCE = 100;
+
+    /**
+     * Second pass over anything still wearing a dark look-and-feel colour once
+     * the light restore has finished (#45).
+     *
+     * <p>{@code updateComponentTreeUI} walks PARENT FIRST, and some containers
+     * read their children while updating. JIDE's {@code LabeledTextField} —
+     * the filter above the Perspective property editor, among others — ends
+     * its {@code updateUI()} in {@code setEnabled()}, which does {@code
+     * setBackground(getTextField().getBackground())}. On the way back to light
+     * the inner text field is still dark at that moment, so the wrapper copies
+     * FlatLaf's {@code #46494B} onto itself and the field below it goes light a
+     * step later. Nothing has that colour tracked, because nothing in this
+     * module ever set it.
+     *
+     * <p>So: walk CHILD FIRST and re-run {@code updateUI()} on whatever is
+     * still holding a dark UIResource background. By then the children are
+     * right, so a container that copies from one copies the light value.
+     * UIResource means look-and-feel-owned by definition, which is what keeps
+     * this away from user content — and the Vision workspace is skipped
+     * outright, as everywhere else.
+     */
+    private void refreshComponentsLeftDark() {
+        int refreshed = 0;
+        for (Window window : Window.getWindows()) {
+            refreshed += refreshComponentsLeftDark(window);
+        }
+        if (refreshed > 0) {
+            DebugLog.detail("Light restore: re-ran updateUI on " + refreshed
+                + " component(s) left holding a dark look-and-feel colour.");
+        }
+    }
+
+    /** Package-private so the harness can drive the walk without a real Window. */
+    int refreshComponentsLeftDark(java.awt.Container container) {
+        int refreshed = 0;
+        for (java.awt.Component child : container.getComponents()) {
+            if (child instanceof java.awt.Container) {
+                refreshed += refreshComponentsLeftDark((java.awt.Container) child);
+            }
+            if (!isDarkLeftover(child)) {
+                continue;
+            }
+            try {
+                ((javax.swing.JComponent) child).updateUI();
+                refreshed++;
+                if (isDarkLeftover(child)) {
+                    DebugLog.detail("Still dark after updateUI: "
+                        + child.getClass().getName() + " bg="
+                        + String.format("#%06X", child.getBackground().getRGB() & 0xFFFFFF));
+                }
+            } catch (Throwable t) {
+                // One component that cannot be refreshed must not cost the
+                // rest of the walk, the same bargain as every other pass here.
+                DebugLog.log("updateUI failed on " + child.getClass().getName()
+                    + " during the dark-leftover pass; continuing.", t);
+            }
+        }
+        return refreshed;
+    }
+
+    private static boolean isDarkLeftover(java.awt.Component component) {
+        if (!(component instanceof javax.swing.JComponent) || !component.isBackgroundSet()) {
+            return false;
+        }
+        java.awt.Color background = component.getBackground();
+        return background instanceof javax.swing.plaf.UIResource
+            && luminance(background) < DARK_LEFTOVER_LUMINANCE
+            && !insideVisionWorkspace(component);
     }
 
     static int luminance(java.awt.Color color) {

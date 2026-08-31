@@ -70,6 +70,125 @@ public class CellRendererSanitizer {
     private final Map<javax.swing.JComponent, javax.swing.border.Border> mutatedBorders =
         new WeakHashMap<>();
 
+    /**
+     * The colours a renderer component had before dark mode touched anything,
+     * and the components whose UI delegate we refreshed (#45).
+     *
+     * <p>Two different mechanisms erase a renderer's own colours, and both are
+     * one-way: {@code DefaultTableCellRenderer.updateUI()} is
+     * {@code super.updateUI(); setForeground(null); setBackground(null);}, and
+     * a renderer that sets its colours in the CONSTRUCTOR — {@code
+     * SimpleTreeTable$SimpleHeaderRenderer} does exactly that, {@code
+     * setForeground(BLACK)} and {@code setBackground(UIManager.getColor(
+     * "Panel.background"))} — never sets them again. So one {@code updateUI()}
+     * costs it those colours for the life of the Designer.
+     *
+     * <p>It gets one on the way into dark mode, from Swing itself:
+     * {@code JTableHeader.updateUI()} calls {@code updateComponentTreeUI} on
+     * its default renderer when that renderer is a {@code Component}. On the
+     * way back it does NOT, because by then the renderer is wrapped in a
+     * {@link SanitizingTableRenderer}, which is not a Component — so the Tag
+     * Browser's {@code Value} header came back with no colours of its own and
+     * still on a FlatLaf delegate.
+     *
+     * <p>Hence a snapshot taken before the switch touches anything, restored by
+     * {@link #uninstall()}. Keyed weakly: a renderer that goes away with its
+     * table must not be held alive by this.
+     */
+    private final Map<Component, Color[]> stockRendererColors = new WeakHashMap<>();
+    private final Map<javax.swing.JComponent, Boolean> refreshedRenderers = new WeakHashMap<>();
+
+    /**
+     * Record the colours of every renderer component in the UI, before the
+     * switch to dark can wipe them.
+     *
+     * <p>Runs as its own phase, ahead of {@code updateComponentTrees}, rather
+     * than inside {@link #install()}: install() runs at the END of the dark
+     * switch, by which point Swing's own renderer update has already nulled
+     * the colours this exists to remember.
+     */
+    public void captureStockColors() {
+        for (Window window : Window.getWindows()) {
+            captureStockColorsIn(window);
+        }
+    }
+
+    /** Package-private so tests can drive the walk without a real Window. */
+    void captureStockColorsIn(Container container) {
+        for (Component child : container.getComponents()) {
+            if (child instanceof JTable) {
+                JTable table = (JTable) child;
+                for (int i = 0; i < table.getColumnModel().getColumnCount(); i++) {
+                    rememberStockColors(table.getColumnModel().getColumn(i).getCellRenderer());
+                }
+                for (Class<?> valueClass : DEFAULT_RENDERER_CLASSES) {
+                    rememberStockColors(table.getDefaultRenderer(valueClass));
+                }
+            } else if (child instanceof JTableHeader) {
+                rememberStockColors(((JTableHeader) child).getDefaultRenderer());
+            } else if (child instanceof JList) {
+                rememberStockColors(installedRenderer((JList<?>) child));
+            }
+            if (child instanceof Container) {
+                captureStockColorsIn((Container) child);
+            }
+        }
+    }
+
+    /**
+     * Record a renderer's colours, and its children's, unless they are already
+     * recorded — the walk runs over every window and a renderer instance is
+     * routinely shared between tables, so the FIRST reading is the stock one.
+     */
+    private void rememberStockColors(Object renderer) {
+        if (!(renderer instanceof Component)) {
+            return;
+        }
+        Map<Component, Color[]> colors = new java.util.LinkedHashMap<>();
+        snapshotColors((Component) renderer, colors);
+        colors.forEach(stockRendererColors::putIfAbsent);
+    }
+
+    /**
+     * Refresh a renderer's stale UI delegate without losing its colours.
+     *
+     * <p>The refresh is an {@code updateUI()}, and {@code updateUI()} on a
+     * {@code DefaultTableCellRenderer} nulls both colours (see
+     * {@link #stockRendererColors}). Snapshotting around the call keeps the
+     * refresh to what it is for — the delegate — and leaves the colours to
+     * {@link #sanitize}, which tracks what it changes.
+     */
+    private void refreshDelegatePreservingColors(javax.swing.JComponent renderer) {
+        Map<Component, Color[]> before = new java.util.LinkedHashMap<>();
+        snapshotColors(renderer, before);
+        ThemeManager.refreshStaleUiDelegates(renderer);
+        before.forEach((component, colors) -> {
+            component.setBackground(colors[0]);
+            component.setForeground(colors[1]);
+        });
+        refreshedRenderers.put(renderer, Boolean.TRUE);
+    }
+
+    /**
+     * One component's own colours and its children's.
+     *
+     * <p>{@code isBackgroundSet()} rather than {@code getBackground()}: an
+     * unset colour inherits from the parent, and recording the inherited value
+     * would later PIN it — turning a renderer that follows its table into one
+     * that no longer does.
+     */
+    private static void snapshotColors(Component component, Map<Component, Color[]> into) {
+        into.put(component, new Color[] {
+            component.isBackgroundSet() ? component.getBackground() : null,
+            component.isForegroundSet() ? component.getForeground() : null,
+        });
+        if (component instanceof Container) {
+            for (Component child : ((Container) component).getComponents()) {
+                snapshotColors(child, into);
+            }
+        }
+    }
+
     /** Wrap the renderers of every table, header, and list currently in the UI. */
     public void install() {
         darkBackground = orDefault(UIManager.getColor("Table.background"), new Color(0x3A3D3F));
@@ -217,7 +336,7 @@ public class CellRendererSanitizer {
                             && ThemeManager.hasStaleUi(c, true)) {
                         refreshingDelegates = true;
                         try {
-                            ThemeManager.refreshStaleUiDelegates((javax.swing.JComponent) c);
+                            refreshDelegatePreservingColors((javax.swing.JComponent) c);
                         } finally {
                             refreshingDelegates = false;
                         }
@@ -410,6 +529,31 @@ public class CellRendererSanitizer {
         // rebuilds the table UIs; just forget them so a later dark install
         // re-intercepts the fresh ones.
         interceptedPanes.clear();
+        // Any renderer still on a FlatLaf delegate, whether this class
+        // refreshed it or Swing did. Swing will not put it back for us:
+        // JTableHeader.updateUI() only reaches a default renderer that is a
+        // Component, and the light restore's tree update ran while ours (not a
+        // Component) was still wrapped around it. So the Tag Browser's Value
+        // header would keep painting through FlatLaf all through light mode.
+        // Here the wrapper is gone and the light theme is installed, which is
+        // exactly when refreshStaleUiDelegates does the right thing.
+        java.util.Set<javax.swing.JComponent> stale =
+            java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
+        stale.addAll(refreshedRenderers.keySet());
+        for (Component component : stockRendererColors.keySet()) {
+            if (component instanceof javax.swing.JComponent) {
+                stale.add((javax.swing.JComponent) component);
+            }
+        }
+        for (javax.swing.JComponent renderer : stale) {
+            try {
+                refreshDelegatePreservingColors(renderer);
+            } catch (Throwable t) {
+                DebugLog.log("Could not restore the UI delegate of "
+                    + renderer.getClass().getName(), t);
+            }
+        }
+        refreshedRenderers.clear();
         // Undo the color mutations on long-lived renderer instances so light
         // mode gets their constructor-era colors back.
         mutatedBackgrounds.forEach(Component::setBackground);
@@ -418,6 +562,16 @@ public class CellRendererSanitizer {
         mutatedForegrounds.clear();
         mutatedBorders.forEach(javax.swing.JComponent::setBorder);
         mutatedBorders.clear();
+        // Last, and over the top of everything above: the colours the renderer
+        // had before the switch to dark. These are the only record of what a
+        // renderer that colours itself in its constructor is supposed to look
+        // like — mutatedBackgrounds can only hold what sanitize() overwrote,
+        // which by then was already null.
+        stockRendererColors.forEach((component, colors) -> {
+            component.setBackground(colors[0]);
+            component.setForeground(colors[1]);
+        });
+        stockRendererColors.clear();
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})

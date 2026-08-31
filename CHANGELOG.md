@@ -12,6 +12,34 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ### Fixed
 
+- **The Tag Browser's `Value` header and the Perspective property editor's
+  filter now come back when dark mode is switched off**
+  ([#45](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/45)). Two different
+  mechanisms, both invisible to the defaults diff — every `UIManager` key was
+  already coming back correct.
+
+  The header is painted by a cell renderer, which is not in the component
+  hierarchy. `JTableHeader.updateUI()` reaches its default renderer anyway, but
+  only while that renderer is a `Component`: on the way into dark mode it is, so
+  Swing calls `DefaultTableCellRenderer.updateUI()` — literally `super.updateUI();
+  setForeground(null); setBackground(null);` — and destroys the colours
+  `SimpleTreeTable$SimpleHeaderRenderer` sets in its constructor and never sets
+  again. On the way back the renderer is wrapped in ours, which is not a
+  `Component`, so Swing skips it and the header keeps null colours and a FlatLaf
+  delegate for the rest of the session. The colours are now snapshotted before
+  the switch can wipe them, and the delegate is put back explicitly.
+
+  The filter is JIDE's `LabeledTextField`, whose `updateUI()` ends in
+  `setEnabled()`, which does `setBackground(getTextField().getBackground())`.
+  `updateComponentTreeUI` walks parent first, so on the restore the wrapper
+  copies the inner field's still-dark `#46494B` onto itself a moment before that
+  field goes light. A second pass now re-runs `updateUI()` child-first on
+  anything left holding a dark `UIResource` background.
+
+  Measured on the real components: a light→dark→light cycle over a
+  `SimpleTreeTable` and a `QuickFilterField` rendered 15,462 pixels different
+  from stock before the fix and 0 after.
+
 - The **tree-update diagnostic now reports null backgrounds and foregrounds**,
   not only fonts. It was written against the description in
   [#12](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/12),
