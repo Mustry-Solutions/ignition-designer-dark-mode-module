@@ -1112,6 +1112,8 @@ public class ThemeManager {
     private static final java.awt.Color DARK_CONTENT_BACKGROUND = new java.awt.Color(0x3A3D3F);
     /** Line colour substituted for a white matte/line border under dark mode. */
     static final java.awt.Color DARK_BORDER_LINE = new java.awt.Color(0x55595B);
+    /** Above this, a border line is a light-theme leftover rather than a dark one. */
+    static final int LIGHT_LINE_LUMINANCE = 160;
     /** Component -> its stock border, for the light restore. */
     private final java.util.Map<javax.swing.JComponent, javax.swing.border.Border>
         swappedBorders = new java.util.WeakHashMap<>();
@@ -1203,6 +1205,18 @@ public class ThemeManager {
             javax.swing.border.Border border = component.getBorder();
             javax.swing.border.Border darkened = darkenWhiteBorder(border);
             if (darkened != null) {
+                // A white line is proof this border is light-theme chrome, so
+                // darken its OTHER light lines too rather than half of it.
+                // The Tag Browser's tree-header corner stacks 8px of white on
+                // 1px of the light Table.gridColor (#21): darkening only the
+                // white left a pale hairline under "Tag" while the same line
+                // under "Value" — a cell renderer, corrected elsewhere — went
+                // dark. The narrow trigger is the point: no component that
+                // does not already qualify is touched, so this cannot reach
+                // user content.
+                darkened = darkenBorder(border,
+                    colour -> colour == java.awt.Color.WHITE
+                        || luminance(colour) > LIGHT_LINE_LUMINANCE);
                 swappedBorders.put(component, border);
                 component.setBorder(darkened);
             }
@@ -1224,9 +1238,32 @@ public class ThemeManager {
 
     /** The border with white lines darkened, or null if it has none. */
     static javax.swing.border.Border darkenWhiteBorder(javax.swing.border.Border border) {
+        return darkenBorder(border, colour -> colour == java.awt.Color.WHITE);
+    }
+
+    /**
+     * The border with every line colour matching {@code tooLight} redrawn in
+     * {@link #DARK_BORDER_LINE}, or null if none of them match.
+     *
+     * <p>The predicate is the caller's business because the two callers work at
+     * very different blast radii. The hierarchy walk passes identity {@code
+     * Color.WHITE} and nothing else: it visits every component in the Designer,
+     * and a luminance test there would repaint borders in user content. A cell
+     * renderer is unambiguously chrome, so {@code CellRendererSanitizer} can
+     * afford to ask for anything light — which is what #21 needed, since the
+     * pale line under the Tag Browser header is drawn in a stale {@code
+     * Table.gridColor} rather than in white.
+     *
+     * <p>Borders are <em>replaced</em>, never recoloured: {@code MatteBorder}
+     * is immutable and its colour is usually shared.
+     */
+    static javax.swing.border.Border darkenBorder(javax.swing.border.Border border,
+            java.util.function.Predicate<java.awt.Color> tooLight) {
         if (border instanceof javax.swing.border.MatteBorder) {
             javax.swing.border.MatteBorder matte = (javax.swing.border.MatteBorder) border;
-            if (matte.getMatteColor() != java.awt.Color.WHITE) {
+            java.awt.Color colour = matte.getMatteColor();
+            // A MatteBorder built from an Icon has no colour at all.
+            if (colour == null || !tooLight.test(colour)) {
                 return null;
             }
             java.awt.Insets insets = matte.getBorderInsets();
@@ -1235,7 +1272,7 @@ public class ThemeManager {
         }
         if (border instanceof javax.swing.border.LineBorder) {
             javax.swing.border.LineBorder line = (javax.swing.border.LineBorder) border;
-            if (line.getLineColor() != java.awt.Color.WHITE) {
+            if (line.getLineColor() == null || !tooLight.test(line.getLineColor())) {
                 return null;
             }
             return javax.swing.BorderFactory.createLineBorder(
@@ -1248,8 +1285,8 @@ public class ThemeManager {
                 (javax.swing.border.CompoundBorder) border;
             javax.swing.border.Border outside = compound.getOutsideBorder();
             javax.swing.border.Border inside = compound.getInsideBorder();
-            javax.swing.border.Border darkOutside = darkenWhiteBorder(outside);
-            javax.swing.border.Border darkInside = darkenWhiteBorder(inside);
+            javax.swing.border.Border darkOutside = darkenBorder(outside, tooLight);
+            javax.swing.border.Border darkInside = darkenBorder(inside, tooLight);
             if (darkOutside == null && darkInside == null) {
                 return null;
             }
@@ -1260,7 +1297,8 @@ public class ThemeManager {
         return null;
     }
 
-    private void swapWhiteTokenBackgrounds(java.awt.Container container) {
+    /** Package-private so the harness can drive the walk without a real Window. */
+    void swapWhiteTokenBackgrounds(java.awt.Container container) {
         for (java.awt.Component child : container.getComponents()) {
             if (child instanceof javax.swing.JComponent) {
                 javax.swing.JComponent component = (javax.swing.JComponent) child;
