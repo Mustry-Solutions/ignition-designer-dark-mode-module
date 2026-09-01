@@ -10,6 +10,20 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ## [Unreleased]
 
+### Added
+
+- Unit tests for the theme preference — the one piece of state the module keeps
+  between launches, and until now the only behaviour with no test of its own.
+  They cover the `setDark`/`isDarkModeEnabled` round trip, the rule that the
+  saved value follows the theme actually INSTALLED rather than the one
+  requested (a switch that fails must not come back at the next launch), and
+  that the startup path applies dark only when the preference asks for it.
+  `ThemeManager` gained a package-private constructor taking the `Preferences`
+  node so the tests write to an in-memory one instead of the developer's own,
+  and the startup apply moved out of the readiness poll into
+  `applyStartupPreference()` so it can be driven without a live Designer.
+  No behaviour change.
+
 ### Fixed
 
 - A second documentation pass, this one over statements that contradict
