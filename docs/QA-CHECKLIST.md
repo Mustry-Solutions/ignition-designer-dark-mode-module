@@ -20,6 +20,7 @@ value is knowing *where to look*.
 | Date | Ignition | Vision | Module | Scope covered |
 |---|---|---|---|---|
 | 2026-08-29 | 8.3.6 | 12.3.6 | `f4104b54`, built at `33cf8c7` — **10 commits behind `main`**, so without #36/#37/#38 | Three Designer sittings (13:22, 13:40, 14:15 UTC): §L popups, Alarm Pipeline Editor, Translation Manager, dataset editor, named-query selector |
+| 2026-09-01 (afternoon) | 8.3.6 | 12.3.6 | `b01d80eb` | #57 and the editor-resilience fix confirmed by eye. Third popup source verified (Perspective canvas). A **saved** view added to the dev project so §E stops being blocked by an empty project |
 | 2026-09-01 | 8.3.6 | 12.3.6 | `b510440` | Closing the gaps left by the 2026-08-31 sweep (#41). Created a Perspective view so §E had something to open; Symbol Factory; one more heavyweight popup. **Right-click is confirmed un-automatable** — see [§L](#l-popup-sweep) |
 | 2026-08-31 (evening) | 8.3.6 | 12.3.6 | `b510440` | Verification pass by eye in a real Designer for #47, #48, #50, #51, #52 and the late-attach fix. All confirmed. Two rounds: the first found #50 only half-fixed (chart background still white) and the Vision filters dark in light mode |
 | 2026-08-31 | 8.3.6 | 12.3.6 | `76c4600` (`main`, release candidate) | Driven with computer use, 12:01–12:13 UTC. §A, §B (Properties, Export, Diagnostics), §C, §D console + autocomplete, §E property editor, §F palette/inspector, §J Image Management, §K Query Browser, toggle-off. **Two new `light` results — see [Diagnostics](#b-menus-dialogs-project-settings) and [Query Browser](#k-database-and-queries).** §L not re-verified (see [Note on this run](#note-on-the-2026-08-31-run)) |
@@ -259,7 +260,7 @@ so the log from this sweep also records the real 8.3 names for these sources.
 |---|---|---|---|---|
 | `TagFrameTree` | Tag Browser tree | `pass` | `2026-09-01` | `TagPopupMenu` — arrived **stale**, repaired before paint. Same result on 2026-08-29 |
 | `NavTreePanel$1` | Project Browser tree | `pass` | `2026-09-01` | Arrived **stale**, repaired before paint. `NodeContextMenu` (8 openings) on 2026-08-29 |
-| `Graphics2dRenderWidget` | Perspective view editor canvas | `pass` | `2026-08-29` | `JPopupMenu`, 15 items |
+| `Graphics2dRenderWidget` | Perspective view editor canvas | `pass` | `2026-09-01` | 12 items, disabled ones correctly greyed. `Popup$HeavyWeightWindow`. Also `pass` 2026-08-29 |
 | `InteractionLayer` | Vision window editor canvas | `pass` | `2026-08-29` | `JPopupMenu` with a `CustomizerMenu` submenu, 17 items |
 | `BorderlessField` / `PerspectiveKeyEditor` | A text field's cut/copy/paste menu | `pass` | `2026-08-29` | `JPopupMenu`, 3 items |
 | `JTree` | Project Library nav tree (Scripting) | `pass` | `2026-08-29` | `NodeContextMenu`, 14 items |
@@ -523,7 +524,8 @@ these is a real gap, not a pass.
 
 | Surface | Why it is unchecked | What it needs |
 |---|---|---|
-| §L right-click popups, the remaining 6 sources | The two tree sources are now verified by dispatching the trigger from inside the JVM; the rest (canvases, text fields, property rows, binding picker) have not been re-run since 2026-08-29 | Either the Script Console technique in [§L](#right-click-cannot-be-automated-from-outside--but-it-can-from-inside), or ~10 minutes by hand |
+| §L right-click popups, the remaining 5 sources | Three verified 2026-09-01 by dispatching the trigger from inside the JVM (both trees, the Perspective canvas). The rest need their surface open first: the Vision canvas needs a window, the property-row and binding-picker menus need a component on a view, and a text field's cut/copy/paste menu did not open from a synthetic trigger on the fields available | Either the Script Console technique in [§L](#right-click-cannot-be-automated-from-outside--but-it-can-from-inside), or ~10 minutes by hand |
+| §E binding editor, component scope picker, style editor | **No longer blocked.** A saved view (`qa-dark-mode`) now exists in the dev project, so the editor opens; what is still missing is a component dropped on it, which needs a palette drag | A component on the view, by hand |
 | §E binding editor, component scope picker, style editor | Need a component on the canvas; adding one needs a palette drag the automation cannot do, and the Perspective palette was not docked in this layout | A component dropped on a view, by hand |
 | §H Reporting (whole section) | The dev project has no report resources | A report to open |
 | §F border chooser, Layout, Size and Position | Need a Vision window with a component selected | A Vision window, by hand |
