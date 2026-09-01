@@ -355,6 +355,12 @@ public class TreeIconRecolorer {
      *
      * @return true if the button had a usable pair and was handled
      */
+    /**
+     * Brightness above which an icon was near-invisible on the light theme's
+     * chrome, so it must not become the brightest thing on a dark surface.
+     */
+    private static final double SUBTLE_ON_LIGHT = 200;
+
     private boolean swapEnabledDisabledIcons(javax.swing.AbstractButton button) {
         Icon enabled = button.getIcon();
         // IA is not consistent about which disabled slot it fills: take
@@ -371,6 +377,24 @@ public class TreeIconRecolorer {
         }
         Icon brightest = brightness(enabled) >= brightness(disabled) ? enabled : disabled;
         Icon dimmest = brightest == enabled ? disabled : enabled;
+
+        if (brightest == enabled && brightness(enabled) > SUBTLE_ON_LIGHT) {
+            // The pair offers nothing here — the icon it would install is the
+            // one already installed — AND this icon is so light it was nearly
+            // invisible against the light theme's near-white chrome. On dark it
+            // becomes the loudest thing on screen, which is precisely the
+            // relative-contrast inversion darkVariant exists to undo. Decline
+            // the button so the smart invert gets it.
+            //
+            // JIDE's QuickFilterField clear button (#60) is the case in hand: a
+            // solid disc measuring 226 against a ~250 surface (a contrast of 24)
+            // turns into 226 against our ~60 (a contrast of 166). Every other
+            // no-op pair on the Designer's classpath sits far below this
+            // threshold — the main toolbar's VectorIcons at 174, the Vision
+            // palette at 183, popup menus at 109 — and keeps its icon, which is
+            // what the threshold is here to protect.
+            return false;
+        }
 
         buttonIconPairs.putIfAbsent(button,
             new Icon[] {enabled, button.getDisabledIcon(), button.getDisabledSelectedIcon()});
