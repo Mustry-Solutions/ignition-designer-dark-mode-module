@@ -20,10 +20,12 @@ whole Designer — dock panels, trees, tables, menus, the Perspective component
 palette and property editor, the tag browser and tag editor, the script editors
 and output console, dialogs, and icons — to a dark theme built on
 [FlatLaf](https://www.formdev.com/flatlaf/). The choice is remembered between
-sessions.
+sessions, per computer and OS user account — see
+[Where the setting is stored](#where-the-setting-is-stored).
 
-Toggling back restores the stock Designer. Relaunching always gives a clean
-stock theme, whichever way you left it.
+Toggling back restores the stock Designer. A relaunch always starts from the
+stock theme and re-applies dark on top of it, so nothing carries over from the
+last session but the choice itself.
 
 Because Ignition's own UI hard-codes many light colors in ways a normal look and
 feel swap cannot reach, the module does substantial work under the hood to make
@@ -80,6 +82,28 @@ Everything this module does happens inside the Designer. It adds no gateway
 service, no tags, and no scripting functions, and it changes nothing for
 Perspective sessions, Vision clients, or anyone else using your gateway. To
 remove it: **Config → Modules → Uninstall**, and relaunch the Designer.
+
+### Where the setting is stored
+
+The toggle is saved for the **OS user account on that computer**. It is not
+per-gateway and not per-project, and there is no gateway-wide default to set.
+
+It lives in the standard Java preference store, under the node
+`com/mustrysolutions/designerdarkmode/designer`, key `darkMode`:
+
+| OS | Where |
+|---|---|
+| Windows | `HKEY_CURRENT_USER\Software\JavaSoft\Prefs\com\mustrysolutions\designerdarkmode\designer` |
+| macOS | `~/Library/Preferences/com.mustrysolutions.designerdarkmode.plist` |
+| Linux | `~/.java/.userPrefs/com/mustrysolutions/designerdarkmode/designer/prefs.xml` |
+
+So one person turning dark mode on gets it in **every Designer they launch on
+that machine** — every gateway they connect to, every project they open. Nobody
+else is affected: not a colleague at the next desk, and not the same person
+signed in to a different computer, who each choose for themselves.
+
+The gateway does have to have the module installed for the setting to do
+anything, so a Designer opened against a gateway without it comes up stock.
 
 ## Build
 

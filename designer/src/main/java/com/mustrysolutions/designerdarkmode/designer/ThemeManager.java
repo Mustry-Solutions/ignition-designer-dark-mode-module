@@ -170,7 +170,7 @@ public class ThemeManager {
     }
 
     public void setDark(boolean dark) {
-        prefs.putBoolean(PREF_DARK_MODE, dark);
+        savePreference(dark);
         onEdt(() -> {
             if (!uiReady) {
                 DebugLog.detail("setDark(" + dark + ") before the UI is ready; "
@@ -214,8 +214,35 @@ public class ThemeManager {
      */
     private void finishSwitch() {
         boolean darkActive = isDarkActive();
-        prefs.putBoolean(PREF_DARK_MODE, darkActive);
+        savePreference(darkActive);
         stateListener.switchFinished(darkActive);
+    }
+
+    /**
+     * Write the preference and push it to the backing store immediately.
+     *
+     * <p>The flush is not belt-and-braces. On Linux the backing store is
+     * {@code FileSystemPreferences}, which only writes through on a 30-second
+     * sync timer or a shutdown hook — so a Designer that is force-quit, killed
+     * or crashes within that window loses the toggle, and the next launch
+     * comes up in the theme the user just changed away from. Verified against
+     * Ignition's own bundled Linux JRE 17: without the flush the value is gone,
+     * with it the value is on disk before this method returns.
+     *
+     * <p>Windows (registry) and macOS (cfprefsd) both persist out of process
+     * and survive it either way, which is why this went unnoticed.
+     */
+    private void savePreference(boolean dark) {
+        prefs.putBoolean(PREF_DARK_MODE, dark);
+        try {
+            prefs.flush();
+        } catch (java.util.prefs.BackingStoreException e) {
+            // Not fatal: the value is in the in-memory node either way, so the
+            // running session is correct and the timer or shutdown hook may
+            // still write it. Only the crash-durability guarantee is lost.
+            log.warn("Could not flush the dark mode preference to the backing store.", e);
+            DebugLog.log("Preference flush failed; the setting may not survive a force-quit.", e);
+        }
     }
 
     private static boolean isDarkActive() {

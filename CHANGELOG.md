@@ -12,6 +12,20 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ### Fixed
 
+- **The dark mode choice could be lost on Linux** if the Designer was
+  force-quit, killed or crashed shortly after toggling. `ThemeManager` wrote
+  the preference but never flushed it, and on Linux the backing store
+  (`FileSystemPreferences`) only writes through on a 30-second sync timer or a
+  shutdown hook — so the next launch came up in the theme the user had just
+  changed away from. Both write sites now flush. Reproduced and verified
+  against Ignition's own bundled Linux JRE 17. Windows (registry) and macOS
+  (cfprefsd) persist out of process and were never affected, which is why this
+  went unnoticed.
+- The README claimed both that the theme choice is remembered between sessions
+  and that "relaunching always gives a clean stock theme, whichever way you
+  left it". The second was wrong: a relaunch starts from the stock theme and
+  re-applies dark on top when dark is saved. The sentence had been compressed
+  from one that described the *restore* path, and lost its meaning in the edit.
 - Documentation corrections found by a sweep of the docs against the code
   (docs only; no behaviour change). The build docs still named Gradle 8.14
   after the wrapper moved to 9.7.1. Three places — `docker-compose.yml`,
