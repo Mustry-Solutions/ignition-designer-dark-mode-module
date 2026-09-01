@@ -34,15 +34,27 @@ The same Designer, toggled off and on:
 
 ## Known limitations
 
-- **A faint pale band** sits under the Tag Browser's `Tag | Value` header in
-  dark mode
-  ([#21](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/21)).
-  Cosmetic, one panel.
-- The Vision design canvas is deliberately left alone: it renders your own
-  window content, and theming it would misrepresent what your users will see.
+Some surfaces are left light **on purpose**, because they render *your* content
+rather than the Designer's chrome, and theming them would misrepresent what your
+users will actually see:
 
-The open issue is cosmetic. It affects neither the Designer's behaviour nor
-anything you build with it.
+- the **Vision design canvas**, which shows your window content;
+- the **Perspective view canvas**, which renders the view as a session would —
+  it follows the session's own theme, not the Designer's;
+- **Symbol Factory thumbnails**, which are the symbol artwork itself.
+
+Two more, following the prior art's own judgement (see
+[Prior art](#prior-art)): the Vision **property tables** are deliberately not
+themed, because colouring them looks spotty and makes them harder to use.
+
+Genuinely open, rather than deliberate: the Perspective view editor's **rulers
+and surround** stay light. They are chrome rather than content, so they arguably
+should follow the theme; it has not been decided.
+
+Everything else in the Designer is themed. If you find a surface that is not,
+that is a bug worth reporting — the
+[QA checklist](docs/QA-CHECKLIST.md) tracks what has been swept and what has
+not.
 
 ## Install
 

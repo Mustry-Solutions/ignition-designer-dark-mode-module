@@ -47,27 +47,40 @@ pass is logged (with a stack trace, to the debug log) without stranding the rest
    passes on the dark switch, because nothing else may call into Synthetica
    until it is back.
 3. **Color tokens** — `IaColorTokens.install()` (dark) / `.uninstall()` (light).
-3. **JIDE extension** — `installJideExtension(dark)`. FlatLaf isn't a look and
+4. **JIDE extension** — `installJideExtension(dark)`. FlatLaf isn't a look and
    feel JIDE recognizes, so under dark it must be told the VSNET style
    explicitly: `installJideExtension(1)`.
-4. **Theme painters** — `overrideThemePainters(dark)` repoints JIDE's painter
+5. **Theme painters** — `overrideThemePainters(dark)` repoints JIDE's painter
    map (see below).
-5. **Default re-assert** — `applyMenuDefaults(dark)` re-puts *all* FlatLaf
+6. **Default re-assert** — `applyMenuDefaults(dark)` re-puts *all* FlatLaf
    defaults on top (the JIDE extension clobbers standard Swing keys), then
    `applyJideDarkOverrides(dark)` sets the JIDE-specific keys.
-6. **`updateComponentTreeUI`** on every window.
-7. **macOS title bars** — set/clear the `apple.awt.windowAppearance` client
+7. **Renderer colour capture** (dark only) — `CellRendererSanitizer
+   .captureStockColors()`, before the tree update, because
+   `JTableHeader.updateUI()` nulls a cell renderer's colours and a renderer that
+   colours itself in its constructor never gets them back.
+8. **`updateComponentTreeUI`** on every window.
+9. **macOS title bars** — set/clear the `apple.awt.windowAppearance` client
    property so the native title bar follows the theme.
-8. **The passes** (dark only): tree icons, button/label icons, cell-renderer
-   sanitizer, collapsible title panes, white-token background and border swaps,
-   script editors, console output styles, status-bar legibility, cached JIDE
-   painters, stale-delegate refresh in secondary windows. On light, the
-   corresponding restores.
-9. **Component watcher** installed (dark) / removed (light).
+10. **The passes** (dark only): tree icons, button/label icons, cell-renderer
+    sanitizer, collapsible title panes, white-token background and border swaps,
+    script editors, **JIDE code editors**, **diagnostics chart axes**, console
+    output styles (including the Output Console's per-run colours), block
+    workspaces, status-bar legibility, cached JIDE painters, stale-delegate
+    refresh in secondary windows. On light, the corresponding restores — plus a
+    **dark-leftover pass** that re-runs `updateUI()` child-first on anything
+    still wearing a dark look-and-feel colour.
+11. **Component watchers.** The dark watcher is installed on dark and removed on
+    light. A much smaller **light watcher** takes its place on the light side,
+    re-running the dark-leftover pass when a subtree is attached — a dock
+    detached during the restore keeps its dark state, and re-attaching it
+    recreates the parent-first copy that leaves JIDE wrappers dark.
 
 On light mode, the restores iterate **tracked component sets**, never the live
 hierarchy — a component detached at restore time (a closed dialog, a hidden
-section) would be missed by a walk and come back stuck dark.
+section) would be missed by a walk and come back stuck dark. The converse is
+what the light watcher is for: state the restore could not reach because the
+subtree was not attached at all.
 
 ## The components
 
@@ -169,6 +182,44 @@ Styles are looked up by name, so only documents that define them are touched.
 The restore distinguishes a style that had an explicit foreground from one that
 inherited it, and removes the attribute rather than writing an explicit value
 back.
+
+### CodeEditorTheme
+JIDE's `com.jidesoft.editor.CodeEditor` — the Database Query Browser and **every
+expression editor in the Designer** (46 referring classes in 8.3.6). Its colours
+live on the component and in its `SyntaxStyleSchema`, not in `UIManager`, so the
+look-and-feel swap never touched them: a cream current-line band, a black caret
+on dark chrome, and syntax tokens at `#000000`, `#000080`, `#650099`.
+
+Foregrounds are **lifted, not replaced** — each keeps its hue and is raised to a
+readable *luminance*, so a keyword stays blue and an error stays red. Note
+luminance, not HSB brightness: blue carries 11% of perceived luminance against
+green's 59%, so `#0000FF` at full brightness still measures 29 and is
+unreadable.
+
+Failures are isolated **per property and per editor**. JIDE throws
+`IndexOutOfBoundsException: Wrong line: -1` out of `setBracketHighlightColor` on
+an editor with no valid caret line; treating that as systemic once disabled
+theming for every expression editor for a whole session.
+
+### DiagnosticsChartTheme
+The Diagnostics performance charts. IA colours the JFreeChart plot background
+and gridlines from its own design tokens, which `IaColorTokens` already
+restyles — so the plot came out right and the rest did not. What IA never sets
+is the **axis paints** (JFreeChart defaults them to `Color.black`) and the
+**chart background** (white). This pass sets both and restores them.
+
+Targeted at `DynamicTimeSeriesChart` by name rather than at any `ChartPanel`:
+Vision windows render *user* charts, and repainting those would misrepresent
+what an operator sees.
+
+### BlockWorkspaceTheme
+Alarm pipeline and SFC blocks. A block *is* a component — `BasicBlockUI extends
+JPanel` — but it does not paint from its own background: `paintComponent` fills
+a shape with one of two `Color` fields and strokes it with one of three others,
+all assigned literals in the constructor. No look-and-feel swap reaches a
+literal, so the inspector shows nothing wrong while the screen does. The pass
+darkens the fills rather than correcting the labels, judged on each colour's own
+luminance.
 
 ### ComponentInspector
 Debug only. **Cmd/Ctrl+Shift+I** (or `+F12`) dumps the component chain under the

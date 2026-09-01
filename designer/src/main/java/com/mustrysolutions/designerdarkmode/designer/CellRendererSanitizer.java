@@ -128,6 +128,7 @@ public class CellRendererSanitizer {
                 rememberStockColors(((JTableHeader) child).getDefaultRenderer());
             } else if (child instanceof JList) {
                 rememberStockColors(installedRenderer((JList<?>) child));
+                rememberStockColors(groupRenderer((JList<?>) child));
             }
             if (child instanceof Container) {
                 captureStockColorsIn((Container) child);
@@ -208,6 +209,7 @@ public class CellRendererSanitizer {
                 wrapHeader((JTableHeader) child);
             } else if (child instanceof JList) {
                 wrapList((JList<?>) child);
+                wrapGroupRenderer((JList<?>) child);
             }
             if (child instanceof Container) {
                 installIn((Container) child);
@@ -230,9 +232,19 @@ public class CellRendererSanitizer {
     private boolean rendererPaneUnavailable;
 
     private void interceptRendererPane(JTable table) {
-        if (rendererPaneUnavailable || interceptedPanes.containsKey(table)) {
+        if (rendererPaneUnavailable) {
             return;
         }
+        // Deliberately NOT "have we done this table before". A table's UI is
+        // rebuilt whenever updateComponentTreeUI runs over it, and the rebuild
+        // installs a FRESH CellRendererPane — so a table intercepted once and
+        // remembered forever quietly loses the interception the next time its
+        // UI is refreshed, and every cell it paints after that goes unthemed.
+        //
+        // That is what left the Tag Editor's property table showing white combo
+        // cells with our lightened text on them: its pane was a plain
+        // CellRendererPane by the time the dialog opened. The idempotence comes
+        // from the pane check below instead, which costs one field read.
         javax.swing.plaf.TableUI ui = table.getUI();
         if (!(ui instanceof javax.swing.plaf.basic.BasicTableUI)) {
             return;
@@ -525,6 +537,9 @@ public class CellRendererSanitizer {
         wrappedLists.forEach(this::restoreList);
         wrappedLists.clear();
         skippedLists.clear();
+        wrappedGroupRenderers.forEach(this::restoreGroupRenderer);
+        wrappedGroupRenderers.clear();
+        skippedGroupLists.clear();
         // The panes themselves are discarded when updateComponentTreeUI
         // rebuilds the table UIs; just forget them so a later dark install
         // re-intercepts the fresh ones.
@@ -575,6 +590,86 @@ public class CellRendererSanitizer {
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
+    /**
+     * A JIDE {@code GroupList} paints its group HEADERS through a second,
+     * separate renderer slot that {@code setCellRenderer} never touches, so the
+     * rows of such a list come out themed while the headers above them stay in
+     * stock light-mode colors.
+     *
+     * <p>Reporting's Data tab is the case in hand (#59): its
+     * {@code SyntheticaSafeGroupList} rendered "StartDate"/"EndDate" correctly
+     * dark under light-blue "Parameters" and "Data Sources" bars. The list
+     * itself probes clean — {@code bg=#46494B fg=#DDDDDD} — because the headers
+     * are not components, exactly like a table's cell renderers.
+     *
+     * <p>Reflective because JIDE is not a compile dependency here, and
+     * name-based for the same reason {@link #installedRenderer} is: matching by
+     * SHAPE would also match {@code getGroupCellRenderer} from the other
+     * direction and wrap the wrong slot.
+     */
+    private void wrapGroupRenderer(JList<?> list) {
+        if (wrappedGroupRenderers.containsKey(list) || skippedGroupLists.containsKey(list)) {
+            return;
+        }
+        ListCellRenderer<?> renderer = groupRenderer(list);
+        java.lang.reflect.Method setter = groupRendererSetter(list);
+        if (renderer == null || setter == null) {
+            skippedGroupLists.put(list, Boolean.TRUE);
+            return;
+        }
+        if (renderer instanceof SanitizingListRenderer) {
+            return;
+        }
+        try {
+            setter.invoke(list, new SanitizingListRenderer(renderer));
+            wrappedGroupRenderers.put(list, renderer);
+            list.repaint();
+        } catch (Throwable t) {
+            skippedGroupLists.put(list, Boolean.TRUE);
+            DebugLog.log("Could not wrap the group renderer of "
+                + list.getClass().getName(), t);
+        }
+    }
+
+    private void restoreGroupRenderer(JList<?> list, ListCellRenderer<?> original) {
+        java.lang.reflect.Method setter = groupRendererSetter(list);
+        if (setter == null || !(groupRenderer(list) instanceof SanitizingListRenderer)) {
+            return;
+        }
+        try {
+            setter.invoke(list, original);
+            list.repaint();
+        } catch (Throwable t) {
+            DebugLog.log("Could not restore the group renderer of "
+                + list.getClass().getName(), t);
+        }
+    }
+
+    /** The group-header renderer of a JIDE GroupList, or null for a plain list. */
+    private static ListCellRenderer<?> groupRenderer(JList<?> list) {
+        java.lang.reflect.Method getter = findMethod(list.getClass(), "getGroupCellRenderer");
+        if (getter == null || !ListCellRenderer.class.isAssignableFrom(getter.getReturnType())) {
+            return null;
+        }
+        try {
+            return (ListCellRenderer<?>) getter.invoke(list);
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    private static java.lang.reflect.Method groupRendererSetter(JList<?> list) {
+        try {
+            return list.getClass().getMethod("setGroupCellRenderer", ListCellRenderer.class);
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    private final Map<JList<?>, ListCellRenderer<?>> wrappedGroupRenderers = new WeakHashMap<>();
+    /** Lists with no group slot, so the reflective lookup is paid once. */
+    private final Map<JList<?>, Boolean> skippedGroupLists = new WeakHashMap<>();
+
     private void restoreList(JList<?> list, ListCellRenderer<?> original) {
         // installedRenderer, not getCellRenderer: on a decorating list the
         // wrapper sits under the decorator, so getCellRenderer() reports the

@@ -73,6 +73,12 @@ public class TreeIconRecolorer {
 
     /** Wrap the renderers of every tree currently in the UI. Safe to re-run. */
     public void install() {
+        readColors();
+        wrapTrees(findAllTrees());
+    }
+
+    /** The two colours the wrapper paints with, from the current theme. */
+    private void readColors() {
         iconColor = UIManager.getColor("Tree.foreground");
         if (iconColor == null) {
             iconColor = new Color(0xB8BFC6);
@@ -81,8 +87,19 @@ public class TreeIconRecolorer {
         if (rendererBackground == null) {
             rendererBackground = new Color(0x3A3D3F);
         }
+    }
+
+    /** Package-private so tests can drive the wrap without a real Window. */
+    void installIn(Container container) {
+        readColors();
+        List<JTree> trees = new ArrayList<>();
+        collectTrees(container, trees);
+        wrapTrees(trees);
+    }
+
+    private void wrapTrees(List<JTree> trees) {
         int wrapped = 0;
-        for (JTree tree : findAllTrees()) {
+        for (JTree tree : trees) {
             TreeCellRenderer current = tree.getCellRenderer();
             if (current == null || current instanceof RecoloringRenderer) {
                 continue;
@@ -93,6 +110,14 @@ public class TreeIconRecolorer {
             // renderer-pane sanitizer.
             if (current.getClass().getName().contains("CheckBoxTreeCellRenderer")
                     || tree.getClass().getName().contains("CheckBoxTree")) {
+                continue;
+            }
+            // A tree that publishes its renderer through a TYPED accessor casts
+            // it, and our wrapper is not that type. TagBrowserTree does exactly
+            // this — getTagRenderer() is (TagRenderer) getCellRenderer() — and
+            // it is called from the tree's own paint, so wrapping turned every
+            // repaint into a ClassCastException on the EDT.
+            if (castsItsRenderer(tree)) {
                 continue;
             }
             wrappedTrees.put(tree, current);
@@ -129,6 +154,12 @@ public class TreeIconRecolorer {
             component.setBackground(Color.WHITE);
         }
         whitenedRendererComponents.clear();
+        // Before any icon is put back: setIcon fires the very property these
+        // watchers listen for, so leaving them attached means the restore
+        // re-themes each icon on its way out.
+        iconWatchers.forEach((component, watcher) ->
+            component.removePropertyChangeListener("icon", watcher));
+        iconWatchers.clear();
         buttonIconOriginals.forEach((component, icon) -> {
             if (component instanceof javax.swing.AbstractButton) {
                 ((javax.swing.AbstractButton) component).setIcon(icon);
@@ -324,6 +355,12 @@ public class TreeIconRecolorer {
      *
      * @return true if the button had a usable pair and was handled
      */
+    /**
+     * Brightness above which an icon was near-invisible on the light theme's
+     * chrome, so it must not become the brightest thing on a dark surface.
+     */
+    private static final double SUBTLE_ON_LIGHT = 200;
+
     private boolean swapEnabledDisabledIcons(javax.swing.AbstractButton button) {
         Icon enabled = button.getIcon();
         // IA is not consistent about which disabled slot it fills: take
@@ -340,6 +377,24 @@ public class TreeIconRecolorer {
         }
         Icon brightest = brightness(enabled) >= brightness(disabled) ? enabled : disabled;
         Icon dimmest = brightest == enabled ? disabled : enabled;
+
+        if (brightest == enabled && brightness(enabled) > SUBTLE_ON_LIGHT) {
+            // The pair offers nothing here — the icon it would install is the
+            // one already installed — AND this icon is so light it was nearly
+            // invisible against the light theme's near-white chrome. On dark it
+            // becomes the loudest thing on screen, which is precisely the
+            // relative-contrast inversion darkVariant exists to undo. Decline
+            // the button so the smart invert gets it.
+            //
+            // JIDE's QuickFilterField clear button (#60) is the case in hand: a
+            // solid disc measuring 226 against a ~250 surface (a contrast of 24)
+            // turns into 226 against our ~60 (a contrast of 166). Every other
+            // no-op pair on the Designer's classpath sits far below this
+            // threshold — the main toolbar's VectorIcons at 174, the Vision
+            // palette at 183, popup menus at 109 — and keeps its icon, which is
+            // what the threshold is here to protect.
+            return false;
+        }
 
         buttonIconPairs.putIfAbsent(button,
             new Icon[] {enabled, button.getDisabledIcon(), button.getDisabledSelectedIcon()});
@@ -455,7 +510,8 @@ public class TreeIconRecolorer {
         }
     }
 
-    private void recolorButtonIcons(Container container) {
+    /** Package-private so tests can drive the walk without a real Window. */
+    void recolorButtonIcons(Container container) {
         recolorButtonIcons(container, false);
     }
 
@@ -470,38 +526,133 @@ public class TreeIconRecolorer {
             || container instanceof javax.swing.JToolBar
             || container.getClass().getName().endsWith("StatusBar");
         for (Component child : container.getComponents()) {
-            javax.swing.JLabel label = null;
-            Icon icon = null;
-            if (child instanceof javax.swing.AbstractButton) {
-                icon = ((javax.swing.AbstractButton) child).getIcon();
-            } else if (bar && child instanceof javax.swing.JLabel) {
-                label = (javax.swing.JLabel) child;
-                icon = label.getIcon();
-            }
-            // Prefer Ignition's own light variant where the button carries a
-            // disabled/enabled pair: it is the icon IA drew for a low-contrast
-            // context, so it beats anything a filter can synthesise. Only fall
-            // back to the smart invert when there is no pair to swap.
-            boolean paired = child instanceof javax.swing.AbstractButton
-                && swapEnabledDisabledIcons((javax.swing.AbstractButton) child);
-            if (!paired && icon != null && !variantIcons.contains(icon)) {
-                Icon variant = darkVariant(icon);
-                if (variant != null) {
-                    buttonIconOriginals.putIfAbsent((Component) child, icon);
-                    if (label != null) {
-                        label.setIcon(variant);
-                    } else {
-                        ((javax.swing.AbstractButton) child).setIcon(variant);
-                    }
-                }
-            }
+            recolorIconOf(child, bar);
+            watchForALaterIcon(child, bar);
             if (child instanceof Container) {
                 recolorButtonIcons((Container) child, bar);
             }
         }
     }
 
+    /** Recolor whatever icon this component is wearing right now. */
+    private void recolorIconOf(Component child, boolean bar) {
+        javax.swing.JLabel label = null;
+        Icon icon = null;
+        if (child instanceof javax.swing.AbstractButton) {
+            icon = ((javax.swing.AbstractButton) child).getIcon();
+        } else if (bar && child instanceof javax.swing.JLabel) {
+            label = (javax.swing.JLabel) child;
+            icon = label.getIcon();
+        }
+        // Prefer Ignition's own light variant where the button carries a
+        // disabled/enabled pair: it is the icon IA drew for a low-contrast
+        // context, so it beats anything a filter can synthesise. Only fall
+        // back to the smart invert when there is no pair to swap.
+        boolean paired = child instanceof javax.swing.AbstractButton
+            && swapEnabledDisabledIcons((javax.swing.AbstractButton) child);
+        if (!paired && icon != null && !variantIcons.contains(icon)) {
+            Icon variant = darkVariant(icon);
+            if (variant != null) {
+                buttonIconOriginals.putIfAbsent(child, icon);
+                if (label != null) {
+                    label.setIcon(variant);
+                } else {
+                    ((javax.swing.AbstractButton) child).setIcon(variant);
+                }
+            }
+        }
+    }
+
+    /**
+     * Recolor an icon that only arrives after this pass has run.
+     *
+     * <p>This walk reads {@code getIcon()} once. A widget that fills its icon
+     * slot lazily therefore keeps stock, light-mode artwork for the rest of the
+     * session, because nothing runs over it again — the late-attach watcher
+     * fires on COMPONENT_ADDED, and the component was already there.
+     *
+     * <p>JIDE's {@code QuickFilterField} clear button (#60) is exactly this: it
+     * exists from the start with an empty icon slot and is given its ⊗ only
+     * once there is text to clear. The debug log recorded it as
+     * {@code icon=-(-1)} at pass time while a probe of the same button later in
+     * the session found a 14x14 ImageIcon on it.
+     *
+     * <p>Setting the icon below re-fires this listener. The {@code variantIcons}
+     * check only covers icons the smart invert produced, and the pair swap's
+     * result is not one of those — so a reentrancy flag, not that check, is what
+     * stops a second pass grazing an already-brightened icon. (Without it the
+     * late button came out a visibly different shade from a button that carried
+     * the same icon through the walk: #6A6A6A against #606060.)
+     */
+    private void watchForALaterIcon(Component child, boolean bar) {
+        if (!(child instanceof javax.swing.AbstractButton)
+                && !(bar && child instanceof javax.swing.JLabel)) {
+            return;
+        }
+        if (iconWatchers.containsKey(child)) {
+            return;
+        }
+        java.beans.PropertyChangeListener watcher = event -> {
+            Object arrived = event.getNewValue();
+            if (recoloringIcon || !(arrived instanceof Icon) || variantIcons.contains(arrived)) {
+                return;
+            }
+            recoloringIcon = true;
+            try {
+                recolorIconOf(child, bar);
+            } finally {
+                recoloringIcon = false;
+            }
+        };
+        ((javax.swing.JComponent) child).addPropertyChangeListener("icon", watcher);
+        iconWatchers.put(child, watcher);
+    }
+
+    /** Set while a watcher is installing an icon, so it does not retouch it. */
+    private boolean recoloringIcon;
+
+    /** Icon-slot listeners, so the light restore can take them off again. */
+    private final Map<Component, java.beans.PropertyChangeListener> iconWatchers =
+        new WeakHashMap<>();
+
     /** Delegates to the original renderer, then adapts colors and icons. */
+    /**
+     * Does this tree hand its renderer back through a typed accessor?
+     *
+     * <p>If it does, it casts — and a wrapper of ours will not survive the
+     * cast. {@code TagBrowserTree.getTagRenderer()} is
+     * {@code (TagRenderer) getCellRenderer()}, called from that tree's own
+     * {@code paint}, so wrapping it threw a {@code ClassCastException} on the
+     * EDT every time the Tag Browser repainted.
+     *
+     * <p>Detected by shape rather than by name: any zero-argument method
+     * declared below {@code JTree} whose return type is a {@code
+     * TreeCellRenderer} SUBTYPE is a cast waiting to happen. That is broader
+     * than strictly necessary — a class could declare such an accessor and
+     * never cast {@code getCellRenderer()} — and the trade is deliberate: the
+     * cost of skipping is that one tree's icons keep their stock colours, and
+     * the cost of getting it wrong the other way is an exception in the paint
+     * loop.
+     */
+    private static boolean castsItsRenderer(JTree tree) {
+        for (Class<?> type = tree.getClass();
+                type != null && type != JTree.class;
+                type = type.getSuperclass()) {
+            for (java.lang.reflect.Method method : type.getDeclaredMethods()) {
+                if (method.getParameterCount() == 0
+                        && TreeCellRenderer.class.isAssignableFrom(method.getReturnType())
+                        && method.getReturnType() != TreeCellRenderer.class) {
+                    DebugLog.detail("TreeIconRecolorer: not wrapping "
+                        + tree.getClass().getName() + " — it publishes "
+                        + method.getName() + "() returning "
+                        + method.getReturnType().getSimpleName() + ", which casts.");
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     private class RecoloringRenderer implements TreeCellRenderer {
 
         private final TreeCellRenderer delegate;

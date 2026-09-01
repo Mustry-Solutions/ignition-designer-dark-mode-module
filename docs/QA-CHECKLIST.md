@@ -20,6 +20,8 @@ value is knowing *where to look*.
 | Date | Ignition | Vision | Module | Scope covered |
 |---|---|---|---|---|
 | 2026-08-29 | 8.3.6 | 12.3.6 | `f4104b54`, built at `33cf8c7` — **10 commits behind `main`**, so without #36/#37/#38 | Three Designer sittings (13:22, 13:40, 14:15 UTC): §L popups, Alarm Pipeline Editor, Translation Manager, dataset editor, named-query selector |
+| 2026-09-01 (afternoon) | 8.3.6 | 12.3.6 | `b01d80eb` | #57 and the editor-resilience fix confirmed by eye. Third popup source verified (Perspective canvas). A **saved** view added to the dev project so §E stops being blocked by an empty project |
+| 2026-09-01 | 8.3.6 | 12.3.6 | `b510440` | Closing the gaps left by the 2026-08-31 sweep (#41). Created a Perspective view so §E had something to open; Symbol Factory; one more heavyweight popup. **Right-click is confirmed un-automatable** — see [§L](#l-popup-sweep) |
 | 2026-08-31 (evening) | 8.3.6 | 12.3.6 | `b510440` | Verification pass by eye in a real Designer for #47, #48, #50, #51, #52 and the late-attach fix. All confirmed. Two rounds: the first found #50 only half-fixed (chart background still white) and the Vision filters dark in light mode |
 | 2026-08-31 | 8.3.6 | 12.3.6 | `76c4600` (`main`, release candidate) | Driven with computer use, 12:01–12:13 UTC. §A, §B (Properties, Export, Diagnostics), §C, §D console + autocomplete, §E property editor, §F palette/inspector, §J Image Management, §K Query Browser, toggle-off. **Two new `light` results — see [Diagnostics](#b-menus-dialogs-project-settings) and [Query Browser](#k-database-and-queries).** §L not re-verified (see [Note on this run](#note-on-the-2026-08-31-run)) |
 
@@ -143,9 +145,9 @@ A `pass` on one says nothing about the other.
 |---|---|---|---|---|
 | View editor canvas | Open any view | `n/a` | `2026-08-31` | : the dev project has no views, so nothing to open. **Still unchecked in substance** |
 | Component palette | Right dock | — | — | Guard hierarchy walks against `FilterablePalette` (see [Out of scope](#out-of-scope)) |
-| Property editor tree | Right dock, view open | `pass` | `2026-08-31` | session props with no view open |
+| Property editor tree | Right dock, view open | `pass` | `2026-09-01` | Checked properly this time, with a view open: PROPS/CUSTOM/PARAMS, value colouring, Add Property links |
 | Property key editor field | Click a property name | — | — | |
-| Binding editor dialog | Click a property's binding icon | — | — | |
+| Binding editor dialog | Click a property's binding icon | — | — | Still unchecked: needs a component on the canvas, and adding one needs a palette drag the automation cannot do |
 | Component scope / node picker in a binding | Inside the binding editor **(unverified)** | — | — | |
 | Style editor | Project Browser → Styles | — | — | |
 | Page Configuration | Perspective → Page Configuration | `pass` | `2026-08-31` | |
@@ -219,8 +221,8 @@ Reporting module required; mark the whole section `n/a` if it is not installed.
 | Surface | Where | Result | Last checked | Notes |
 |---|---|---|---|---|
 | Image Management panel | Tools → Image Management | `pass` | `2026-08-31` | location confirmed |
-| Symbol Factory browser | Vision palette → Symbol Factory **(unverified)** | — | — | Module required |
-| Symbol Factory thumbnail gallery | Inside that browser | — | — | |
+| Symbol Factory browser | Tools → Symbol Factory | `pass` | `2026-09-01` | Location corrected: it is in the Tools menu. Category list, search field and preview all dark |
+| Symbol Factory thumbnail gallery | Inside that browser | `skip` | `2026-09-01` | The white cells are the symbol ARTWORK, drawn on white. Recolouring it would misrepresent what an operator sees, the same rule as the Vision canvas |
 | SVG canvas (`JSVGCanvas`) | Symbol Factory preview | — | — | Third-party Batik canvas; may not honour Swing colours |
 
 ## K. Database and queries
@@ -256,9 +258,9 @@ so the log from this sweep also records the real 8.3 names for these sources.
 
 | 8.1 source class | Where to right-click | Result | Last checked | 8.3 class from the log |
 |---|---|---|---|---|
-| `TagFrameTree` | Tag Browser tree | `pass` | `2026-08-29` | `TagPopupMenu` — arrived **stale**, repaired before paint |
-| `NavTreePanel$1` | Project Browser tree | `pass` | `2026-08-29` | `NodeContextMenu` (8 openings) |
-| `Graphics2dRenderWidget` | Perspective view editor canvas | `pass` | `2026-08-29` | `JPopupMenu`, 15 items |
+| `TagFrameTree` | Tag Browser tree | `pass` | `2026-09-01` | `TagPopupMenu` — arrived **stale**, repaired before paint. Same result on 2026-08-29 |
+| `NavTreePanel$1` | Project Browser tree | `pass` | `2026-09-01` | Arrived **stale**, repaired before paint. `NodeContextMenu` (8 openings) on 2026-08-29 |
+| `Graphics2dRenderWidget` | Perspective view editor canvas | `pass` | `2026-09-01` | 12 items, disabled ones correctly greyed. `Popup$HeavyWeightWindow`. Also `pass` 2026-08-29 |
 | `InteractionLayer` | Vision window editor canvas | `pass` | `2026-08-29` | `JPopupMenu` with a `CustomizerMenu` submenu, 17 items |
 | `BorderlessField` / `PerspectiveKeyEditor` | A text field's cut/copy/paste menu | `pass` | `2026-08-29` | `JPopupMenu`, 3 items |
 | `JTree` | Project Library nav tree (Scripting) | `pass` | `2026-08-29` | `NodeContextMenu`, 14 items |
@@ -266,7 +268,44 @@ so the log from this sweep also records the real 8.3 names for these sources.
 | `ComponentScopeEditor$…$2` | Binding editor → component/property picker | `pass` | `2026-08-29` | `JPopupMenu` |
 | — | UDT instance menu (Tag Browser) | `pass` | `2026-08-29` | `TagActions$udtInstanceMenu$1` — arrived **stale**, repaired |
 | — | Combo dropdowns | `pass` | `2026-08-29` | `FlatComboPopup` |
+| — | Tag Browser hamburger menu (left-click) | `pass` | `2026-09-01` | `Popup$HeavyWeightWindow` -> `JPopupMenu`, seen by the watcher, dark, nothing stale. **Left-click trigger, not right-click** |
 | — | An IA error popup | `pass` | `2026-08-29` | `DefaultPopupWindowParent` → `ErrorPanel` — **not a `JPopupMenu`**, see below |
+
+### Right-click cannot be automated from outside — but it can from inside
+
+Synthetic right-clicks at the OS level do not reach the Designer: no popup
+opens and none is logged, established on two Designers across two days.
+`Shift+F10`, Swing's keyboard route, does nothing either.
+
+**What does work** is dispatching the popup-trigger event from inside the
+Designer's own JVM, through the Script Console. It goes through the component's
+own mouse listeners, so it is the same path a right-click takes minus the OS
+layer:
+
+```python
+from java.awt.event import MouseEvent
+from java.lang import System
+# target = the JTree/JTable/etc, found by walking Window.getWindows()
+e = MouseEvent(target, MouseEvent.MOUSE_PRESSED, System.currentTimeMillis(),
+               MouseEvent.BUTTON3_DOWN_MASK, 20, 20, 1, True,   # popupTrigger
+               MouseEvent.BUTTON3)
+target.dispatchEvent(e)      # on the EDT, via SwingUtilities.invokeLater
+```
+
+The `popupTrigger=True` argument is the whole trick — Swing's tree and table
+listeners check `isPopupTrigger()`, not the button number.
+
+Two things this does NOT prove, and they are worth being honest about: that a
+human right-click reaches the same listener (it does in practice — the menus
+that opened are the ones a right-click opens), and anything about menus that
+are built lazily in response to the click's *position*.
+
+One thing it proves better than a human could: the log shows both menus
+**arrived stale and were repaired before their first paint**, so the delegate
+refresh is demonstrably firing rather than idle.
+
+Popups reachable from a **left-click** menu button are covered too, and one is
+recorded above.
 
 ### The one that is not a JPopupMenu
 
@@ -412,6 +451,46 @@ worth in two directions:
 The Perspective view editor, binding editors and style editor are still
 unchecked in substance: the dev project has no views.
 
+### Compare against a relaunched Designer before calling something a bug
+
+Two of the five findings from the 2026-09-01 hand sweep — the Vision component
+palette and the Reporting Design palette, both reported as looking washed out
+or disabled after switching back to light — turned out to be **IA's own
+light-mode styling**, unchanged by this module.
+
+Eyeballing could not have settled it, because "does this look too pale?" has no
+answer without a reference. What settled it was relaunching the Designer (which
+comes up in whatever mode the preference last held, and never enters dark if you
+do not toggle), recording the surface, and only then doing a dark -> light round
+trip and recording it again:
+
+| | stock | after dark -> light |
+|---|---|---|
+| `DefaultPaletteItemToggleButton` fg | `#70757A` uires | `#70757A` uires |
+| its background | `#FAFAFB` uires | `#FAFAFB` uires |
+| icon brightness, first 10 items | 183, 176, 177, 189, 187, 192, 179, 116, 94, 163 | identical |
+
+Byte-identical, so there was nothing to fix. Measure the two states rather than
+comparing the light one against your memory of the dark one — dark mode resets
+what looks "normal", and a correct light surface can look wrong straight after
+it.
+
+The same run also found a genuine leftover this way: `CategoryView` on the
+Reporting palette holds an explicit `#555A5C` computed under FlatLaf and never
+recomputed, which neither the stale-`UIResource` sweep nor the dark-leftover
+pass catches because both require a `UIResource`. It is invisible today only
+because that pane is not opaque
+([#59](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/59)).
+
+### The light restore writes stack traces to the Output Console
+
+Every switch back to light throws two `NullPointerException`s on the EDT from
+Ignition's own `TreeCollapsedIconPainter` / `TreeExpandedIconPainter`, while a
+JIDE tree-table repaints. They are transient — probing afterwards shows every
+table back on a stock, correctly parented `CellRendererPane` — and the icons
+repaint correctly, so there is nothing to see on screen. Check the console, not
+the screen ([#61](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/61)).
+
 ## Toggle-off spot check
 
 Reversibility is a project invariant, and restore has broken on its own before
@@ -477,6 +556,21 @@ belt-and-braces rather than the thing doing the work.
 > component, so a throw costs only that component while its siblings and its
 > own subtree are still walked. The NPE itself is Ignition's and still fires;
 > what it no longer does is take the frame with it.
+
+## What is still unchecked, and why
+
+Kept explicit so nobody has to reconstruct it from the tables. Every one of
+these is a real gap, not a pass.
+
+| Surface | Why it is unchecked | What it needs |
+|---|---|---|
+| §L right-click popups, the remaining 5 sources | Three verified 2026-09-01 by dispatching the trigger from inside the JVM (both trees, the Perspective canvas). The rest need their surface open first: the Vision canvas needs a window, the property-row and binding-picker menus need a component on a view, and a text field's cut/copy/paste menu did not open from a synthetic trigger on the fields available | Either the Script Console technique in [§L](#right-click-cannot-be-automated-from-outside--but-it-can-from-inside), or ~10 minutes by hand |
+| §E binding editor, component scope picker, style editor | **No longer blocked.** A saved view (`qa-dark-mode`) now exists in the dev project, so the editor opens; what is still missing is a component dropped on it, which needs a palette drag | A component on the view, by hand |
+| §E binding editor, component scope picker, style editor | Need a component on the canvas; adding one needs a palette drag the automation cannot do, and the Perspective palette was not docked in this layout | A component dropped on a view, by hand |
+| §H Reporting (whole section) | The dev project has no report resources | A report to open |
+| §F border chooser, Layout, Size and Position | Need a Vision window with a component selected | A Vision window, by hand |
+| Relaunch-comes-up-stock | Never run: the saved preference is dark, so a relaunch comes up dark | Toggle off, relaunch, confirm stock, toggle back |
+| §E view editor rulers and surround | Not a gap in testing — an undecided question. They are chrome and they stay light | A decision |
 
 ## Out of scope
 

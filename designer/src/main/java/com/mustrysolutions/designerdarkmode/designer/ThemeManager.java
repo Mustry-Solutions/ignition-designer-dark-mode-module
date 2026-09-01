@@ -1183,12 +1183,14 @@ public class ThemeManager {
             for (java.awt.Component component : new java.util.ArrayList<>(whiteSwapped)) {
                 component.removePropertyChangeListener("background", whiteEnforcer);
                 component.setBackground(java.awt.Color.WHITE);
-                java.awt.Color originalForeground = liftedForegrounds.remove(component);
-                if (originalForeground != null) {
-                    component.setForeground(originalForeground);
-                }
             }
             whiteSwapped.clear();
+            // Every lift, not just the ones that rode along with a white
+            // background. Draining this inside the loop above stranded
+            // #DDE0E3 text on any component lifted by another branch, which
+            // in light mode reads as permanently disabled.
+            liftedForegrounds.forEach(java.awt.Component::setForeground);
+            liftedForegrounds.clear();
             swappedBorders.forEach(javax.swing.JComponent::setBorder);
             swappedBorders.clear();
             swappedViewportBorders.forEach(javax.swing.JScrollPane::setViewportBorder);
@@ -1204,7 +1206,10 @@ public class ThemeManager {
         }
     }
 
-    /** Originals for foregrounds lifted alongside a white-background swap. */
+    /** A foreground this dark cannot be read against a dark background. */
+    private static final int DARK_FOREGROUND_LUMINANCE = 90;
+
+    /** Originals for foregrounds we lifted so they stay readable on dark. */
     private final java.util.Map<java.awt.Component, java.awt.Color> liftedForegrounds =
         new java.util.WeakHashMap<>();
     private static final java.awt.Color LIGHT_FOREGROUND = new java.awt.Color(0xDDE0E3);
@@ -1358,10 +1363,24 @@ public class ThemeManager {
                 java.awt.Color foreground = component.isForegroundSet()
                     ? component.getForeground() : null;
                 if (foreground instanceof javax.swing.plaf.UIResource
-                        && luminance(foreground) < 90
+                        && luminance(foreground) < DARK_FOREGROUND_LUMINANCE
                         && !staleUiresForegrounds.containsKey(component)) {
                     staleUiresForegrounds.put(component, foreground);
                     component.setForeground(LIGHT_FOREGROUND);
+                } else if (foreground != null
+                        && luminance(foreground) < DARK_FOREGROUND_LUMINANCE
+                        && component.getBackground() != null
+                        && luminance(component.getBackground()) < DARK_LEFTOVER_LUMINANCE
+                        && !insideVisionWorkspace(component)) {
+                    // An EXPLICIT dark foreground is invisible to the look and
+                    // feel, so a component that hard-codes near-black text keeps
+                    // it under dark mode no matter how its background went dark
+                    // — the other lift only fires as a rider on a background
+                    // swap, and these components never get one. Reporting's
+                    // Report Overview is the case in hand: HeaderLabel and
+                    // AntialiasLabel carry a literal #454545, which on our
+                    // #3C3F41 is a contrast ratio of about 1.1:1 (#59).
+                    liftDarkForeground(component);
                 }
             }
             if (child instanceof java.awt.Container) {
@@ -1533,7 +1552,8 @@ public class ThemeManager {
         if (foreground == null || foreground instanceof javax.swing.plaf.UIResource) {
             return;
         }
-        if (luminance(foreground) < 90 && !liftedForegrounds.containsKey(component)) {
+        if (luminance(foreground) < DARK_FOREGROUND_LUMINANCE
+                && !liftedForegrounds.containsKey(component)) {
             liftedForegrounds.put(component, foreground);
             component.setForeground(LIGHT_FOREGROUND);
         }

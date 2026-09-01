@@ -115,14 +115,13 @@ final class CodeEditorTheme {
     /** Put every recorded colour back. */
     void uninstall() {
         editorColors.forEach((editor, colors) -> {
+            // Per property, for the same reason as the install path: a throw
+            // from one setter must not cost the three after it.
+            apply(editor, colors[0], colors[1], colors[2], colors[3]);
             try {
-                set(editor, "setLineHighlightColor", colors[0]);
-                set(editor, "setCaretColor", colors[1]);
-                set(editor, "setSelectionColor", colors[2]);
-                set(editor, "setBracketHighlightColor", colors[3]);
                 ((Component) editor).repaint();
             } catch (Throwable t) {
-                DebugLog.log("Could not restore a CodeEditor's colours.", t);
+                DebugLog.detail("CodeEditor repaint refused: " + t);
             }
         });
         editorColors.clear();
@@ -156,19 +155,54 @@ final class CodeEditorTheme {
                     get(editor, "getBracketHighlightColor"),
                 });
             }
-            set(editor, "setLineHighlightColor", LINE_HIGHLIGHT);
-            set(editor, "setCaretColor", CARET);
-            set(editor, "setSelectionColor", SELECTION);
-            set(editor, "setBracketHighlightColor", BRACKET_HIGHLIGHT);
+            apply(editor, LINE_HIGHLIGHT, CARET, SELECTION, BRACKET_HIGHLIGHT);
             themeStyles(editor.getClass().getMethod("getStyles").invoke(editor));
             ((Component) editor).repaint();
-        } catch (Throwable t) {
-            // One editor that will not theme is a light editor, not a broken
-            // Designer — but a JIDE that has moved would fail on every one of
-            // them, so stop after the first rather than log 46 times.
+        } catch (ReflectiveOperationException moved) {
+            // THIS is systemic: a method that is not there fails identically on
+            // every editor, so stop rather than log 46 times.
             unavailable = true;
             DebugLog.log("CodeEditor theming unavailable; SQL and expression "
-                + "editors will stay light.", t);
+                + "editors will stay light.", moved);
+        } catch (Throwable t) {
+            // Anything else is this ONE editor's problem and must not cost the
+            // rest — the same rule as the resilient tree walk (#4, #5). Getting
+            // this wrong is not theoretical: JIDE throws
+            // "IndexOutOfBoundsException: Wrong line: -1" out of
+            // setBracketHighlightColor on an editor whose caret line is -1, and
+            // the first cut of this pass took that as systemic and stopped
+            // theming every expression editor for the rest of the session.
+            DebugLog.log("One CodeEditor could not be themed; continuing with the rest.", t);
+        }
+    }
+
+    /**
+     * Set the four colours, each isolated from the others.
+     *
+     * <p>Per property, not per editor: JIDE fires a property change from these
+     * setters and recomputes a view position, which throws on an editor with no
+     * valid caret line. Grouped in one try, that throw cost the three
+     * properties after it as well.
+     *
+     * <p>A value that already matches is skipped, which is not just an
+     * optimisation — it avoids firing the property change that throws.
+     */
+    private void apply(Object editor, Color lineHighlight, Color caret,
+            Color selection, Color bracket) {
+        trySet(editor, "setLineHighlightColor", "getLineHighlightColor", lineHighlight);
+        trySet(editor, "setCaretColor", "getCaretColor", caret);
+        trySet(editor, "setSelectionColor", "getSelectionColor", selection);
+        trySet(editor, "setBracketHighlightColor", "getBracketHighlightColor", bracket);
+    }
+
+    private void trySet(Object editor, String setter, String getter, Color value) {
+        try {
+            if (java.util.Objects.equals(get(editor, getter), value)) {
+                return;
+            }
+            set(editor, setter, value);
+        } catch (Throwable t) {
+            DebugLog.detail("CodeEditor." + setter + " refused: " + t);
         }
     }
 
