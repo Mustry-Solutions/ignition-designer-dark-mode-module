@@ -124,6 +124,25 @@ jobs:
           unzip -p "${{ steps.modl.outputs.path }}" module.xml | grep -q "<version>${{ steps.ver.outputs.version }}</version>" \
             || { echo "::error::module.xml version does not match the tag"; unzip -p "${{ steps.modl.outputs.path }}" module.xml; exit 1; }
 
+      # The release notes ARE the CHANGELOG section for this version. Generated
+      # notes are a list of commit subjects, which says what was touched but not
+      # what was wrong or why it broke — the part a reader of a release actually
+      # needs. Fail loudly rather than publish a release with no notes.
+      - name: Extract the release notes from the CHANGELOG
+        id: notes
+        if: ${{ steps.ver.outputs.publish == 'true' }}
+        run: |
+          awk -v ver="${{ steps.ver.outputs.version }}" '
+            index($0, "## [" ver "]") == 1 { found = 1; next }
+            found && index($0, "## [") == 1 { exit }
+            found { print }
+          ' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
+          if [ ! -s "$RUNNER_TEMP/notes.md" ]; then
+            echo "::error::CHANGELOG.md has no '## [${{ steps.ver.outputs.version }}]' section. Add one before tagging."
+            exit 1
+          fi
+          echo "path=$RUNNER_TEMP/notes.md" >> "$GITHUB_OUTPUT"
+
       # Dry run (workflow_dispatch): keep the signed .modl as an artifact
       # instead of publishing — the way to confirm the signing secrets work.
       - name: Upload signed .modl (dry run)
@@ -141,11 +160,9 @@ jobs:
         run: |
           # Draft first, publish only once the asset is attached — a failed
           # upload must never leave a half-public release.
-          # Notes are generated from commits/PRs; switch to a CHANGELOG
-          # extract once this repo has one.
           gh release create "$GITHUB_REF_NAME" \
             --title "v${{ steps.ver.outputs.version }}" \
-            --generate-notes \
+            --notes-file "${{ steps.notes.outputs.path }}" \
             --draft \
             "${{ steps.modl.outputs.path }}"
           gh release edit "$GITHUB_REF_NAME" --draft=false
