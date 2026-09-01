@@ -73,6 +73,12 @@ public class TreeIconRecolorer {
 
     /** Wrap the renderers of every tree currently in the UI. Safe to re-run. */
     public void install() {
+        readColors();
+        wrapTrees(findAllTrees());
+    }
+
+    /** The two colours the wrapper paints with, from the current theme. */
+    private void readColors() {
         iconColor = UIManager.getColor("Tree.foreground");
         if (iconColor == null) {
             iconColor = new Color(0xB8BFC6);
@@ -81,8 +87,19 @@ public class TreeIconRecolorer {
         if (rendererBackground == null) {
             rendererBackground = new Color(0x3A3D3F);
         }
+    }
+
+    /** Package-private so tests can drive the wrap without a real Window. */
+    void installIn(Container container) {
+        readColors();
+        List<JTree> trees = new ArrayList<>();
+        collectTrees(container, trees);
+        wrapTrees(trees);
+    }
+
+    private void wrapTrees(List<JTree> trees) {
         int wrapped = 0;
-        for (JTree tree : findAllTrees()) {
+        for (JTree tree : trees) {
             TreeCellRenderer current = tree.getCellRenderer();
             if (current == null || current instanceof RecoloringRenderer) {
                 continue;
@@ -93,6 +110,14 @@ public class TreeIconRecolorer {
             // renderer-pane sanitizer.
             if (current.getClass().getName().contains("CheckBoxTreeCellRenderer")
                     || tree.getClass().getName().contains("CheckBoxTree")) {
+                continue;
+            }
+            // A tree that publishes its renderer through a TYPED accessor casts
+            // it, and our wrapper is not that type. TagBrowserTree does exactly
+            // this — getTagRenderer() is (TagRenderer) getCellRenderer() — and
+            // it is called from the tree's own paint, so wrapping turned every
+            // repaint into a ClassCastException on the EDT.
+            if (castsItsRenderer(tree)) {
                 continue;
             }
             wrappedTrees.put(tree, current);
@@ -502,6 +527,43 @@ public class TreeIconRecolorer {
     }
 
     /** Delegates to the original renderer, then adapts colors and icons. */
+    /**
+     * Does this tree hand its renderer back through a typed accessor?
+     *
+     * <p>If it does, it casts — and a wrapper of ours will not survive the
+     * cast. {@code TagBrowserTree.getTagRenderer()} is
+     * {@code (TagRenderer) getCellRenderer()}, called from that tree's own
+     * {@code paint}, so wrapping it threw a {@code ClassCastException} on the
+     * EDT every time the Tag Browser repainted.
+     *
+     * <p>Detected by shape rather than by name: any zero-argument method
+     * declared below {@code JTree} whose return type is a {@code
+     * TreeCellRenderer} SUBTYPE is a cast waiting to happen. That is broader
+     * than strictly necessary — a class could declare such an accessor and
+     * never cast {@code getCellRenderer()} — and the trade is deliberate: the
+     * cost of skipping is that one tree's icons keep their stock colours, and
+     * the cost of getting it wrong the other way is an exception in the paint
+     * loop.
+     */
+    private static boolean castsItsRenderer(JTree tree) {
+        for (Class<?> type = tree.getClass();
+                type != null && type != JTree.class;
+                type = type.getSuperclass()) {
+            for (java.lang.reflect.Method method : type.getDeclaredMethods()) {
+                if (method.getParameterCount() == 0
+                        && TreeCellRenderer.class.isAssignableFrom(method.getReturnType())
+                        && method.getReturnType() != TreeCellRenderer.class) {
+                    DebugLog.detail("TreeIconRecolorer: not wrapping "
+                        + tree.getClass().getName() + " — it publishes "
+                        + method.getName() + "() returning "
+                        + method.getReturnType().getSimpleName() + ", which casts.");
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     private class RecoloringRenderer implements TreeCellRenderer {
 
         private final TreeCellRenderer delegate;

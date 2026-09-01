@@ -271,6 +271,16 @@ by name still exists.
 
 ### Fixed
 
+- **The Tag Browser tree no longer throws on every repaint**
+  ([#58](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/58)).
+  `TreeIconRecolorer` wraps a tree's cell renderer to recolour its icons, but
+  `TagBrowserTree` publishes its renderer through a typed accessor that casts —
+  `(TagRenderer) getCellRenderer()` — and calls it from its own `paint`. The
+  wrapper therefore turned every repaint into a `ClassCastException` on the
+  EDT, swallowed by the paint loop, so the only symptom was a stack trace in
+  the Output Console. Trees that publish a typed renderer accessor are now
+  skipped, detected by shape rather than by class name.
+
 - **The Tag Editor's combo cells are dark and readable**
   ([#57](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/57)).
   They rendered as white fields carrying our own lightened text — pale fill,
