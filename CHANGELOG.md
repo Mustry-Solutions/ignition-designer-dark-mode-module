@@ -10,6 +10,17 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ## [Unreleased]
 
+### Added
+
+- Tests for the saved theme choice, which previously had none. They assert the
+  flush rather than the value: the value lands in the in-memory node either
+  way, so a test that only checked it could not have caught the Linux bug
+  below. Covers the save, the deferred-switch path, an unwritable backing
+  store, and the light default. `ThemeManager` gained a package-private
+  constructor taking a `Preferences` node so a test can use a throwaway one —
+  the production node is per OS user, and a test writing to it would toggle the
+  developer's own Designer.
+
 ### Fixed
 
 - **The dark mode choice could be lost on Linux** if the Designer was

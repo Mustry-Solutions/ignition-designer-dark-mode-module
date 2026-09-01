@@ -59,7 +59,7 @@ public class ThemeManager {
     private static final int MAX_STARTUP_POLLS = 120;
 
     private final Logger log = LoggerFactory.getLogger(ThemeManager.class);
-    private final Preferences prefs = Preferences.userNodeForPackage(ThemeManager.class);
+    private final Preferences prefs;
     private final TreeIconRecolorer treeIcons = new TreeIconRecolorer();
     private final IaColorTokens tokens = new IaColorTokens();
     private final CellRendererSanitizer cellRenderers = new CellRendererSanitizer();
@@ -134,6 +134,23 @@ public class ThemeManager {
     private final DiagnosticsChartTheme charts = new DiagnosticsChartTheme();
     private final ConsoleTextTheme consoleText = new ConsoleTextTheme();
     private final BlockWorkspaceTheme blockWorkspaces = new BlockWorkspaceTheme();
+
+    public ThemeManager() {
+        this(Preferences.userNodeForPackage(ThemeManager.class));
+    }
+
+    /**
+     * Test seam: point the theme preference at a throwaway node.
+     *
+     * <p>Only exists so tests can exercise the real save path without writing
+     * to the developer's own {@code darkMode} setting — the node is per OS
+     * user, so a test that used the production node would turn the developer's
+     * Designer dark (or light) as a side effect. Production always goes through
+     * the no-arg constructor.
+     */
+    ThemeManager(Preferences prefs) {
+        this.prefs = prefs;
+    }
 
     /** Register the menu's listener before {@link #startup}. */
     public void setThemeStateListener(ThemeStateListener listener) {
