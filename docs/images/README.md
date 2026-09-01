@@ -13,6 +13,16 @@ Filenames are stable on purpose: replacing them in place keeps every existing
 reference — README, issues, release notes — pointing at the current image. Do
 not add dates or version numbers.
 
+The current pair was captured on 2026-08-31 against 0.2.0. Two things to check
+in a replacement, both of which have gone wrong before:
+
+- **No trial badge in the status bar.** A later capture of the same frame was
+  rejected for showing a red "Trial Expired" — the Reporting module's trial,
+  started by QA work on the dev gateway, and nothing to do with this module. In
+  a README it reads as though this module is trial-limited.
+- **Tags in the Tag Browser.** An empty one wastes the panel that shows off the
+  tree theming.
+
 ## Reproducing them
 
 1. Bring up the dev gateway and launch a Designer against it:
@@ -47,12 +57,6 @@ not add dates or version numbers.
    Retina captures come out around 3500px and 1 MB each; 1600px is plenty for
    GitHub (which renders README images at roughly half that) and keeps the
    clone small.
-
-## Known caveat in the current pair
-
-The dark capture still shows [#21](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/21):
-a faint pale band under the Tag Browser's `Tag | Value` header. It is cosmetic,
-confined to that one panel, and documented in the README's Known limitations.
 
 ## Why the light shot comes from a fresh launch
 
