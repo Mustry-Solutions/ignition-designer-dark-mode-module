@@ -124,11 +124,13 @@ point of the first run.
 
 **Two different editors live behind the word "editor", and they need separate
 checks.** The Python editors (Script Console, Project Library, event scripts)
-are `RSyntaxTextArea`, themed by `ScriptEditorTheme`. The SQL editors (Query
-Browser, and probably the Named Query editor and Transaction Groups) are JIDE's
-`com.jidesoft.editor.CodeEditor`, with their own style registry that nothing in
-this module touches — [#48](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/48).
-A `pass` on one says nothing about the other.
+are `RSyntaxTextArea`, themed by `ScriptEditorTheme` through IA's `NamedTheme`.
+The SQL and expression editors (Query Browser, and probably the Named Query
+editor and Transaction Groups) are JIDE's `com.jidesoft.editor.CodeEditor`, with
+their own style registry — themed since 0.2.0 by a separate pass,
+`CodeEditorTheme` ([#48](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/48)).
+Two passes, two failure modes: a `pass` on one says nothing about the other, so
+check an editor of each kind rather than assuming "the editors" are covered.
 
 | Surface | Where | Result | Last checked | Notes |
 |---|---|---|---|---|
@@ -246,9 +248,10 @@ hardest: a cached `JPopupMenu` keeps a Synthetica UI delegate that cannot paint
 under FlatLaf, so the failure mode is a **blank or white menu**, not a
 slightly-wrong shade. Two mechanisms cover it —
 `ThemeManager.refreshCachedPopups` walks `getComponentPopupMenu()` and
-`JMenu.getPopupMenu()`, and a global `COMPONENT_ADDED` listener refreshes any
-`JPopupMenu` before its first paint
-([ThemeManager.java:1353](../designer/src/main/java/com/mustrysolutions/designerdarkmode/designer/ThemeManager.java:1353)).
+`JMenu.getPopupMenu()`, and the global `COMPONENT_ADDED` listener installed by
+`ThemeManager.installAwtEventListener` refreshes any `JPopupMenu` before its
+first paint
+([ThemeManager.java](../designer/src/main/java/com/mustrysolutions/designerdarkmode/designer/ThemeManager.java)).
 The second should cover popups that are not registered on their source
 component, which is what the Exchange script's 50 ms polling exists to catch.
 This section is the evidence for whether it does.
@@ -395,21 +398,23 @@ Anywhere IA uses `InlineTipLabel` is affected; Diagnostics is just where this
 run happened to look. Note that the plain "Tip:" line at the
 bottom of **Image Management** is a different, ordinary label and is `pass`.
 
-### SQL editors (JIDE `CodeEditor`)
+### SQL editors (JIDE `CodeEditor`) — fixed in 0.2.0
 
 Found 2026-08-31 in **Tools → Database Query Browser**. The editor's background
-is correctly dark, but the **current-line highlight is still the light theme's
-cream**, and the syntax token colours are the light theme's too (blue keywords).
+was correctly dark, but the **current-line highlight was still the light theme's
+cream**, and the syntax token colours were the light theme's too (blue keywords).
 
-The reason is that this is not the same editor as the script editors:
+The reason was that this is not the same editor as the script editors:
 `ScriptEditorTheme` themes `org.fife.ui.rsyntaxtextarea.RSyntaxTextArea` through
 IA's `NamedTheme`, and the chain here reads
 `com.jidesoft.editor.CodeEditor` / `CodeEditorPainter` — JIDE's editor, with its
-own style registry that nothing in this module touches.
+own style registry, which nothing in this module reached at the time.
 
-Filed as [#48](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/48),
-which also carries the census still to do: the Named Query editor and
-Transaction Group SQL fields are the likely other sites.
+Filed as [#48](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/48)
+and fixed in 0.2.0 by `CodeEditorTheme`, which lifts each syntax colour to a
+readable luminance while keeping its hue. Kept here because the census it
+carried is still open: the Named Query editor and Transaction Group SQL fields
+are the likely other sites, and neither has been swept.
 
 ### Subtrees detached during a theme switch
 

@@ -87,7 +87,7 @@ You only need this to develop the module — to *use* it, see
 [Install](#install) above.
 
 Requirements: **JDK 17** (the Gradle toolchain will use it) and internet access
-to Inductive Automation's Maven repository. Everything else — Gradle 8.14, the
+to Inductive Automation's Maven repository. Everything else — Gradle 9.7.1, the
 module plugin, FlatLaf — is resolved automatically.
 
 ```bash
