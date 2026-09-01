@@ -257,8 +257,8 @@ so the log from this sweep also records the real 8.3 names for these sources.
 
 | 8.1 source class | Where to right-click | Result | Last checked | 8.3 class from the log |
 |---|---|---|---|---|
-| `TagFrameTree` | Tag Browser tree | `pass` | `2026-08-29` | `TagPopupMenu` — arrived **stale**, repaired before paint |
-| `NavTreePanel$1` | Project Browser tree | `pass` | `2026-08-29` | `NodeContextMenu` (8 openings) |
+| `TagFrameTree` | Tag Browser tree | `pass` | `2026-09-01` | `TagPopupMenu` — arrived **stale**, repaired before paint. Same result on 2026-08-29 |
+| `NavTreePanel$1` | Project Browser tree | `pass` | `2026-09-01` | Arrived **stale**, repaired before paint. `NodeContextMenu` (8 openings) on 2026-08-29 |
 | `Graphics2dRenderWidget` | Perspective view editor canvas | `pass` | `2026-08-29` | `JPopupMenu`, 15 items |
 | `InteractionLayer` | Vision window editor canvas | `pass` | `2026-08-29` | `JPopupMenu` with a `CustomizerMenu` submenu, 17 items |
 | `BorderlessField` / `PerspectiveKeyEditor` | A text field's cut/copy/paste menu | `pass` | `2026-08-29` | `JPopupMenu`, 3 items |
@@ -270,32 +270,41 @@ so the log from this sweep also records the real 8.3 names for these sources.
 | — | Tag Browser hamburger menu (left-click) | `pass` | `2026-09-01` | `Popup$HeavyWeightWindow` -> `JPopupMenu`, seen by the watcher, dark, nothing stale. **Left-click trigger, not right-click** |
 | — | An IA error popup | `pass` | `2026-08-29` | `DefaultPopupWindowParent` → `ErrorPanel` — **not a `JPopupMenu`**, see below |
 
-### Right-click cannot be automated — this section needs a human
+### Right-click cannot be automated from outside — but it can from inside
 
-Established on 2026-08-31 and again on 2026-09-01, on two Designers: synthetic
-right-clicks do not reach the Designer at all. No popup opens and none is
-logged, so it is not a theming result being missed — the event never arrives.
-`Shift+F10`, Swing's keyboard route to a context menu, does not work either.
+Synthetic right-clicks at the OS level do not reach the Designer: no popup
+opens and none is logged, established on two Designers across two days.
+`Shift+F10`, Swing's keyboard route, does nothing either.
 
-Popups triggered by a **left-click** menu button do work, and one is recorded
-above. That exercises the same mechanism — `COMPONENT_ADDED` -> `JPopupMenu` ->
-delegate refresh, on a heavyweight window — but it is not the same trigger, and
-this section is specifically about right-click sources.
+**What does work** is dispatching the popup-trigger event from inside the
+Designer's own JVM, through the Script Console. It goes through the component's
+own mouse listeners, so it is the same path a right-click takes minus the OS
+layer:
 
-**So this is the part of the checklist that needs hands.** It is about fifteen
-minutes:
+```python
+from java.awt.event import MouseEvent
+from java.lang import System
+# target = the JTree/JTable/etc, found by walking Window.getWindows()
+e = MouseEvent(target, MouseEvent.MOUSE_PRESSED, System.currentTimeMillis(),
+               MouseEvent.BUTTON3_DOWN_MASK, 20, 20, 1, True,   # popupTrigger
+               MouseEvent.BUTTON3)
+target.dispatchEvent(e)      # on the EDT, via SwingUtilities.invokeLater
+```
 
-1. Launch with `-Ddesignerdarkmode.debug=true` and `tail -f
-   ~/.ignition/designer-dark-mode.log`.
-2. Dark mode on.
-3. Right-click each source in the table above, once each.
-4. For each, check the menu is dark and legible, and note the class the log
-   records next to it.
+The `popupTrigger=True` argument is the whole trick — Swing's tree and table
+listeners check `isPopupTrigger()`, not the button number.
 
-It is worth the fifteen minutes rather than being quietly skipped: this is the
-one place where the failure mode is a **blank or white menu** rather than a
-slightly-wrong shade, because a cached popup keeps a look-and-feel delegate that
-cannot paint under the other theme.
+Two things this does NOT prove, and they are worth being honest about: that a
+human right-click reaches the same listener (it does in practice — the menus
+that opened are the ones a right-click opens), and anything about menus that
+are built lazily in response to the click's *position*.
+
+One thing it proves better than a human could: the log shows both menus
+**arrived stale and were repaired before their first paint**, so the delegate
+refresh is demonstrably firing rather than idle.
+
+Popups reachable from a **left-click** menu button are covered too, and one is
+recorded above.
 
 ### The one that is not a JPopupMenu
 
@@ -514,7 +523,7 @@ these is a real gap, not a pass.
 
 | Surface | Why it is unchecked | What it needs |
 |---|---|---|
-| §L right-click popups | Synthetic right-clicks never reach the Designer, on two attempts across two days. `Shift+F10` does not work either | ~15 minutes by hand — see [§L](#right-click-cannot-be-automated--this-section-needs-a-human) |
+| §L right-click popups, the remaining 6 sources | The two tree sources are now verified by dispatching the trigger from inside the JVM; the rest (canvases, text fields, property rows, binding picker) have not been re-run since 2026-08-29 | Either the Script Console technique in [§L](#right-click-cannot-be-automated-from-outside--but-it-can-from-inside), or ~10 minutes by hand |
 | §E binding editor, component scope picker, style editor | Need a component on the canvas; adding one needs a palette drag the automation cannot do, and the Perspective palette was not docked in this layout | A component dropped on a view, by hand |
 | §H Reporting (whole section) | The dev project has no report resources | A report to open |
 | §F border chooser, Layout, Size and Position | Need a Vision window with a component selected | A Vision window, by hand |
