@@ -5,6 +5,10 @@ most-requested Designer idea on Inductive Automation's ideas portal.
 
 ![The Ignition Designer with dark mode enabled](docs/images/designer-dark.png)
 
+**[Download the latest release](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/releases/latest)**,
+install the `.modl` on your gateway, relaunch the Designer, and turn it on with
+**Tools → Dark Mode**. Full steps in [Install](#install).
+
 > Status: young but usable. Designer scope only; targets Ignition **8.3+**.
 > See [Known limitations](#known-limitations) before installing.
 
@@ -58,14 +62,29 @@ not.
 
 ## Install
 
-Grab a built `.modl` (see [Build](#build)) and install it on your gateway:
-**Config → Modules → Install or Upgrade a Module** in the Gateway web UI, then
-relaunch the Designer. The module is unsigned by default, so an 8.3 gateway will
-ask you to accept it during install.
+You do not need to build anything.
 
-Then, in the Designer: **Tools → Dark Mode**.
+1. Download `designer-dark-mode.modl` from the
+   **[latest release](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/releases/latest)**.
+2. In the Gateway web UI, go to **Config → Modules**, choose **Install or
+   Upgrade a Module**, and pick that file.
+3. The gateway will ask you to accept the module's certificate. It is signed by
+   Mustry Solutions with our own certificate rather than one Ignition ships, so
+   you are asked to trust it once, on first install.
+4. **Relaunch the Designer**, then turn it on with **Tools → Dark Mode**.
+
+Requires Ignition **8.3.0** or newer. Upgrading is the same flow — install the
+newer `.modl` over the old one and relaunch the Designer.
+
+Everything this module does happens inside the Designer. It adds no gateway
+service, no tags, and no scripting functions, and it changes nothing for
+Perspective sessions, Vision clients, or anyone else using your gateway. To
+remove it: **Config → Modules → Uninstall**, and relaunch the Designer.
 
 ## Build
+
+You only need this to develop the module — to *use* it, see
+[Install](#install) above.
 
 Requirements: **JDK 17** (the Gradle toolchain will use it) and internet access
 to Inductive Automation's Maven repository. Everything else — Gradle 8.14, the
@@ -75,9 +94,10 @@ module plugin, FlatLaf — is resolved automatically.
 ./gradlew build
 ```
 
-The module lands at `build/designer-dark-mode.unsigned.modl`. Builds are unsigned
-unless you pass signing credentials (see
-[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#signing)).
+The module lands at `build/designer-dark-mode.unsigned.modl`. Builds from source
+are unsigned unless you pass signing credentials (see
+[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#signing)), and an 8.3 gateway will
+refuse to load an unsigned module unless you accept it during install.
 
 ## Try it in a throwaway gateway
 
