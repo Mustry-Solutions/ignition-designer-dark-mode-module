@@ -119,6 +119,12 @@ val lafHarnessTask = tasks.register<Test>("lafHarness") {
         "--add-exports", "java.desktop/sun.awt=ALL-UNNAMED",
         "--add-opens", "java.desktop/javax.swing=ALL-UNNAMED",
         "--add-opens", "java.desktop/javax.swing.plaf.synth=ALL-UNNAMED",
+        // CellRendererSanitizer replaces BasicTableUI's protected rendererPane;
+        // without this the interception is unavailable and the tests that cover
+        // it cannot run at all. The real Designer opens exactly this package —
+        // checked against the running process's command line — so leaving it
+        // out made the harness LESS capable than the thing it models.
+        "--add-opens", "java.desktop/javax.swing.plaf.basic=ALL-UNNAMED",
         "--add-opens", "java.desktop/java.awt=ALL-UNNAMED",
     )
 

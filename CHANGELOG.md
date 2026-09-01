@@ -271,6 +271,17 @@ by name still exists.
 
 ### Fixed
 
+- **The Tag Editor's combo cells are dark and readable**
+  ([#57](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/57)).
+  They rendered as white fields carrying our own lightened text — pale fill,
+  light text, barely readable. The cause was not the renderer but the plumbing:
+  the pass that replaces a table's `CellRendererPane` (the only thing that
+  catches tables resolving a renderer per cell, as JIDE property grids do)
+  remembered which tables it had done and never revisited them. But
+  `updateComponentTreeUI` rebuilds a table's UI and installs a *fresh* pane, so
+  any table refreshed after being intercepted silently lost the interception.
+  The guard is now on the live pane rather than on the table.
+
 - **The pale band under the Tag Browser's `Tag | Value` header is gone**
   ([#21](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/21)).
   `SimpleTreeTable$SimpleHeaderRenderer` gives every header cell a compound

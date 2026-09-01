@@ -230,9 +230,19 @@ public class CellRendererSanitizer {
     private boolean rendererPaneUnavailable;
 
     private void interceptRendererPane(JTable table) {
-        if (rendererPaneUnavailable || interceptedPanes.containsKey(table)) {
+        if (rendererPaneUnavailable) {
             return;
         }
+        // Deliberately NOT "have we done this table before". A table's UI is
+        // rebuilt whenever updateComponentTreeUI runs over it, and the rebuild
+        // installs a FRESH CellRendererPane — so a table intercepted once and
+        // remembered forever quietly loses the interception the next time its
+        // UI is refreshed, and every cell it paints after that goes unthemed.
+        //
+        // That is what left the Tag Editor's property table showing white combo
+        // cells with our lightened text on them: its pane was a plain
+        // CellRendererPane by the time the dialog opened. The idempotence comes
+        // from the pane check below instead, which costs one field read.
         javax.swing.plaf.TableUI ui = table.getUI();
         if (!(ui instanceof javax.swing.plaf.basic.BasicTableUI)) {
             return;
