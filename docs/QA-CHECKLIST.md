@@ -20,6 +20,7 @@ value is knowing *where to look*.
 | Date | Ignition | Vision | Module | Scope covered |
 |---|---|---|---|---|
 | 2026-08-29 | 8.3.6 | 12.3.6 | `f4104b54`, built at `33cf8c7` — **10 commits behind `main`**, so without #36/#37/#38 | Three Designer sittings (13:22, 13:40, 14:15 UTC): §L popups, Alarm Pipeline Editor, Translation Manager, dataset editor, named-query selector |
+| 2026-09-01 | 8.3.6 | 12.3.6 | `b510440` | Closing the gaps left by the 2026-08-31 sweep (#41). Created a Perspective view so §E had something to open; Symbol Factory; one more heavyweight popup. **Right-click is confirmed un-automatable** — see [§L](#l-popup-sweep) |
 | 2026-08-31 (evening) | 8.3.6 | 12.3.6 | `b510440` | Verification pass by eye in a real Designer for #47, #48, #50, #51, #52 and the late-attach fix. All confirmed. Two rounds: the first found #50 only half-fixed (chart background still white) and the Vision filters dark in light mode |
 | 2026-08-31 | 8.3.6 | 12.3.6 | `76c4600` (`main`, release candidate) | Driven with computer use, 12:01–12:13 UTC. §A, §B (Properties, Export, Diagnostics), §C, §D console + autocomplete, §E property editor, §F palette/inspector, §J Image Management, §K Query Browser, toggle-off. **Two new `light` results — see [Diagnostics](#b-menus-dialogs-project-settings) and [Query Browser](#k-database-and-queries).** §L not re-verified (see [Note on this run](#note-on-the-2026-08-31-run)) |
 
@@ -143,9 +144,9 @@ A `pass` on one says nothing about the other.
 |---|---|---|---|---|
 | View editor canvas | Open any view | `n/a` | `2026-08-31` | : the dev project has no views, so nothing to open. **Still unchecked in substance** |
 | Component palette | Right dock | — | — | Guard hierarchy walks against `FilterablePalette` (see [Out of scope](#out-of-scope)) |
-| Property editor tree | Right dock, view open | `pass` | `2026-08-31` | session props with no view open |
+| Property editor tree | Right dock, view open | `pass` | `2026-09-01` | Checked properly this time, with a view open: PROPS/CUSTOM/PARAMS, value colouring, Add Property links |
 | Property key editor field | Click a property name | — | — | |
-| Binding editor dialog | Click a property's binding icon | — | — | |
+| Binding editor dialog | Click a property's binding icon | — | — | Still unchecked: needs a component on the canvas, and adding one needs a palette drag the automation cannot do |
 | Component scope / node picker in a binding | Inside the binding editor **(unverified)** | — | — | |
 | Style editor | Project Browser → Styles | — | — | |
 | Page Configuration | Perspective → Page Configuration | `pass` | `2026-08-31` | |
@@ -219,8 +220,8 @@ Reporting module required; mark the whole section `n/a` if it is not installed.
 | Surface | Where | Result | Last checked | Notes |
 |---|---|---|---|---|
 | Image Management panel | Tools → Image Management | `pass` | `2026-08-31` | location confirmed |
-| Symbol Factory browser | Vision palette → Symbol Factory **(unverified)** | — | — | Module required |
-| Symbol Factory thumbnail gallery | Inside that browser | — | — | |
+| Symbol Factory browser | Tools → Symbol Factory | `pass` | `2026-09-01` | Location corrected: it is in the Tools menu. Category list, search field and preview all dark |
+| Symbol Factory thumbnail gallery | Inside that browser | `skip` | `2026-09-01` | The white cells are the symbol ARTWORK, drawn on white. Recolouring it would misrepresent what an operator sees, the same rule as the Vision canvas |
 | SVG canvas (`JSVGCanvas`) | Symbol Factory preview | — | — | Third-party Batik canvas; may not honour Swing colours |
 
 ## K. Database and queries
@@ -266,7 +267,35 @@ so the log from this sweep also records the real 8.3 names for these sources.
 | `ComponentScopeEditor$…$2` | Binding editor → component/property picker | `pass` | `2026-08-29` | `JPopupMenu` |
 | — | UDT instance menu (Tag Browser) | `pass` | `2026-08-29` | `TagActions$udtInstanceMenu$1` — arrived **stale**, repaired |
 | — | Combo dropdowns | `pass` | `2026-08-29` | `FlatComboPopup` |
+| — | Tag Browser hamburger menu (left-click) | `pass` | `2026-09-01` | `Popup$HeavyWeightWindow` -> `JPopupMenu`, seen by the watcher, dark, nothing stale. **Left-click trigger, not right-click** |
 | — | An IA error popup | `pass` | `2026-08-29` | `DefaultPopupWindowParent` → `ErrorPanel` — **not a `JPopupMenu`**, see below |
+
+### Right-click cannot be automated — this section needs a human
+
+Established on 2026-08-31 and again on 2026-09-01, on two Designers: synthetic
+right-clicks do not reach the Designer at all. No popup opens and none is
+logged, so it is not a theming result being missed — the event never arrives.
+`Shift+F10`, Swing's keyboard route to a context menu, does not work either.
+
+Popups triggered by a **left-click** menu button do work, and one is recorded
+above. That exercises the same mechanism — `COMPONENT_ADDED` -> `JPopupMenu` ->
+delegate refresh, on a heavyweight window — but it is not the same trigger, and
+this section is specifically about right-click sources.
+
+**So this is the part of the checklist that needs hands.** It is about fifteen
+minutes:
+
+1. Launch with `-Ddesignerdarkmode.debug=true` and `tail -f
+   ~/.ignition/designer-dark-mode.log`.
+2. Dark mode on.
+3. Right-click each source in the table above, once each.
+4. For each, check the menu is dark and legible, and note the class the log
+   records next to it.
+
+It is worth the fifteen minutes rather than being quietly skipped: this is the
+one place where the failure mode is a **blank or white menu** rather than a
+slightly-wrong shade, because a cached popup keeps a look-and-feel delegate that
+cannot paint under the other theme.
 
 ### The one that is not a JPopupMenu
 
@@ -477,6 +506,20 @@ belt-and-braces rather than the thing doing the work.
 > component, so a throw costs only that component while its siblings and its
 > own subtree are still walked. The NPE itself is Ignition's and still fires;
 > what it no longer does is take the frame with it.
+
+## What is still unchecked, and why
+
+Kept explicit so nobody has to reconstruct it from the tables. Every one of
+these is a real gap, not a pass.
+
+| Surface | Why it is unchecked | What it needs |
+|---|---|---|
+| §L right-click popups | Synthetic right-clicks never reach the Designer, on two attempts across two days. `Shift+F10` does not work either | ~15 minutes by hand — see [§L](#right-click-cannot-be-automated--this-section-needs-a-human) |
+| §E binding editor, component scope picker, style editor | Need a component on the canvas; adding one needs a palette drag the automation cannot do, and the Perspective palette was not docked in this layout | A component dropped on a view, by hand |
+| §H Reporting (whole section) | The dev project has no report resources | A report to open |
+| §F border chooser, Layout, Size and Position | Need a Vision window with a component selected | A Vision window, by hand |
+| Relaunch-comes-up-stock | Never run: the saved preference is dark, so a relaunch comes up dark | Toggle off, relaunch, confirm stock, toggle back |
+| §E view editor rulers and surround | Not a gap in testing — an undecided question. They are chrome and they stay light | A decision |
 
 ## Out of scope
 
