@@ -18,6 +18,7 @@ confirmed in a real Designer on 8.3.6. The theming passes gained failure
 isolation, and the test harness gained two instruments it was missing:
 component-level state diffing, and a check that everything this module reaches
 by name still exists.
+
 ### Added
 
 - **A test for everything the module reaches by name**
