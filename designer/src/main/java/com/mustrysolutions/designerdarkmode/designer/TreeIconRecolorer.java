@@ -154,6 +154,12 @@ public class TreeIconRecolorer {
             component.setBackground(Color.WHITE);
         }
         whitenedRendererComponents.clear();
+        // Before any icon is put back: setIcon fires the very property these
+        // watchers listen for, so leaving them attached means the restore
+        // re-themes each icon on its way out.
+        iconWatchers.forEach((component, watcher) ->
+            component.removePropertyChangeListener("icon", watcher));
+        iconWatchers.clear();
         buttonIconOriginals.forEach((component, icon) -> {
             if (component instanceof javax.swing.AbstractButton) {
                 ((javax.swing.AbstractButton) component).setIcon(icon);
@@ -480,7 +486,8 @@ public class TreeIconRecolorer {
         }
     }
 
-    private void recolorButtonIcons(Container container) {
+    /** Package-private so tests can drive the walk without a real Window. */
+    void recolorButtonIcons(Container container) {
         recolorButtonIcons(container, false);
     }
 
@@ -495,36 +502,94 @@ public class TreeIconRecolorer {
             || container instanceof javax.swing.JToolBar
             || container.getClass().getName().endsWith("StatusBar");
         for (Component child : container.getComponents()) {
-            javax.swing.JLabel label = null;
-            Icon icon = null;
-            if (child instanceof javax.swing.AbstractButton) {
-                icon = ((javax.swing.AbstractButton) child).getIcon();
-            } else if (bar && child instanceof javax.swing.JLabel) {
-                label = (javax.swing.JLabel) child;
-                icon = label.getIcon();
-            }
-            // Prefer Ignition's own light variant where the button carries a
-            // disabled/enabled pair: it is the icon IA drew for a low-contrast
-            // context, so it beats anything a filter can synthesise. Only fall
-            // back to the smart invert when there is no pair to swap.
-            boolean paired = child instanceof javax.swing.AbstractButton
-                && swapEnabledDisabledIcons((javax.swing.AbstractButton) child);
-            if (!paired && icon != null && !variantIcons.contains(icon)) {
-                Icon variant = darkVariant(icon);
-                if (variant != null) {
-                    buttonIconOriginals.putIfAbsent((Component) child, icon);
-                    if (label != null) {
-                        label.setIcon(variant);
-                    } else {
-                        ((javax.swing.AbstractButton) child).setIcon(variant);
-                    }
-                }
-            }
+            recolorIconOf(child, bar);
+            watchForALaterIcon(child, bar);
             if (child instanceof Container) {
                 recolorButtonIcons((Container) child, bar);
             }
         }
     }
+
+    /** Recolor whatever icon this component is wearing right now. */
+    private void recolorIconOf(Component child, boolean bar) {
+        javax.swing.JLabel label = null;
+        Icon icon = null;
+        if (child instanceof javax.swing.AbstractButton) {
+            icon = ((javax.swing.AbstractButton) child).getIcon();
+        } else if (bar && child instanceof javax.swing.JLabel) {
+            label = (javax.swing.JLabel) child;
+            icon = label.getIcon();
+        }
+        // Prefer Ignition's own light variant where the button carries a
+        // disabled/enabled pair: it is the icon IA drew for a low-contrast
+        // context, so it beats anything a filter can synthesise. Only fall
+        // back to the smart invert when there is no pair to swap.
+        boolean paired = child instanceof javax.swing.AbstractButton
+            && swapEnabledDisabledIcons((javax.swing.AbstractButton) child);
+        if (!paired && icon != null && !variantIcons.contains(icon)) {
+            Icon variant = darkVariant(icon);
+            if (variant != null) {
+                buttonIconOriginals.putIfAbsent(child, icon);
+                if (label != null) {
+                    label.setIcon(variant);
+                } else {
+                    ((javax.swing.AbstractButton) child).setIcon(variant);
+                }
+            }
+        }
+    }
+
+    /**
+     * Recolor an icon that only arrives after this pass has run.
+     *
+     * <p>This walk reads {@code getIcon()} once. A widget that fills its icon
+     * slot lazily therefore keeps stock, light-mode artwork for the rest of the
+     * session, because nothing runs over it again — the late-attach watcher
+     * fires on COMPONENT_ADDED, and the component was already there.
+     *
+     * <p>JIDE's {@code QuickFilterField} clear button (#60) is exactly this: it
+     * exists from the start with an empty icon slot and is given its ⊗ only
+     * once there is text to clear. The debug log recorded it as
+     * {@code icon=-(-1)} at pass time while a probe of the same button later in
+     * the session found a 14x14 ImageIcon on it.
+     *
+     * <p>Setting the icon below re-fires this listener. The {@code variantIcons}
+     * check only covers icons the smart invert produced, and the pair swap's
+     * result is not one of those — so a reentrancy flag, not that check, is what
+     * stops a second pass grazing an already-brightened icon. (Without it the
+     * late button came out a visibly different shade from a button that carried
+     * the same icon through the walk: #6A6A6A against #606060.)
+     */
+    private void watchForALaterIcon(Component child, boolean bar) {
+        if (!(child instanceof javax.swing.AbstractButton)
+                && !(bar && child instanceof javax.swing.JLabel)) {
+            return;
+        }
+        if (iconWatchers.containsKey(child)) {
+            return;
+        }
+        java.beans.PropertyChangeListener watcher = event -> {
+            Object arrived = event.getNewValue();
+            if (recoloringIcon || !(arrived instanceof Icon) || variantIcons.contains(arrived)) {
+                return;
+            }
+            recoloringIcon = true;
+            try {
+                recolorIconOf(child, bar);
+            } finally {
+                recoloringIcon = false;
+            }
+        };
+        ((javax.swing.JComponent) child).addPropertyChangeListener("icon", watcher);
+        iconWatchers.put(child, watcher);
+    }
+
+    /** Set while a watcher is installing an icon, so it does not retouch it. */
+    private boolean recoloringIcon;
+
+    /** Icon-slot listeners, so the light restore can take them off again. */
+    private final Map<Component, java.beans.PropertyChangeListener> iconWatchers =
+        new WeakHashMap<>();
 
     /** Delegates to the original renderer, then adapts colors and icons. */
     /**
