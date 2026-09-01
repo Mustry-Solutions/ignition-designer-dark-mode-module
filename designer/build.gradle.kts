@@ -15,7 +15,7 @@ dependencies {
     // add designer scoped dependencies here
     modlImplementation("com.formdev:flatlaf:3.7.2")
 
-    testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
+    testImplementation("org.junit.jupiter:junit-jupiter:6.1.3")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 
     // slf4j reaches the module via the (compileOnly) Ignition SDK, so it is
@@ -94,7 +94,7 @@ dependencies {
     "lafHarnessImplementation"("com.inductiveautomation.ignitionsdk:ignition-common:${rootProject.extra["harness_sdk_version"]}")
     "lafHarnessImplementation"("com.formdev:flatlaf:3.7.2")
 
-    "lafHarnessImplementation"("org.junit.jupiter:junit-jupiter:5.11.4")
+    "lafHarnessImplementation"("org.junit.jupiter:junit-jupiter:6.1.3")
     "lafHarnessRuntimeOnly"("org.junit.platform:junit-platform-launcher")
     "lafHarnessRuntimeOnly"("org.slf4j:slf4j-nop:2.0.12")
 }
