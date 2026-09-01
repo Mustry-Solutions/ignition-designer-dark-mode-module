@@ -10,6 +10,20 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ## [Unreleased]
 
+### Fixed
+
+- Documentation corrections found by a sweep of the docs against the code
+  (docs only; no behaviour change). The build docs still named Gradle 8.14
+  after the wrapper moved to 9.7.1. Three places — `docker-compose.yml`,
+  `ops/lib.sh` and `ops/README.md` — still described accepting the dev
+  certificate in the commissioning wizard, which `accept_staged_module`
+  removed: the fingerprint and EULA hash are seeded into `data/modules.json`
+  and nothing is clicked. The QA checklist said in two places that JIDE's
+  `CodeEditor` is untouched by this module, which `CodeEditorTheme` stopped
+  being true in 0.2.0, and its deep link into `ThemeManager` pointed at a line
+  the file no longer has — now named by method instead, so it cannot drift
+  again.
+
 ## [0.2.0] - 2026-09-01
 
 A defect-fixing release. Ten dark-mode defects found by a Designer QA sweep

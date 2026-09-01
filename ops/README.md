@@ -18,9 +18,11 @@ The gateway publishes on **http://localhost:8088** (HTTPS 8043), Ignition's own 
 How the pieces fit:
 
 - The module is signed with a throwaway self-signed certificate generated into
-  `signing/` on first run (gitignored). Because the cert stays the same across
-  rebuilds, the gateway only asks you to accept it once; after that `deploy.sh`
-  swaps in new builds without prompting.
+  `signing/` on first run (gitignored). `setup.sh` accepts it for you — it writes
+  the cert fingerprint and the EULA hash into the gateway's `data/modules.json`
+  while the gateway is stopped, which is what keeps a fresh gateway out of
+  commissioning. Because the cert stays the same across rebuilds, that is done
+  once, and `deploy.sh` then swaps in new builds with nothing to accept.
 - The signed `.modl` is staged into `modules/`, which is bind-mounted into the
   container as the gateway's `externalModulesFolder`.
 - Gateway state lives in the `gateway-data` Docker volume, so commissioning and
