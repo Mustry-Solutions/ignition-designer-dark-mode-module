@@ -12,7 +12,15 @@
 version: 2
 
 updates:
-  # --- Gradle: the root build (plugin versions live here) ------------------
+  # --- Gradle -------------------------------------------------------------
+  # ONE entry, not one per subproject. The Gradle ecosystem at "/" scans the
+  # whole multi-project build: the first run proved it by opening PRs from this
+  # entry for junit and slf4j, which are declared only in
+  # designer/build.gradle.kts. A second entry for "/designer" therefore does not
+  # extend coverage, it duplicates it — that run opened the same junit bump
+  # twice (#65 and #66) — and worse, it split the ignore list, so the slf4j pin
+  # below was declared on an entry that was not the one making the decision and
+  # slf4j was bumped anyway (#67, #69).
   - package-ecosystem: gradle
     directory: "/"
     schedule:
@@ -33,20 +41,8 @@ updates:
       # dependency coordinate, so it is not Dependabot's to move either. Both are
       # explained at the top of build.gradle.kts.
       - dependency-name: "com.inductiveautomation.ignitionsdk:*"
-
-  # --- Gradle: the designer module ----------------------------------------
-  - package-ecosystem: gradle
-    directory: "/designer"
-    schedule:
-      interval: monthly
-    open-pull-requests-limit: 5
-    commit-message:
-      prefix: "build"
-    ignore:
-      # Same reasoning as above.
-      - dependency-name: "com.inductiveautomation.ignitionsdk:*"
-      # slf4j is pinned on purpose to the version the Ignition SDK resolves.
-      # It reaches the module through the (compileOnly) SDK at runtime, so the
+      # slf4j is pinned on purpose to the version the Ignition SDK resolves. It
+      # reaches the module through the (compileOnly) SDK at runtime, so the
       # test-scope pin exists to make tests log through the same slf4j
       # production does. Bumping it would quietly undo that.
       - dependency-name: "org.slf4j:*"
