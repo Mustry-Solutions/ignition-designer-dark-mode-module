@@ -567,9 +567,9 @@ these is a real gap, not a pass.
 | §L right-click popups, the remaining 5 sources | Three verified 2026-09-01 by dispatching the trigger from inside the JVM (both trees, the Perspective canvas). The rest need their surface open first: the Vision canvas needs a window, the property-row and binding-picker menus need a component on a view, and a text field's cut/copy/paste menu did not open from a synthetic trigger on the fields available | Either the Script Console technique in [§L](#right-click-cannot-be-automated-from-outside--but-it-can-from-inside), or ~10 minutes by hand |
 | §E binding editor, component scope picker, style editor | **No longer blocked.** A saved view (`qa-dark-mode`) now exists in the dev project, so the editor opens; what is still missing is a component dropped on it, which needs a palette drag | A component on the view, by hand |
 | §E binding editor, component scope picker, style editor | Need a component on the canvas; adding one needs a palette drag the automation cannot do, and the Perspective palette was not docked in this layout | A component dropped on a view, by hand |
-| §H Reporting (whole section) | The dev project has no report resources | A report to open |
+| §H Reporting, Preview and Schedule tabs | The dev project now HAS a report (`qa-report`, saved 2026-09-01), and Report Overview, Data and Design were swept on it in both modes — that sweep is what found #59. Preview and Schedule were not opened | Open the last two tabs on `qa-report` |
 | §F border chooser, Layout, Size and Position | Need a Vision window with a component selected | A Vision window, by hand |
-| Relaunch-comes-up-stock | Never run: the saved preference is dark, so a relaunch comes up dark | Toggle off, relaunch, confirm stock, toggle back |
+| ~~Relaunch-comes-up-stock~~ | **Run 2026-09-01 and passed.** Toggled off, relaunched, confirmed the Designer comes up genuinely stock, toggled back. Recorded rather than deleted because the run doubles as the baseline half of the comparison in [Compare against a relaunched Designer](#compare-against-a-relaunched-designer-before-calling-something-a-bug) | — |
 | §E view editor rulers and surround | Not a gap in testing — an undecided question. They are chrome and they stay light | A decision |
 
 ## Out of scope
