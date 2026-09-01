@@ -10,6 +10,14 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-01
+
+A defect-fixing release. Seven dark-mode defects found by a Designer QA sweep
+and fixed, each root-caused to a mechanism rather than patched by eye, and each
+confirmed in a real Designer on 8.3.6. The theming passes gained failure
+isolation, and the test harness gained two instruments it was missing:
+component-level state diffing, and a check that everything this module reaches
+by name still exists.
 ### Added
 
 - **A test for everything the module reaches by name**
@@ -25,38 +33,75 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   still behaves the same — that is what the QA checklist is for — but it turns
   a silent regression into a red build.
 
-### Fixed
+- When `updateComponentTreeUI` fails on a window, the module now **says what
+  broke and how much of the tree went unrefreshed**
+  ([#12](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/12)).
+  The failure was already survivable and already logged with its stack, but a
+  stack names the UI delegate that threw — not the component, and not the
+  subtree the aborted update never reached, which is the part that actually
+  matters. The report names components with no font at all and the path to each,
+  any `UIManager` font key resolving to null, and every component left holding a
+  delegate from the wrong look and feel. Runs only on the failure path, so it is
+  not gated on the debug flag: that is precisely the moment nobody has verbose
+  logging on.
 
-- **The Output Console's log text is readable**
-  ([#52](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/52)).
-  Two consoles in the Designer are coloured two different ways, and only one of
-  them was covered. The Script Console uses named document styles; the Output
-  Console dock registers appenders on the bifurcated `System.out` / `System.err`
-  holding `Color.black` and `Color.red` and stamps that colour onto *every
-  inserted run* — and since the Designer's logging goes through stdout, that is
-  the entire console. Neither colour may be mutated (they are the JDK globals,
-  the same rule that protects `Base000`), so the pass rewrites the runs already
-  in the document and repoints the appenders for lines still to come. The
-  restore maps back by colour rather than by offset, which is what makes it
-  survive the console being trimmed as it grows.
+- The harness pins that **no FlatLaf scaling listener is left registered**
+  ([#12](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/12)).
+  With FlatLaf user scaling on, `UIScale` registers a listener on all three
+  defaults tables that is still there after the stock theme is back, reacting to
+  another look and feel's font changes. The module's only defence is one
+  ordering-sensitive line setting `flatlaf.uiScale.enabled=false` before FlatLaf
+  loads, and nothing guarded it. Measured both ways: as shipped no such listener
+  appears anywhere; flip the property and all three tables carry one after a
+  restore.
 
-- **The Diagnostics performance charts' axes are readable**
-  ([#50](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/50)).
-  IA colours the plot background and gridlines from its own design tokens, which
-  this module already restyles — but never sets the axis paints, so those kept
-  JFreeChart's `Color.black` defaults and the axis numbers and titles sat black
-  on dark. A new pass sets the label, tick-label, axis-line and tick-mark paints
-  and restores them. Targeted at `DynamicTimeSeriesChart` by name rather than at
-  any chart: Vision windows render *user* charts, and repainting those would
-  misrepresent what an operator sees.
+- A **headless look-and-feel harness** (`./gradlew :designer:lafHarness`,
+  [#32](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/32)).
+  It drives the real switch sequence against the real Synthetica, JIDE and
+  FlatLaf jars — no gateway, no Designer, no screenshots — and diffs every
+  resolvable `UIManager` default across a light→dark→light cycle. The unit
+  tests only ever saw stub look and feels, so every bug this module has had
+  (#14, #17, #19, #22, #23) had to be found by deploying and looking. Four
+  invariants are now pinned instead: a full cycle restores every default, the
+  FlatLaf overrides are cleared while FlatLaf is still installed (the ordering
+  #23 got wrong), repeated cycles converge, and JIDE's `Theme.painter` map
+  comes back to its stock entries, the standard Swing colours actually go dark,
+  and no `UIManager` key naming a background stays light under dark mode —
+  which is [#22](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/22)
+  turned from a manual dump into an assertion over 174 keys. It runs in CI.
 
-- **The Query Browser's result-table buttons no longer show pale boxes**
-  ([#51](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/51)).
-  `ResultTable$EditButton` paints its own gradient behind the label from eight
-  literal colours, the first of which is plain white. The button component
-  itself is correctly dark, which is why inspecting it came back clean while the
-  screen showed the problem. The seven fills join the class constants
-  `IaColorTokens` darkens; the two amber focus/hover accents are left alone.
+  Its blind spots are mapped and documented rather than assumed: state outside
+  `UIManager` (the IA colour tokens, the Synthetica singleton) is invisible to
+  it, the dark half is weakly covered because JIDE derives dark colours
+  correctly with no Designer present, and it cannot see pixels. A Designer
+  still settles "does this look right".
+
+- A **partly-applied theme now says so**, in the Designer's status bar: which
+  passes failed, out of how many, and where to read the stack traces. Every
+  pass after the look-and-feel swap is isolated, so one that fails leaves a
+  Designer that works and is visibly wrong somewhere; the only record used to
+  be a log file nobody knows to look for.
+
+- The Designer's status bar stays readable under dark mode. `StatusBar
+  .setMessage` re-asserts `Color.black` on the message label on every call, so
+  its own messages were black on a dark bar.
+
+- **[docs/QA-CHECKLIST.md](docs/QA-CHECKLIST.md)** — a sweep of Designer
+  surfaces with a pass/fail per surface, so coverage gaps are found before a
+  release rather than reported as bugs
+  ([#5](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/5)).
+  The surface list is drawn from the catalogue in the MIT-licensed
+  [Exchange dark-mode script](https://inductiveautomation.com/exchange/2719/overview);
+  its 8.1 class names have shifted on 8.3, its UI locations have not.
+
+- `LookAndFeelDefaultsTableTest` (`./gradlew :designer:lafHarness`) pins the
+  gap between the developer defaults table and the look-and-feel table: 109
+  colour keys resolve through `UIManager` but not through
+  `getLookAndFeelDefaults()` under the stock look and feel, and the restore
+  leaves that set exactly as it found it. Ignition code reading a colour
+  that way gets null in a stock Designer and a real colour under dark mode,
+  which is the opposite of the intuitive direction and has already caused
+  one stack trace to be misread.
 
 ### Changed
 
@@ -174,7 +219,6 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   and the START block was the one thing on that canvas that already read
   correctly.
 
-
 - Opening a Vision window no longer crashes the Designer's event thread with a
   `StackOverflowError` out of `CellRendererSanitizer`. JIDE's `CheckBoxList`
   does not return the renderer `setCellRenderer` replaces — it hands back a
@@ -208,81 +252,11 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   was not in — permanently, and retried at every launch. The checkmark and the
   saved preference are now both set from the look and feel actually installed
   once the switch has finished.
+
 - A switch no longer looks like a click that did not register. It runs one
   event-queue turn late, behind an "Applying dark mode…" message painted
   before the event dispatch thread blocks, with the menu item disabled so a
   second click cannot queue an opposite toggle.
-
-### Added
-
-- When `updateComponentTreeUI` fails on a window, the module now **says what
-  broke and how much of the tree went unrefreshed**
-  ([#12](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/12)).
-  The failure was already survivable and already logged with its stack, but a
-  stack names the UI delegate that threw — not the component, and not the
-  subtree the aborted update never reached, which is the part that actually
-  matters. The report names components with no font at all and the path to each,
-  any `UIManager` font key resolving to null, and every component left holding a
-  delegate from the wrong look and feel. Runs only on the failure path, so it is
-  not gated on the debug flag: that is precisely the moment nobody has verbose
-  logging on.
-
-- The harness pins that **no FlatLaf scaling listener is left registered**
-  ([#12](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/12)).
-  With FlatLaf user scaling on, `UIScale` registers a listener on all three
-  defaults tables that is still there after the stock theme is back, reacting to
-  another look and feel's font changes. The module's only defence is one
-  ordering-sensitive line setting `flatlaf.uiScale.enabled=false` before FlatLaf
-  loads, and nothing guarded it. Measured both ways: as shipped no such listener
-  appears anywhere; flip the property and all three tables carry one after a
-  restore.
-
-- A **headless look-and-feel harness** (`./gradlew :designer:lafHarness`,
-  [#32](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/32)).
-  It drives the real switch sequence against the real Synthetica, JIDE and
-  FlatLaf jars — no gateway, no Designer, no screenshots — and diffs every
-  resolvable `UIManager` default across a light→dark→light cycle. The unit
-  tests only ever saw stub look and feels, so every bug this module has had
-  (#14, #17, #19, #22, #23) had to be found by deploying and looking. Four
-  invariants are now pinned instead: a full cycle restores every default, the
-  FlatLaf overrides are cleared while FlatLaf is still installed (the ordering
-  #23 got wrong), repeated cycles converge, and JIDE's `Theme.painter` map
-  comes back to its stock entries, the standard Swing colours actually go dark,
-  and no `UIManager` key naming a background stays light under dark mode —
-  which is [#22](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/22)
-  turned from a manual dump into an assertion over 174 keys. It runs in CI.
-
-  Its blind spots are mapped and documented rather than assumed: state outside
-  `UIManager` (the IA colour tokens, the Synthetica singleton) is invisible to
-  it, the dark half is weakly covered because JIDE derives dark colours
-  correctly with no Designer present, and it cannot see pixels. A Designer
-  still settles "does this look right".
-
-- A **partly-applied theme now says so**, in the Designer's status bar: which
-  passes failed, out of how many, and where to read the stack traces. Every
-  pass after the look-and-feel swap is isolated, so one that fails leaves a
-  Designer that works and is visibly wrong somewhere; the only record used to
-  be a log file nobody knows to look for.
-- The Designer's status bar stays readable under dark mode. `StatusBar
-  .setMessage` re-asserts `Color.black` on the message label on every call, so
-  its own messages were black on a dark bar.
-- **[docs/QA-CHECKLIST.md](docs/QA-CHECKLIST.md)** — a sweep of Designer
-  surfaces with a pass/fail per surface, so coverage gaps are found before a
-  release rather than reported as bugs
-  ([#5](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/5)).
-  The surface list is drawn from the catalogue in the MIT-licensed
-  [Exchange dark-mode script](https://inductiveautomation.com/exchange/2719/overview);
-  its 8.1 class names have shifted on 8.3, its UI locations have not.
-- `LookAndFeelDefaultsTableTest` (`./gradlew :designer:lafHarness`) pins the
-  gap between the developer defaults table and the look-and-feel table: 109
-  colour keys resolve through `UIManager` but not through
-  `getLookAndFeelDefaults()` under the stock look and feel, and the restore
-  leaves that set exactly as it found it. Ignition code reading a colour
-  that way gets null in a stock Designer and a real colour under dark mode,
-  which is the opposite of the intuitive direction and has already caused
-  one stack trace to be misread.
-
-### Changed
 
 - The debug log has two levels. `DebugLog.log` (theme switches, failures) always
   writes; the per-pass counts, icon classes, popup contents and stale-delegate
@@ -292,7 +266,60 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   cost a file open, write and close on the event dispatch thread. Popup state
   was logged on **every** popup menu creation, and a renderer-straggler walk
   ran over **every painted table cell**; both are now behind the same flag.
+
 - The log file is opened once and held for the session, flushed per line.
+
+### Fixed
+
+- **The pale band under the Tag Browser's `Tag | Value` header is gone**
+  ([#21](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/21)).
+  `SimpleTreeTable$SimpleHeaderRenderer` gives every header cell a compound
+  border of 8px `Color.WHITE` over 1px of `Table.gridColor`, and the grid colour
+  is a `static final` captured at class-init, so it kept the light theme's
+  `#C0C5CA` for the life of the Designer. A header cell is a rubber stamp,
+  configured and painted through a `CellRendererPane` and never added to
+  anything — which is why thirty component inspections came back clean while the
+  band stayed on screen.
+
+- **One code editor that throws no longer costs the rest.** JIDE raises
+  `IndexOutOfBoundsException: Wrong line: -1` out of
+  `setBracketHighlightColor` on an editor with no valid caret line. The first
+  cut of the editor pass treated any throw as systemic and gave up, which
+  silently left every later expression editor light for the rest of the
+  session — found in a debug log, not on screen. Failures are now isolated per
+  property and per editor, and only a genuinely systemic failure (a method that
+  has moved) stops the pass.
+
+- **The Output Console's log text is readable**
+  ([#52](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/52)).
+  Two consoles in the Designer are coloured two different ways, and only one of
+  them was covered. The Script Console uses named document styles; the Output
+  Console dock registers appenders on the bifurcated `System.out` / `System.err`
+  holding `Color.black` and `Color.red` and stamps that colour onto *every
+  inserted run* — and since the Designer's logging goes through stdout, that is
+  the entire console. Neither colour may be mutated (they are the JDK globals,
+  the same rule that protects `Base000`), so the pass rewrites the runs already
+  in the document and repoints the appenders for lines still to come. The
+  restore maps back by colour rather than by offset, which is what makes it
+  survive the console being trimmed as it grows.
+
+- **The Diagnostics performance charts' axes are readable**
+  ([#50](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/50)).
+  IA colours the plot background and gridlines from its own design tokens, which
+  this module already restyles — but never sets the axis paints, so those kept
+  JFreeChart's `Color.black` defaults and the axis numbers and titles sat black
+  on dark. A new pass sets the label, tick-label, axis-line and tick-mark paints
+  and restores them. Targeted at `DynamicTimeSeriesChart` by name rather than at
+  any chart: Vision windows render *user* charts, and repainting those would
+  misrepresent what an operator sees.
+
+- **The Query Browser's result-table buttons no longer show pale boxes**
+  ([#51](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/51)).
+  `ResultTable$EditButton` paints its own gradient behind the label from eight
+  literal colours, the first of which is plain white. The button component
+  itself is correctly dark, which is why inspecting it came back clean while the
+  screen showed the problem. The seven fills join the class constants
+  `IaColorTokens` darkens; the two amber focus/hover accents are left alone.
 
 ## [0.1.0] - 2026-08-28
 

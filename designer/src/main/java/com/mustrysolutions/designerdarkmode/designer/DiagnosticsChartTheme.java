@@ -152,11 +152,16 @@ final class DiagnosticsChartTheme {
             }
             themeChartBackground(chart);
             ((Component) chart).repaint();
-        } catch (Throwable t) {
-            // A JFreeChart or an IA class that has moved fails identically on
-            // every chart, so stop rather than log once per panel.
+        } catch (ReflectiveOperationException moved) {
+            // Systemic: a JFreeChart or IA class that has moved fails
+            // identically on every chart, so stop rather than log per panel.
             unavailable = true;
-            DebugLog.log("Diagnostics chart axes could not be themed.", t);
+            DebugLog.log("Diagnostics chart axes could not be themed.", moved);
+        } catch (Throwable t) {
+            // One chart's problem, not every chart's — the same correction as
+            // CodeEditorTheme, where taking a per-instance throw as systemic
+            // silently disabled the pass for a whole session.
+            DebugLog.log("One diagnostics chart could not be themed; continuing.", t);
         }
     }
 

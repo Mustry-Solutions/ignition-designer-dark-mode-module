@@ -129,6 +129,56 @@ class CodeEditorThemeTest {
             "a lifted navy should still be blue-dominant: " + hex(lifted));
     }
 
+    @Test
+    @DisplayName("one editor that throws does not stop the others being themed (#48)")
+    void aThrowingEditorDoesNotStrandTheRest() {
+        // A real session logged this three times: JIDE throws
+        // "IndexOutOfBoundsException: Wrong line: -1" out of
+        // setBracketHighlightColor on an editor whose caret line is -1, and the
+        // first cut of this pass took that as systemic — so it stopped theming
+        // EVERY expression editor for the rest of the session. That is the
+        // failure this pins, and it is the same rule as the resilient tree walk
+        // (#4, #5): one component must not cost the rest.
+        //
+        // The throw is injected through repaint() because JIDE's colour setters
+        // are final. It is the same shape as far as the pass is concerned: a
+        // Throwable out of one editor, mid-theming.
+        // The healthy editor sits one level deeper, which is how the Designer
+        // actually holds them — different editors live in different dock
+        // panels. It matters: the pass checks its "give up" flag when it
+        // recurses into a container, so a sibling would have been themed anyway
+        // and a flat layout would not reproduce the bug at all.
+        JPanel panel = new JPanel(new java.awt.BorderLayout());
+        ThrowingCodeEditor throwing = new ThrowingCodeEditor();
+        panel.add(throwing, java.awt.BorderLayout.NORTH);
+        JPanel otherDock = new JPanel(new java.awt.BorderLayout());
+        CodeEditor healthy = new CodeEditor();
+        otherDock.add(healthy, java.awt.BorderLayout.CENTER);
+        panel.add(otherDock, java.awt.BorderLayout.CENTER);
+        panel.setSize(600, 300);
+        throwing.armed = true;
+
+        goDark(panel);
+
+        assertTrue(ThemeManager.luminance(healthy.getLineHighlightColor()) < 100,
+            "the editor after the throwing one was left light ("
+                + hex(healthy.getLineHighlightColor())
+                + ") — one bad editor stranded the rest");
+    }
+
+    /** Throws mid-theming, the way JIDE does on an editor with no caret line. */
+    private static final class ThrowingCodeEditor extends CodeEditor {
+        boolean armed;
+
+        @Override
+        public void repaint() {
+            if (armed) {
+                throw new IndexOutOfBoundsException("Wrong line: -1");
+            }
+            super.repaint();
+        }
+    }
+
     /** Styles whose foreground cannot be read on the dark editor background. */
     private static List<String> unreadable(CodeEditor editor) {
         List<String> bad = new ArrayList<>();
