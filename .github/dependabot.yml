@@ -1,0 +1,66 @@
+# Dependabot version updates.
+#
+# The interesting part of this file is what it does NOT update. An Ignition
+# module's dependency list is not a flat "keep everything current" problem:
+# most of what it compiles against is provided by the gateway at runtime, so
+# raising a version here does not upgrade anything — it changes which Ignition
+# versions the module still works on.
+#
+# Security updates are a separate switch (Settings -> Advanced Security ->
+# Dependabot security updates) and are not configured by this file.
+
+version: 2
+
+updates:
+  # --- Gradle: the root build (plugin versions live here) ------------------
+  - package-ecosystem: gradle
+    directory: "/"
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "build"
+    ignore:
+      # DO NOT bump the Ignition SDK. `sdk_version` is the support FLOOR, not a
+      # dependency to keep current: it is what the module compiles against (so a
+      # newer API cannot creep in unnoticed) AND what `module.xml` publishes as
+      # `requiredIgnitionVersion`. Raising it silently tells every gateway below
+      # that version that the module no longer supports them — a compatibility
+      # decision wearing the clothes of a routine dependency bump.
+      #
+      # The harness deliberately runs against a DIFFERENT, newer SDK
+      # (`harness_sdk_version`); that one is a project property rather than a
+      # dependency coordinate, so it is not Dependabot's to move either. Both are
+      # explained at the top of build.gradle.kts.
+      - dependency-name: "com.inductiveautomation.ignitionsdk:*"
+
+  # --- Gradle: the designer module ----------------------------------------
+  - package-ecosystem: gradle
+    directory: "/designer"
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "build"
+    ignore:
+      # Same reasoning as above.
+      - dependency-name: "com.inductiveautomation.ignitionsdk:*"
+      # slf4j is pinned on purpose to the version the Ignition SDK resolves.
+      # It reaches the module through the (compileOnly) SDK at runtime, so the
+      # test-scope pin exists to make tests log through the same slf4j
+      # production does. Bumping it would quietly undo that.
+      - dependency-name: "org.slf4j:*"
+
+  # --- The workflows themselves -------------------------------------------
+  # Grouped, because five first-party actions each opening their own PR is how
+  # a maintainer learns to ignore Dependabot.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "ci"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
