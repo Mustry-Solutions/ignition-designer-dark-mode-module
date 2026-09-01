@@ -330,11 +330,11 @@ tiers when one stops resolving:
   field costs one unthemed surface and a warning, not a broken switch. The
   failed pass names are collected and summarised in the status bar, so a
   half-dark Designer comes with an explanation rather than only a log line.
-- **Afterwards, either way.** `finishSwitch()` squares the preference and the
-  Tools menu checkmark with the look and feel that is *actually* installed. The
-  checkmark used to track the request, so a switch that failed left it claiming
-  a theme the Designer was not in, and the preference retried it at every
-  launch.
+
+Afterwards, either way, `finishSwitch()` squares the preference and the Tools
+menu checkmark with the look and feel that is *actually* installed. The
+checkmark used to track the request, so a switch that failed left it claiming a
+theme the Designer was not in, and the preference retried it at every launch.
 
 That shapes how to debug a regression after an Ignition upgrade. A surface that
 has gone light is usually a name that no longer resolves: check

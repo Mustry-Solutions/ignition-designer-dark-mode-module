@@ -12,6 +12,23 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ### Fixed
 
+- A second documentation pass, this one over statements that contradict
+  themselves rather than the code (docs only; no behaviour change). A "four
+  invariants" list in 0.2.0's own notes that introduced six; a "two more"
+  in the README that introduced one; a "two tiers" in `ARCHITECTURE.md`
+  followed by three bullets; the same §E row twice in the QA checklist,
+  disagreeing with itself about whether it is blocked; the README's project
+  layout, which had drifted five classes and both test source sets behind
+  `designer/src`; the QA Runs table, now newest-first; and two Notes cells
+  with a stray leading colon.
+
+  `DEVELOPMENT.md`'s mutation figure was re-measured rather than re-guessed:
+  reintroducing #23's ordering fails five assertions, not "three of the six"
+  (`ThemeSwitchCycleTest` has had ten since #53). It now names the tests
+  instead of counting them, so it does not go stale again the next time the
+  harness grows. The 1297-defaults-left-null figure is unchanged and still
+  exact.
+
 - Documentation corrections found by a sweep of the docs against the code
   (docs only; no behaviour change). The build docs still named Gradle 8.14
   after the wrapper moved to 9.7.1. Three places — `docker-compose.yml`,
@@ -76,12 +93,12 @@ by name still exists.
   FlatLaf jars — no gateway, no Designer, no screenshots — and diffs every
   resolvable `UIManager` default across a light→dark→light cycle. The unit
   tests only ever saw stub look and feels, so every bug this module has had
-  (#14, #17, #19, #22, #23) had to be found by deploying and looking. Four
+  (#14, #17, #19, #22, #23) had to be found by deploying and looking. Six
   invariants are now pinned instead: a full cycle restores every default, the
   FlatLaf overrides are cleared while FlatLaf is still installed (the ordering
-  #23 got wrong), repeated cycles converge, and JIDE's `Theme.painter` map
-  comes back to its stock entries, the standard Swing colours actually go dark,
-  and no `UIManager` key naming a background stays light under dark mode —
+  #23 got wrong), repeated cycles converge, JIDE's `Theme.painter` map comes
+  back to its stock entries, the standard Swing colours actually go dark, and
+  no `UIManager` key naming a background stays light under dark mode —
   which is [#22](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/22)
   turned from a manual dump into an assertion over 174 keys. It runs in CI.
 
