@@ -451,6 +451,46 @@ worth in two directions:
 The Perspective view editor, binding editors and style editor are still
 unchecked in substance: the dev project has no views.
 
+### Compare against a relaunched Designer before calling something a bug
+
+Two of the five findings from the 2026-09-01 hand sweep — the Vision component
+palette and the Reporting Design palette, both reported as looking washed out
+or disabled after switching back to light — turned out to be **IA's own
+light-mode styling**, unchanged by this module.
+
+Eyeballing could not have settled it, because "does this look too pale?" has no
+answer without a reference. What settled it was relaunching the Designer (which
+comes up in whatever mode the preference last held, and never enters dark if you
+do not toggle), recording the surface, and only then doing a dark -> light round
+trip and recording it again:
+
+| | stock | after dark -> light |
+|---|---|---|
+| `DefaultPaletteItemToggleButton` fg | `#70757A` uires | `#70757A` uires |
+| its background | `#FAFAFB` uires | `#FAFAFB` uires |
+| icon brightness, first 10 items | 183, 176, 177, 189, 187, 192, 179, 116, 94, 163 | identical |
+
+Byte-identical, so there was nothing to fix. Measure the two states rather than
+comparing the light one against your memory of the dark one — dark mode resets
+what looks "normal", and a correct light surface can look wrong straight after
+it.
+
+The same run also found a genuine leftover this way: `CategoryView` on the
+Reporting palette holds an explicit `#555A5C` computed under FlatLaf and never
+recomputed, which neither the stale-`UIResource` sweep nor the dark-leftover
+pass catches because both require a `UIResource`. It is invisible today only
+because that pane is not opaque
+([#59](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/59)).
+
+### The light restore writes stack traces to the Output Console
+
+Every switch back to light throws two `NullPointerException`s on the EDT from
+Ignition's own `TreeCollapsedIconPainter` / `TreeExpandedIconPainter`, while a
+JIDE tree-table repaints. They are transient — probing afterwards shows every
+table back on a stock, correctly parented `CellRendererPane` — and the icons
+repaint correctly, so there is nothing to see on screen. Check the console, not
+the screen ([#61](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/61)).
+
 ## Toggle-off spot check
 
 Reversibility is a project invariant, and restore has broken on its own before

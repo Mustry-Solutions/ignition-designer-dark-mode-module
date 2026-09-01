@@ -12,7 +12,7 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ## [0.2.0] - 2026-09-01
 
-A defect-fixing release. Seven dark-mode defects found by a Designer QA sweep
+A defect-fixing release. Ten dark-mode defects found by a Designer QA sweep
 and fixed, each root-caused to a mechanism rather than patched by eye, and each
 confirmed in a real Designer on 8.3.6. The theming passes gained failure
 isolation, and the test harness gained two instruments it was missing:
@@ -270,6 +270,42 @@ by name still exists.
 - The log file is opened once and held for the session, flushed per line.
 
 ### Fixed
+
+- **Reporting's Report Overview is readable**
+  ([#59](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/59)).
+  Its headings and report title were not dim but invisible: `HeaderLabel` and
+  `AntialiasLabel` carry a literal `#454545`, which on the dark surface's
+  `#3C3F41` is a contrast ratio of about 1.1:1. An explicit (non-`UIResource`)
+  foreground is invisible to the look and feel by design, and the module lifted
+  such foregrounds only as a rider on a background swap — which a component
+  already sitting on a dark background never gets. Explicit dark text is now
+  lifted on its own merits, guarded so text that would land on a *light*
+  background is left alone. Fixing it exposed a second defect in the same place:
+  lifted originals were restored only for components whose background had been
+  swapped from white, so a lift made by any other branch was recorded and never
+  put back, stranding near-white text on the light theme.
+
+- **The Data tab's parameter and data-source headers are dark**
+  ([#59](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/59)).
+  A JIDE `GroupList` paints its group headers through a second renderer slot
+  that `setCellRenderer` never touches, so the rows came out correctly themed
+  under light-blue "Parameters" and "Data Sources" bars. The list itself probes
+  clean — a group header is not a component, the same way a table's cell
+  renderers are not.
+
+- **The palette's clear-search button is no longer a bright blob**
+  ([#60](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/60)).
+  Two mechanisms had to give. The icon walk reads `getIcon()` once, and JIDE
+  fills this button's icon slot only when there is text to clear, so it was
+  never processed at all; the slot is now watched. That alone was not enough:
+  the icon is not too dark but too *light* (a measured 226), so the
+  enabled/disabled pair swap installed the icon already installed, changed
+  nothing, and still reported the button handled — blocking the smart invert.
+  The pair is now declined when it is a no-op *and* the icon is above 200, which
+  is the point at which an icon drawn to be near-invisible on near-white chrome
+  becomes the loudest thing on a dark surface. The threshold clears every other
+  no-op pair on the Designer's classpath (the toolbar's vector icons at 174, the
+  Vision palette at 183, popup menus at 109), all of which keep their icons.
 
 - **The Tag Browser tree no longer throws on every repaint**
   ([#58](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/58)).
