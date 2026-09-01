@@ -40,7 +40,9 @@ import java.util.Map;
  */
 final class DiagnosticsChartTheme {
 
-    private static final String CHART_PANEL =
+    // Package-private so ReflectiveSurfaceTest can assert this name still
+    // resolves against the Ignition the harness runs.
+    static final String CHART_PANEL =
         "com.inductiveautomation.ignition.client.util.gui.diagnostics.DynamicTimeSeriesChart";
 
     /** Axis titles and tick labels: the same value as the dark Base900 text. */
@@ -59,7 +61,9 @@ final class DiagnosticsChartTheme {
     private static final Color PLOT_BACKGROUND = new Color(0x35383A);
 
     /** The four paints this pass sets on each axis, in order. */
-    private static final String[] AXIS_PAINTS = {
+    // Package-private so ReflectiveSurfaceTest can assert this name still
+    // resolves against the Ignition the harness runs.
+    static final String[] AXIS_PAINTS = {
         "LabelPaint", "TickLabelPaint", "AxisLinePaint", "TickMarkPaint",
     };
 

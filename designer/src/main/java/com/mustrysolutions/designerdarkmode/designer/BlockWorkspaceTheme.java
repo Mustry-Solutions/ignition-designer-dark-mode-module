@@ -60,18 +60,24 @@ import javax.swing.JComponent;
  */
 final class BlockWorkspaceTheme {
 
-    private static final String BASIC_BLOCK_UI =
+    // Package-private so ReflectiveSurfaceTest can assert this name still
+    // resolves against the Ignition the harness runs.
+    static final String BASIC_BLOCK_UI =
         "com.inductiveautomation.ignition.designer.blockandconnector.blockui.BasicBlockUI";
 
     /** Fill fields, and the properties behind them. */
-    private static final String[] FILLS = {"BackgroundConnected", "BackgroundUnconnected"};
+    // Package-private so ReflectiveSurfaceTest can assert this name still
+    // resolves against the Ignition the harness runs.
+    static final String[] FILLS = {"BackgroundConnected", "BackgroundUnconnected"};
 
     /**
      * Stroke fields. {@code BorderSelected} is included so a subclass that
      * darkened it is corrected too; the stock orange fails the test below and
      * is left as it is.
      */
-    private static final String[] STROKES =
+    // Package-private so ReflectiveSurfaceTest can assert this name still
+    // resolves against the Ignition the harness runs.
+    static final String[] STROKES =
         {"BorderConnected", "BorderUnconnected", "BorderSelected"};
 
     /**

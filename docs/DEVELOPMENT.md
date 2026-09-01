@@ -147,6 +147,36 @@ dark filter field, because the wrong colour was sitting on a component (and, in
 the header's case, on a renderer that is not in the hierarchy at all). Reach for
 this shape whenever a restore is right in `UIManager` and wrong on screen.
 
+### The reflective surface, and which Ignition the harness runs against
+
+The module works by reaching into Ignition, JIDE and JFreeChart internals **by
+name** — a class called `InlineTipLabel`, a field called `COLOR`, a method
+called `setLineHighlightColor`. None of that is checked by the compiler, and
+every pass that uses it is deliberately wrapped in a guard so a failure costs a
+surface rather than the Designer. Put those two together and a rename by IA
+makes a pass stop working *silently*. [#35][35] was exactly that.
+
+`ReflectiveSurfaceTest` enumerates the whole surface — about 40 names — and
+asserts each still resolves. It cannot tell you a class still *behaves* the
+same; that is what a Designer and the QA checklist are for. It turns "quietly
+stopped theming after an upgrade" into a red build.
+
+**Add to it whenever you add a reflective call.** Class names, the colour-token
+map and the class-constant map are read from the production classes themselves,
+so those cannot drift; method and field names are listed in the test, grouped by
+the class that reaches them.
+
+The version it runs against is a separate knob from the one the module compiles
+against, and the distinction matters:
+
+| | Version | Why |
+|---|---|---|
+| `sdk_version` | 8.3.0 | The support floor. Compiling against it is what stops a newer API creeping in, and it is what `module.xml` claims as the minimum. |
+| `harness_sdk_version` | 8.3.8 | What people actually run. `-Pharness.sdk=8.3.6` pins a specific gateway. |
+
+CI runs the harness at both. Testing only the floor is testing jars nobody has;
+testing only the latest would let the module drift off its own support claim.
+
 **Validate a new invariant with a mutation.** A green test proves nothing until
 you have seen it go red for the right reason. Break the thing it claims to
 protect — reorder a phase, delete a restore call — and check that the test you
