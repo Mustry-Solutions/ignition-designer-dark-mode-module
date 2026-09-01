@@ -47,7 +47,7 @@ users will actually see:
   it follows the session's own theme, not the Designer's;
 - **Symbol Factory thumbnails**, which are the symbol artwork itself.
 
-Two more, following the prior art's own judgement (see
+One more, following the prior art's own judgement (see
 [Prior art](#prior-art)): the Vision **property tables** are deliberately not
 themed, because colouring them looks spotty and makes them harder to use.
 
@@ -125,12 +125,19 @@ designer/                   The only scope: Designer-side code
     IaColorTokens            Reflectively restyles Ignition's hard-coded colors
     TreeIconRecolorer        Dark-adapts tree icons and cell renderers
     CellRendererSanitizer    Dark-adapts table/list cells and renderer delegates
-    ScriptEditorTheme        Applies Ignition's own dark theme to the code editors
+    ScriptEditorTheme        Dark-themes the Python editors (RSyntaxTextArea)
+    CodeEditorTheme          Dark-themes the SQL/expression editors (JIDE CodeEditor)
     ConsoleTextTheme         Recolours the console output styles
+    DiagnosticsChartTheme    Dark-adapts the Diagnostics chart axes and background
+    BlockWorkspaceTheme      Dark-adapts alarm pipeline and SFC blocks
+    DesignerStatus           Reports switch progress and failures in the status bar
     ComponentInspector       Debug tool: dumps the component under the cursor
+    TreeUpdateDiagnostic     Explains a failed updateComponentTreeUI
     DebugLog                 Append-only debug log
     MoonIcon                 The menu item's icon
   src/main/resources/.../    Bundle strings (menu/action labels)
+  src/test/java/.../         Unit tests: colour predicates, snapshot/restore
+  src/lafHarness/java/.../   Headless harness against the real Synthetica/JIDE/FlatLaf
 ops/                        Disposable Docker gateway for local testing
 docs/                       Architecture and development guides
 ```

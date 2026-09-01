@@ -17,13 +17,15 @@ value is knowing *where to look*.
 
 ## Runs
 
+Newest first.
+
 | Date | Ignition | Vision | Module | Scope covered |
 |---|---|---|---|---|
-| 2026-08-29 | 8.3.6 | 12.3.6 | `f4104b54`, built at `33cf8c7` — **10 commits behind `main`**, so without #36/#37/#38 | Three Designer sittings (13:22, 13:40, 14:15 UTC): §L popups, Alarm Pipeline Editor, Translation Manager, dataset editor, named-query selector |
 | 2026-09-01 (afternoon) | 8.3.6 | 12.3.6 | `b01d80eb` | #57 and the editor-resilience fix confirmed by eye. Third popup source verified (Perspective canvas). A **saved** view added to the dev project so §E stops being blocked by an empty project |
 | 2026-09-01 | 8.3.6 | 12.3.6 | `b510440` | Closing the gaps left by the 2026-08-31 sweep (#41). Created a Perspective view so §E had something to open; Symbol Factory; one more heavyweight popup. **Right-click is confirmed un-automatable** — see [§L](#l-popup-sweep) |
 | 2026-08-31 (evening) | 8.3.6 | 12.3.6 | `b510440` | Verification pass by eye in a real Designer for #47, #48, #50, #51, #52 and the late-attach fix. All confirmed. Two rounds: the first found #50 only half-fixed (chart background still white) and the Vision filters dark in light mode |
 | 2026-08-31 | 8.3.6 | 12.3.6 | `76c4600` (`main`, release candidate) | Driven with computer use, 12:01–12:13 UTC. §A, §B (Properties, Export, Diagnostics), §C, §D console + autocomplete, §E property editor, §F palette/inspector, §J Image Management, §K Query Browser, toggle-off. **Two new `light` results — see [Diagnostics](#b-menus-dialogs-project-settings) and [Query Browser](#k-database-and-queries).** §L not re-verified (see [Note on this run](#note-on-the-2026-08-31-run)) |
+| 2026-08-29 | 8.3.6 | 12.3.6 | `f4104b54`, built at `33cf8c7` — **10 commits behind `main`**, so without #36/#37/#38 | Three Designer sittings (13:22, 13:40, 14:15 UTC): §L popups, Alarm Pipeline Editor, Translation Manager, dataset editor, named-query selector |
 
 ## Running the sweep
 
@@ -104,7 +106,7 @@ point of the first run.
 | Project → Properties: Perspective Symbols | " | `pass` | `2026-08-31` | |
 | Project Export dialog (`CheckBoxTree`) | File → Export | `pass` | `2026-08-31` | tri-state checkboxes legible |
 | Project Import dialog (`CheckBoxTree`) | File → Import | — | — | |
-| Keyboard Layout | ~~Tools → Keyboard Layout~~ | `n/a` | `2026-08-31` | : **no such item on 8.3.6.** The Tools menu is Console, Image Management, Script Console, Database Query Browser, Translation Manager, Symbol Factory, Dark Mode, Launch Perspective |
+| Keyboard Layout | ~~Tools → Keyboard Layout~~ | `n/a` | `2026-08-31` | **No such item on 8.3.6.** The Tools menu is Console, Image Management, Script Console, Database Query Browser, Translation Manager, Symbol Factory, Dark Mode, Launch Perspective |
 | Diagnostics dialog | Help → Diagnostics | `fixed` | `2026-08-31` | Tip banner [#47](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/47) and chart axes [#50](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/50), both confirmed by eye |
 | Diagnostics performance charts | Help → Diagnostics → Performance | `fixed` | `2026-08-31` | Axis paints AND the chart's own background — [#50](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/50). The first fix did only the axes and the label margin stayed white |
 | About dialog | Help → About | — | — | |
@@ -145,7 +147,7 @@ check an editor of each kind rather than assuming "the editors" are covered.
 
 | Surface | Where | Result | Last checked | Notes |
 |---|---|---|---|---|
-| View editor canvas | Open any view | `n/a` | `2026-08-31` | : the dev project has no views, so nothing to open. **Still unchecked in substance** |
+| View editor canvas | Open any view | — | — | `n/a` on 2026-08-31 only because the dev project had no views. A saved view (`qa-dark-mode`) exists since 2026-09-01, so this is now an ordinary unchecked row, not a gap in the Designer |
 | Component palette | Right dock | — | — | Guard hierarchy walks against `FilterablePalette` (see [Out of scope](#out-of-scope)) |
 | Property editor tree | Right dock, view open | `pass` | `2026-09-01` | Checked properly this time, with a view open: PROPS/CUSTOM/PARAMS, value colouring, Add Property links |
 | Property key editor field | Click a property name | — | — | |
@@ -570,8 +572,7 @@ these is a real gap, not a pass.
 | Surface | Why it is unchecked | What it needs |
 |---|---|---|
 | §L right-click popups, the remaining 5 sources | Three verified 2026-09-01 by dispatching the trigger from inside the JVM (both trees, the Perspective canvas). The rest need their surface open first: the Vision canvas needs a window, the property-row and binding-picker menus need a component on a view, and a text field's cut/copy/paste menu did not open from a synthetic trigger on the fields available | Either the Script Console technique in [§L](#right-click-cannot-be-automated-from-outside--but-it-can-from-inside), or ~10 minutes by hand |
-| §E binding editor, component scope picker, style editor | **No longer blocked.** A saved view (`qa-dark-mode`) now exists in the dev project, so the editor opens; what is still missing is a component dropped on it, which needs a palette drag | A component on the view, by hand |
-| §E binding editor, component scope picker, style editor | Need a component on the canvas; adding one needs a palette drag the automation cannot do, and the Perspective palette was not docked in this layout | A component dropped on a view, by hand |
+| §E binding editor, component scope picker, style editor | **The view is no longer the blocker** — a saved view (`qa-dark-mode`) exists in the dev project, so the editor opens. What is still missing is a component dropped on that view: it needs a palette drag the automation cannot do, and the Perspective palette was not docked in the layout used | A component dropped on the view, by hand |
 | §H Reporting, Preview and Schedule tabs | The dev project now HAS a report (`qa-report`, saved 2026-09-01), and Report Overview, Data and Design were swept on it in both modes — that sweep is what found #59. Preview and Schedule were not opened | Open the last two tabs on `qa-report` |
 | §F border chooser, Layout, Size and Position | Need a Vision window with a component selected | A Vision window, by hand |
 | ~~Relaunch-comes-up-stock~~ | **Run 2026-09-01 and passed.** Toggled off, relaunched, confirmed the Designer comes up genuinely stock, toggled back. Recorded rather than deleted because the run doubles as the baseline half of the comparison in [Compare against a relaunched Designer](#compare-against-a-relaunched-designer-before-calling-something-a-bug) | — |
