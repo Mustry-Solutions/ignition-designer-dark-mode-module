@@ -21,8 +21,8 @@ dependencies {
     // slf4j reaches the module via the (compileOnly) Ignition SDK, so it is
     // absent at test runtime. Pin the version the SDK resolves and bind it to
     // a no-op: these tests deliberately exercise failure paths that log.
-    testImplementation("org.slf4j:slf4j-api:2.0.12")
-    testRuntimeOnly("org.slf4j:slf4j-nop:2.0.12")
+    testImplementation("org.slf4j:slf4j-api:2.0.18")
+    testRuntimeOnly("org.slf4j:slf4j-nop:2.0.18")
 }
 
 tasks.test {
@@ -96,7 +96,7 @@ dependencies {
 
     "lafHarnessImplementation"("org.junit.jupiter:junit-jupiter:5.11.4")
     "lafHarnessRuntimeOnly"("org.junit.platform:junit-platform-launcher")
-    "lafHarnessRuntimeOnly"("org.slf4j:slf4j-nop:2.0.12")
+    "lafHarnessRuntimeOnly"("org.slf4j:slf4j-nop:2.0.18")
 }
 
 val lafHarnessTask = tasks.register<Test>("lafHarness") {
