@@ -26,6 +26,22 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ### Fixed
 
+- The README now says where the Dark Mode setting lives and how far it
+  reaches (docs only; no behaviour change). It is a `java.util.prefs` value on
+  the machine running the Designer, per OS user — not on the gateway, not in
+  the project — and it is one value for every gateway that user connects to:
+  a gateway with the module applies it, a gateway without the module never
+  loads the code and leaves it alone, and a failed apply against one gateway
+  resets it for all of them. None of that was written down outside a comment
+  in `ThemeManager`. The README's intro also read as contradicting itself:
+  "the choice is remembered between sessions" followed two sentences later by
+  "relaunching always gives a clean stock theme, whichever way you left it".
+  The second sentence dates from when it sat next to a since-fixed restore
+  limitation; it now says what it meant — a relaunch starts from stock and
+  re-applies dark only if the setting asks for it. `ARCHITECTURE.md` and the
+  bricked-launch recovery note in `DEVELOPMENT.md` cross-reference the new
+  section.
+
 - A second documentation pass, this one over statements that contradict
   themselves rather than the code (docs only; no behaviour change). A "four
   invariants" list in 0.2.0's own notes that introduced six; a "two more"
