@@ -20,10 +20,14 @@ whole Designer — dock panels, trees, tables, menus, the Perspective component
 palette and property editor, the tag browser and tag editor, the script editors
 and output console, dialogs, and icons — to a dark theme built on
 [FlatLaf](https://www.formdev.com/flatlaf/). The choice is remembered between
-sessions.
+sessions: a Designer you left dark comes back dark, and one you left light
+comes back light.
 
-Toggling back restores the stock Designer. Relaunching always gives a clean
-stock theme, whichever way you left it.
+Toggling back restores the stock Designer. Because a relaunch always starts
+from the stock theme and applies dark on top of it only if the setting asks for
+it, a relaunch is also the sure way to clear any residue a toggle-off left
+behind. See [Where the setting is stored](#where-the-setting-is-stored) for
+what "remembered" means when you work against more than one gateway.
 
 Because Ignition's own UI hard-codes many light colors in ways a normal look and
 feel swap cannot reach, the module does substantial work under the hood to make
@@ -80,6 +84,32 @@ Everything this module does happens inside the Designer. It adds no gateway
 service, no tags, and no scripting functions, and it changes nothing for
 Perspective sessions, Vision clients, or anyone else using your gateway. To
 remove it: **Config → Modules → Uninstall**, and relaunch the Designer.
+
+## Where the setting is stored
+
+The Dark Mode choice is saved **on the computer running the Designer, per
+operating-system user**, through Java's `java.util.prefs` API. It is not stored
+on the gateway, not in the project, and not in a tag. Nothing on the gateway
+changes when you toggle it, and a colleague launching the Designer against the
+same gateway from their own machine or account gets their own setting.
+
+It is **one setting for every gateway you connect to**, not one per gateway.
+The saved value does not record which gateway it was set from, so turning dark
+mode on while connected to one gateway turns it on for the Designer of every
+other gateway you open, as long as that gateway has the module installed. A
+gateway *without* the module never loads this code, so its Designer stays
+stock; the saved value is left untouched and applies again the next time you
+open a gateway that has the module.
+
+One consequence of the shared value: after every toggle and every launch the
+module rewrites the setting to match the theme that is actually installed. If
+applying dark mode fails on one gateway (for example after an Ignition upgrade
+the module does not yet support), the setting flips back to light, and that
+flip also applies to the Designers of your other gateways until you toggle it
+on again.
+
+If you need to reset it by hand, see
+[Recovering from a bricked launch](docs/DEVELOPMENT.md#recovering-from-a-bricked-launch).
 
 ## Build
 

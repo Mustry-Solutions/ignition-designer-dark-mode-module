@@ -91,6 +91,18 @@ per-phase error isolation, the JIDE/Synthetica/FlatLaf plumbing, the
 `UIManager` key overrides (dock, collapsible-pane, and container keys), the
 component watcher, and the popup / stale-delegate handling.
 
+The preference node is `Preferences.userNodeForPackage(ThemeManager.class)`:
+it lives on the machine running the Designer, under the OS user's own
+preference store, and holds a single boolean. Nothing gateway-specific goes
+into the path or the key, so the value is shared by every Designer that user
+launches against any gateway carrying the module; a gateway without the module
+never loads `ThemeManager` and simply ignores it. `finishSwitch()` writes the
+node after every switch and every startup apply, so a failed apply against one
+gateway resets the value for all of them (see
+[When Ignition changes underneath us](#when-ignition-changes-underneath-us)).
+Keying the node by gateway would be the change to make if a per-gateway
+setting is ever wanted.
+
 ### IaColorTokens
 Reflectively mutates the **shared `Color` instances** on
 `IgnitionLookAndFeel$Colors` in place — the Designer JVM runs with
