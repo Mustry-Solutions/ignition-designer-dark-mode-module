@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.util.ArrayList;
 import java.util.List;
 
 import javax.swing.LookAndFeel;
@@ -51,14 +50,14 @@ class ThemePreferencePersistenceTest {
 
     private InMemoryPreferences prefs;
     private ThemeManager manager;
-    private RecordingListener listener;
+    private RecordingThemeStateListener listener;
     private LookAndFeel original;
 
     @BeforeEach
     void setUp() throws Exception {
         prefs = new InMemoryPreferences();
         manager = new ThemeManager(prefs);
-        listener = new RecordingListener();
+        listener = new RecordingThemeStateListener();
         manager.setThemeStateListener(listener);
 
         original = UIManager.getLookAndFeel();
@@ -200,18 +199,4 @@ class ThemePreferencePersistenceTest {
         assertEquals(List.of(true), listener.darkActive);
     }
 
-    /** Records what the Tools menu is told the theme ended up being. */
-    private static final class RecordingListener implements ThemeManager.ThemeStateListener {
-
-        private final List<Boolean> darkActive = new ArrayList<>();
-
-        @Override
-        public void switchStarted() {
-        }
-
-        @Override
-        public void switchFinished(boolean dark) {
-            darkActive.add(dark);
-        }
-    }
 }

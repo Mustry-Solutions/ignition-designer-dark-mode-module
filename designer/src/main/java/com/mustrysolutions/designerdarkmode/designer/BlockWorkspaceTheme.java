@@ -236,11 +236,6 @@ final class BlockWorkspaceTheme {
      * one should not pay for a lookup that cannot succeed.
      */
     private static boolean isBlockUi(Class<?> type) {
-        for (Class<?> c = type; c != null; c = c.getSuperclass()) {
-            if (BASIC_BLOCK_UI.equals(c.getName())) {
-                return true;
-            }
-        }
-        return false;
+        return ClassNames.extendsNamed(type, BASIC_BLOCK_UI);
     }
 }

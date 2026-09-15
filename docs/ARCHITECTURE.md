@@ -233,6 +233,109 @@ literal, so the inspector shows nothing wrong while the screen does. The pass
 darkens the fills rather than correcting the labels, judged on each colour's own
 luminance.
 
+### VisionGate
+Not a theming pass: the reason dark mode and Vision are kept apart, and the
+mechanism that keeps them so.
+
+Vision saves a window by serializing every component property that differs
+from a *clean copy* of the component's class (`XMLSerializer.getCleanCopy`),
+and it caches that clean copy in a **static map for the life of the Designer**,
+constructed under whatever look and feel was installed the first time the
+class was saved. Property equality is `equals`, except that a border whose
+class is literally named `SynthBorder` is deemed equal to anything — a stock
+look-and-feel assumption baked into `AbstractEqualityDelegateSupport`. FlatLaf
+borders extend `BasicBorders$MarginBorder`, so they miss that exception and
+get written by class name. (`BorderUIResourceDelegate` is not a way out: it is
+keyed on `BorderUIResource` and serializes the wrapped border, it does not
+skip it. Equality delegates are consulted only when both operands share an
+exact class, so none can reconcile a FlatLaf border with a Synthetica one.)
+The consequences, reproduced headlessly against the real
+`vision-client`/`vision-designer` jars (2026-09-02):
+
+- a stock-born window saved after switching to FlatLaf gains `setFont
+  Helvetica Neue 13`, `setForeground`, `setBackground`, `setButtonBG`,
+  `setMargin` and `<o cls="com.formdev.flatlaf.ui.FlatButtonBorder"/>` on
+  every component;
+- that XML fails to load without FlatLaf on the classpath — every Vision
+  client, and every Designer without this module — with
+  `ClassNotFoundException`, not a warning;
+- in the harness, a window deserialized under FlatLaf and then restored to
+  stock still failed to save (`Unable to create clean copy of
+  de.javasoft.plaf.synthetica.ScalableFont`). A live 8.3.6 Designer hands
+  components a plain `FontUIResource` rather than Synthetica's `ScalableFont`
+  (the module logs the class at startup), so that particular failure is a
+  harness artefact — but the gate treats the round trip as damage anyway,
+  because the clean-copy cache makes any toggle-then-save suspect.
+
+Hence the gate, in three parts, all in `VisionGate` and its three call sites
+in `ThemeManager`:
+
+1. **Refuse** — `beginSwitch(true)` and `applyStartupPreference()` ask
+   `blockingReason()`: any `TopLevelContainer` (the interface both
+   `FPMIWindow` and `VisionTemplate` implement) under any window, or the
+   `WorkspaceManager`'s selected workspace keyed `windows`. A refused click
+   resets the preference and the menu; a refused startup keeps the preference,
+   and so does a drop-out (2 and 3 below) — nothing failed, and a launch away
+   from Vision should come up dark again. The click asks twice: once when the
+   menu item is ticked and again one event turn later when the theme is
+   actually installed, because a click on a Vision node queued behind the
+   menu click selects the Vision workspace in between, and the first answer
+   is stale by then. If dark mode is somehow already on when the gate blocks
+   (a rebuilt menu re-asserting the preference), Vision wins and the Designer
+   drops out rather than reporting a refusal.
+2. **Leave first** — `watchNavigation` adds a `WorkspaceNavigationListener`
+   proxy to the `WorkspaceManager`. Selecting a Vision node in the project
+   browser activates the `windows` workspace on the FIRST click, synchronously;
+   the window is deserialized on the second. `leaveDarkForVision` runs
+   `apply(false)` right there, in the listener, so the window is born under
+   Synthetica. Deferring it one event turn would race the second click.
+3. **Catch the rest** — the dark-mode component watcher checks every attached
+   container (four levels deep) for a `TopLevelContainer`; a hit ends dark
+   mode on the next turn and tells the user to close and reopen the window.
+
+Everything Vision-side is reached by name — `TopLevelContainer`,
+`WorkspaceManager`, `IgnitionDesigner.getWorkspace()` — so a Designer without
+Vision loses the gate, not the module. The Designer-side names are pinned by
+`ReflectiveSurfaceTest`; the Vision one cannot be (its jars are not a published
+artifact) and is checked by hand in the QA checklist, §N.
+
+**Why not fix the serializer instead.** It can be reached: every module's
+`DesignerModuleHook.configureSerializer(XMLSerializer)` runs on the fresh
+serializer `DesignerContextImpl.createSerializer()` builds for each save,
+`XMLSerializer.setCleanCopy(Class, Object)` is public static, and the cache
+behind `getCleanCopy` is a plain static `HashMap`. A headless probe against
+the real 8.3.8 platform and Vision 12.3.8 jars (2026-09-15, nine scenarios:
+`BasicContainer` with a button, label and text field, saved across a
+stock → dark → stock cycle) showed that clearing that cache after each
+look-and-feel switch removes every FlatLaf class name, `setFont` and
+look-and-feel colour from every save — dark save of a stock-born window,
+dark-born window, stock-saved window reloaded under dark, and the light
+saves after the switch back — while hand-set values (`setButtonBG`,
+`setText`) still round-trip. The crash, in other words, is curable from
+here.
+
+What is not: a window LOADED under dark still saves `setForeground #DDE0E3`
+on its buttons. `PMIButton.initialize()` copies the static
+`IgnitionLookAndFeel$Colors.ButtonForeground` object into the button's
+foreground; `IaColorTokens` rewrites that object to Base900 (#DDE0E3) under
+dark, while the clean copy's foreground is FlatLaf's `Button.foreground`
+UIResource (#DDDDDD), so the two differ and the DARK text colour is baked
+into the window — light-grey text in a light Vision client. Under the stock
+theme the constant equals the look-and-feel default, which is the assumption
+Vision relies on. Nine `factorypmi.application.components` classes read
+`Colors.*` this way: `PMIButton`, `PMIToggleButton`, `PMINStateButton`,
+`PMIControlButton`, `PMIMultiStateIndicator` (button colours and the
+indicator colours), `PMICheckBox` and `PMIRadioButton` (Base100),
+`PMIProgressBar` (Base100, Base900, Primary), `PMITextArea` (Base000,
+NonEditableBackground). Dark mode inside Vision therefore needs the cache
+refresh AND either FlatLaf defaults kept equal to the rewritten constants for
+those keys or those constants left alone in Vision, plus one more thing the
+probe surfaced: after the light restore a text field still held Tahoma 11
+while the defaults said Dialog 12 until a second `updateComponentTreeUI` —
+the restore's phase order leaves fonts stale, which would write `setFont`
+into any window open across the switch. That is a follow-up feature, not a
+swap for the gate; the probe recipe is in the project notes.
+
 ### ComponentInspector
 Debug only. **Cmd/Ctrl+Shift+I** (or `+F12`) dumps the component chain under the
 mouse to the debug log — class, background/foreground with `UIResource` vs
@@ -261,6 +364,28 @@ dispatch thread.
 
 ## Gotchas and hard-won facts
 
+- **The Designer calls `getModuleMenu()` again during its own teardown**
+  (`IgnitionDesigner$LoadedModule.shutdown()` does so twice before
+  `hook.shutdown()`, from both exit and opening another project). A
+  `StateChangeAction` fires `itemStateChanged` from `setSelected`, so seeding
+  the Tools menu checkbox from the preference used to read as a click at that
+  moment — harmless while the preference always matched the screen, a refusal
+  dialog on the way out plus a wiped preference once a Vision-blocked launch
+  could keep "dark" saved with a light Designer. The hook seeds under its
+  `syncing` guard, and `ThemeManager.setDark` ignores requests after
+  `shutdown()`.
+- **"Inside Vision" is the canvas, not the package.** The passes that lift
+  dark text and refresh dark leftovers must not touch Vision's user content,
+  and the first cut keyed that on any ancestor from a `factorypmi` package.
+  Vision's component palette and property editor are `factorypmi` classes
+  too, so after the Vision gate dropped a Designer to light their filter
+  fields stayed dark — the same JIDE parent-first quirk as #45, on the two
+  components the fix for #45 was told to skip. The test is now an ancestor
+  that is a Vision `TopLevelContainer` or the Designer's
+  `AbstractDesignableWorkspace`. Related: IA's `PanelBasedTreeCellRenderer`
+  reads the `Tree.*` colours once, in its constructor, and has no `updateUI`;
+  the Tag Browser creates new ones while dark, so the light restore re-syncs
+  the renderer of every tree it walks (`TreeIconRecolorer.syncRendererColors`).
 - **Toggle sometimes ignored.** With FlatLaf user scaling enabled, FlatLaf
   registers a permanent `UIScale` listener on the UI defaults; a later
   Synthetica `uninitialize()` fires `defaultFont = null` through it → NPE that

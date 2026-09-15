@@ -64,6 +64,12 @@ class ReflectiveSurfaceTest {
         named.put("ThemeManager.jideFactory", ThemeManager.JIDE_LAF_FACTORY);
         named.put("ThemeManager.basicPainter", ThemeManager.BASIC_PAINTER);
         named.put("ThemeManager.themePainter", ThemeManager.THEME_PAINTER_TYPE);
+        // The Vision gate. Vision's own TopLevelContainer is NOT listed: the
+        // Vision jars are not a published artifact and are not on this
+        // classpath, so that name is checked by hand (docs/QA-CHECKLIST.md, §N).
+        named.put("VisionGate.workspaceManager", VisionGate.WORKSPACE_MANAGER);
+        named.put("ThemeManager.designableWorkspace", ThemeManager.DESIGNABLE_WORKSPACE);
+        named.put("VisionGate.navigationListener", VisionGate.NAVIGATION_LISTENER);
         named.put("ThemeManager.keyField", ThemeManager.KEY_FIELD_CLASS);
         named.put("ThemeManager.borderlessField", ThemeManager.BORDERLESS_FIELD_CLASS);
 
@@ -108,7 +114,7 @@ class ReflectiveSurfaceTest {
         IaColorTokens.CLASS_DARK.forEach((className, fields) -> {
             Class<?> owner;
             try {
-                owner = Class.forName(className);
+                owner = load(className);
             } catch (ClassNotFoundException absent) {
                 missing.add(className + " (whole class)");
                 return;
@@ -179,6 +185,23 @@ class ReflectiveSurfaceTest {
         method(missing, ThemeManager.KEY_FIELD_CLASS, ThemeManager.UNEDITABLE_FOREGROUND_SETTER,
             Color.class);
 
+        // --- VisionGate ----------------------------------------------------
+        // The gate's whole job is to run BEFORE a window is deserialized, and
+        // the navigation listener is the only hook that fires at that point.
+        // Losing it would degrade the gate silently to the attach-time fallback.
+        methods(missing, "com.inductiveautomation.ignition.designer.IgnitionDesigner", "getWorkspace");
+        methods(missing, VisionGate.WORKSPACE_MANAGER, "getSelectedWorkspace");
+        methods(missing, "com.inductiveautomation.ignition.designer.model.ResourceWorkspace", "getKey");
+        method(missing, VisionGate.NAVIGATION_LISTENER, "workspaceActivated", String.class);
+        method(missing, VisionGate.NAVIGATION_LISTENER, "workspaceDeactivated", String.class);
+        try {
+            Class<?> listener = load(VisionGate.NAVIGATION_LISTENER);
+            method(missing, VisionGate.WORKSPACE_MANAGER, "addNavigationListener", listener);
+            method(missing, VisionGate.WORKSPACE_MANAGER, "removeNavigationListener", listener);
+        } catch (ClassNotFoundException absent) {
+            missing.add(VisionGate.NAVIGATION_LISTENER + " (class)");
+        }
+
         // --- ScriptEditorTheme ---------------------------------------------
         methods(missing, ScriptEditorTheme.NAMED_THEME, "getTheme");
 
@@ -203,9 +226,18 @@ class ReflectiveSurfaceTest {
                 + "working without saying so");
     }
 
+    /**
+     * Resolve without initializing: reflecting on a class's members does not
+     * need its static initializer to run, and {@code IgnitionDesigner}'s wants
+     * a display this harness does not have.
+     */
+    private static Class<?> load(String className) throws ClassNotFoundException {
+        return Class.forName(className, false, ReflectiveSurfaceTest.class.getClassLoader());
+    }
+
     private static boolean resolves(String className) {
         try {
-            Class.forName(className);
+            load(className);
             return true;
         } catch (ClassNotFoundException | LinkageError absent) {
             return false;
@@ -228,7 +260,7 @@ class ReflectiveSurfaceTest {
     private static void method(List<String> missing, String className,
             String name, Class<?>... parameters) {
         try {
-            Class.forName(className).getMethod(name, parameters);
+            load(className).getMethod(name, parameters);
         } catch (ClassNotFoundException absent) {
             missing.add(className + " (class)");
         } catch (NoSuchMethodException gone) {
@@ -239,7 +271,7 @@ class ReflectiveSurfaceTest {
     private static void fields(List<String> missing, String className, String... names) {
         for (String name : names) {
             try {
-                Class.forName(className).getDeclaredField(name);
+                load(className).getDeclaredField(name);
             } catch (ClassNotFoundException absent) {
                 missing.add(className + " (class)");
             } catch (NoSuchFieldException gone) {
