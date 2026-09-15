@@ -17,13 +17,13 @@ value is knowing *where to look*.
 
 ## Runs
 
-| Date | Ignition | Vision | Module | Scope covered |
-|---|---|---|---|---|
-| 2026-08-29 | 8.3.6 | 12.3.6 | `f4104b54`, built at `33cf8c7` — **10 commits behind `main`**, so without #36/#37/#38 | Three Designer sittings (13:22, 13:40, 14:15 UTC): §L popups, Alarm Pipeline Editor, Translation Manager, dataset editor, named-query selector |
-| 2026-09-01 (afternoon) | 8.3.6 | 12.3.6 | `b01d80eb` | #57 and the editor-resilience fix confirmed by eye. Third popup source verified (Perspective canvas). A **saved** view added to the dev project so §E stops being blocked by an empty project |
-| 2026-09-01 | 8.3.6 | 12.3.6 | `b510440` | Closing the gaps left by the 2026-08-31 sweep (#41). Created a Perspective view so §E had something to open; Symbol Factory; one more heavyweight popup. **Right-click is confirmed un-automatable** — see [§L](#l-popup-sweep) |
-| 2026-08-31 (evening) | 8.3.6 | 12.3.6 | `b510440` | Verification pass by eye in a real Designer for #47, #48, #50, #51, #52 and the late-attach fix. All confirmed. Two rounds: the first found #50 only half-fixed (chart background still white) and the Vision filters dark in light mode |
-| 2026-08-31 | 8.3.6 | 12.3.6 | `76c4600` (`main`, release candidate) | Driven with computer use, 12:01–12:13 UTC. §A, §B (Properties, Export, Diagnostics), §C, §D console + autocomplete, §E property editor, §F palette/inspector, §J Image Management, §K Query Browser, toggle-off. **Two new `light` results — see [Diagnostics](#b-menus-dialogs-project-settings) and [Query Browser](#k-database-and-queries).** §L not re-verified (see [Note on this run](#note-on-the-2026-08-31-run)) |
+| Date | OS | Ignition | Vision | Module | Scope covered |
+|---|---|---|---|---|---|
+| 2026-08-29 | macOS | 8.3.6 | 12.3.6 | `f4104b54`, built at `33cf8c7` — **10 commits behind `main`**, so without #36/#37/#38 | Three Designer sittings (13:22, 13:40, 14:15 UTC): §L popups, Alarm Pipeline Editor, Translation Manager, dataset editor, named-query selector |
+| 2026-09-01 (afternoon) | macOS | 8.3.6 | 12.3.6 | `b01d80eb` | #57 and the editor-resilience fix confirmed by eye. Third popup source verified (Perspective canvas). A **saved** view added to the dev project so §E stops being blocked by an empty project |
+| 2026-09-01 | macOS | 8.3.6 | 12.3.6 | `b510440` | Closing the gaps left by the 2026-08-31 sweep (#41). Created a Perspective view so §E had something to open; Symbol Factory; one more heavyweight popup. **Right-click is confirmed un-automatable** — see [§L](#l-popup-sweep) |
+| 2026-08-31 (evening) | macOS | 8.3.6 | 12.3.6 | `b510440` | Verification pass by eye in a real Designer for #47, #48, #50, #51, #52 and the late-attach fix. All confirmed. Two rounds: the first found #50 only half-fixed (chart background still white) and the Vision filters dark in light mode |
+| 2026-08-31 | macOS | 8.3.6 | 12.3.6 | `76c4600` (`main`, release candidate) | Driven with computer use, 12:01–12:13 UTC. §A, §B (Properties, Export, Diagnostics), §C, §D console + autocomplete, §E property editor, §F palette/inspector, §J Image Management, §K Query Browser, toggle-off. **Two new `light` results — see [Diagnostics](#b-menus-dialogs-project-settings) and [Query Browser](#k-database-and-queries).** §L not re-verified (see [Note on this run](#note-on-the-2026-08-31-run)) |
 
 ## Running the sweep
 
@@ -32,7 +32,11 @@ value is knowing *where to look*.
    (see [DEVELOPMENT.md](DEVELOPMENT.md#the-debug-log)). It goes in the Designer
    Launcher, per gateway: select the gateway → **Edit** → *Additional JVM
    Arguments*. It survives relaunches, so this is a one-time setup.
-2. **Tools → Dark Mode** on.
+2. **Tools → Dark Mode** on. The log now opens with an `env:` block — OS,
+   JRE, which `java.desktop` packages the launcher opened, scaling, fonts.
+   Record the OS in the [Runs](#runs) table; on anything but macOS, keep the
+   block with the run, because it is what the
+   [platform rows](#a-main-shell) below are read against.
 3. Walk the sections below. Open each surface, look at it, record a result and
    the date.
    **Judge colour at 100%, never on a scaled screenshot.** On a Retina display a
@@ -77,6 +81,8 @@ point of the first run.
 |---|---|---|---|---|
 | Menus and menu popups | Top of the main frame | `pass` | `2026-08-31` | File / Project / Tools / Help popups |
 | macOS system menu bar | Top of the screen | `skip` | `2026-08-31` | Drawn by the OS and following the system appearance — not reachable from a Swing look and feel. Neither is the search field inside the Help menu |
+| In-window menu bar (Windows, Linux) | Top of the main frame | — | — | The opposite case: off macOS the menu bar is a Swing `JMenuBar`, so the swap DOES theme it — and it has never been looked at, because on macOS it does not exist. Menu titles, hover, mnemonics and the accelerator text in the popups |
+| Native title bar and window frame (Windows, Linux) | Around every window | `skip` | — | Stays light by decision (see [ARCHITECTURE](ARCHITECTURE.md#the-switch-step-by-step), step 9): the `apple.awt.windowAppearance` property is macOS-only, and FlatLaf window decorations on Ignition's frames would be a larger change than the gap justifies. Record it, do not file it |
 | Toolbars | Below the menu bar | `pass` | `2026-08-31` | incl. the Vision workspace's extra toolbars |
 | Dock title bars, grippers, split dividers | Any docked panel | `pass` | `2026-08-31` | |
 | Section headers / collapsible title panes | Left and right docks | `pass` | `2026-08-31` | `SESSION PROPS` |
@@ -90,6 +96,7 @@ point of the first run.
 | Surface | Where | Result | Last checked | Notes |
 |---|---|---|---|---|
 | Project → Properties: Project General | Project → Properties | `pass` | `2026-08-31` | incl. the nav list, combos, checkboxes and OK/Apply/Cancel |
+| File chooser dialogs (Windows, Linux) | File → Import / Export, Image Management upload | — | — | On macOS the Designer may hand you a native `FileDialog`, which no look and feel reaches; off macOS it is a Swing `JFileChooser`, which FlatLaf themes — with icons that may be the platform's own. A different surface, not the same one |
 | Project → Properties: Project Permissions | " | — | — | |
 | Project → Properties: Project Designer | " | — | — | |
 | Project → Properties: Vision General | " | — | — | Vision module required |
@@ -571,6 +578,7 @@ these is a real gap, not a pass.
 | §F border chooser, Layout, Size and Position | Need a Vision window with a component selected | A Vision window, by hand |
 | ~~Relaunch-comes-up-stock~~ | **Run 2026-09-01 and passed.** Toggled off, relaunched, confirmed the Designer comes up genuinely stock, toggled back. Recorded rather than deleted because the run doubles as the baseline half of the comparison in [Compare against a relaunched Designer](#compare-against-a-relaunched-designer-before-calling-something-a-bug) | — |
 | §E view editor rulers and surround | Not a gap in testing — an undecided question. They are chrome and they stay light | A decision |
+| **Everything, on Windows and Linux** | Every run above is macOS. The headless harness runs on all three platforms in CI, which proves the switch sequence and the reflective reach — not what anything looks like. The three rows marked *(Windows, Linux)* in §A and §B are surfaces that exist only there | A Designer sitting on each, walking this checklist, with the `env:` block from the log kept alongside the run. A 150% display on Windows and a HiDPI desktop on Linux would settle the scaling question in [ARCHITECTURE](ARCHITECTURE.md#gotchas-and-hard-won-facts) at the same time |
 
 ## Out of scope
 

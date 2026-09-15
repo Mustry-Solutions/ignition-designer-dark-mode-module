@@ -10,6 +10,40 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ## [Unreleased]
 
+Portability. The module has only ever been watched on macOS; these changes
+make what would differ elsewhere observable, and fix the two things that
+demonstrably did.
+
+### Added
+
+- **The debug log opens with an environment block.** OS, JRE, the
+  module-system and look-and-feel JVM arguments, which `java.desktop`
+  packages the launcher opened, scaling, Synthetica's scale factor and font,
+  and the `UIManager` font on either side of every switch. A bug report from
+  Windows or Linux now carries the evidence instead of the guesswork.
+- **The headless harness runs on Windows and macOS in CI**, not only Linux,
+  with the debug log uploaded per platform.
+- **A status-bar hint when the JVM has not opened `java.awt`.** The design
+  tokens are restyled by rewriting `Color` instances in place, which needs
+  `--add-opens java.desktop/java.awt=ALL-UNNAMED` from the Designer Launcher —
+  observed on macOS, unverified elsewhere. Without it every token-coloured
+  surface stayed light with nothing to say why. Now the status line names the
+  argument and where it goes.
+
+### Fixed
+
+- **Dark mode keeps the Designer's font.** FlatLaf substituted the operating
+  system's UI font (`Dialog 12` → `Helvetica Neue 13` on macOS; Segoe UI at
+  the desktop's size on Windows), so every toggle changed text metrics, not
+  just colours. The stock font is now pinned across the switch, and the pin
+  carries Synthetica's scale factor with it on a scaled display.
+
+### Documented
+
+- The native **title bar and window frame stay light on Windows and Linux**,
+  by decision. The QA checklist gained an OS column and the three surfaces
+  that only exist off macOS.
+
 ## [0.2.0] - 2026-09-01
 
 A defect-fixing release. Ten dark-mode defects found by a Designer QA sweep

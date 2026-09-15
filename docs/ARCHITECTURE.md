@@ -40,9 +40,11 @@ orchestrator; the other classes are the fronts.
 the switch aborts. Phases 2+ are each wrapped in `safely(...)` so one failing
 pass is logged (with a stack trace, to the debug log) without stranding the rest.
 
-1. **Look and feel swap.** Dark: `UIManager.setLookAndFeel(new FlatDarkLaf())`.
-   Light: reinstall the stock theme through Synthetica's own entry point.
-   Wrapped in a one-shot retry (see [Gotchas](#gotchas-and-hard-won-facts)).
+1. **Look and feel swap.** Dark: `UIManager.setLookAndFeel(new FlatDarkLaf())`,
+   then `keepStockFont(...)` puts the `Label.font` read just before the swap
+   as FlatLaf's `defaultFont`, so the switch is colour-only (see
+   [Gotchas](#gotchas-and-hard-won-facts)). Light: reinstall the stock theme
+   through Synthetica's own entry point. Wrapped in a one-shot retry.
 2. **Synthetica singleton** — `keepSyntheticaAlive()`, first of the `safely(...)`
    passes on the dark switch, because nothing else may call into Synthetica
    until it is back.
@@ -61,7 +63,10 @@ pass is logged (with a stack trace, to the debug log) without stranding the rest
    colours itself in its constructor never gets them back.
 8. **`updateComponentTreeUI`** on every window.
 9. **macOS title bars** — set/clear the `apple.awt.windowAppearance` client
-   property so the native title bar follows the theme.
+   property so the native title bar follows the theme. A no-op elsewhere: on
+   Windows and Linux the native title bar and frame stay light, by decision —
+   FlatLaf's own window decorations on Ignition's frames would be a larger
+   and riskier change than the gap justifies.
 10. **The passes** (dark only): tree icons, button/label icons, cell-renderer
     sanitizer, collapsible title panes, white-token background and border swaps,
     script editors, **JIDE code editors**, **diagnostics chart axes**, console
@@ -238,6 +243,19 @@ label on every call, so under dark mode both the Designer's messages and ours
 would be black on a dark bar — a listener lifts the foreground again each time,
 the same shape as the white-background enforcer and for the same reason.
 
+### EnvironmentProbe
+Once per session, at the first switch, the debug log gets a block of host
+facts: OS, JRE, the module-system and look-and-feel JVM arguments, whether
+each `java.desktop` package the module needs is opened or exported to it,
+the scaling properties (`flatlaf.uiScale.enabled`, `sun.java2d.uiScale`,
+`GDK_SCALE`, FlatLaf's system/user factors, the screen transform),
+Synthetica's own scale factor and font, and the `UIManager` font. Every
+switch also logs the `Label.font` on either side. The module has only ever
+been watched on macOS, and these are exactly the facts that can differ on
+another platform — so a bug report from one carries the answers. Written at
+`log` level on purpose: the reader of a bug report will not have had the
+debug flag on. Diagnostic only; every step is guarded.
+
 ### DebugLog
 Best-effort append-only log at `~/.ignition/designer-dark-mode.log`. The
 Designer keeps its own logs in memory only; this file is the dev-loop's eyes.
@@ -307,6 +325,37 @@ dispatch thread.
 - **Restores must iterate tracked sets, not the hierarchy** (see above).
 - **macOS native title bar** stays dark after a light switch unless the root
   pane's `apple.awt.windowAppearance` client property is explicitly cleared.
+- **The font changed on every toggle.** Left alone, FlatLaf resolves the
+  operating system's UI font (the harness log on macOS: `Dialog 12pt` →
+  `Helvetica Neue 13pt`) and the stock restore puts `Dialog 12` back by
+  name. A point on macOS, unnoticed; on Windows the pick is Segoe UI at the
+  desktop's message-font size, and text that grows shifts row heights and
+  clips labels in fixed-size panels. `keepStockFont` reads `Label.font`
+  before the swap and puts it as `defaultFont` right after — before
+  `snapshotMenuDefaults` resolves FlatLaf's active font values into the
+  snapshot, which is what makes the pin reach every `*.font` key. It is in
+  that snapshot, so the light clear removes it with the rest. Reading it
+  live rather than hard-coding `Dialog 12` also carries Synthetica's scale
+  factor into FlatLaf on a scaled display. Pinned by
+  `darkModeKeepsTheStockFont` in the harness, which runs on all three
+  platforms in CI.
+- **`--add-opens java.desktop/java.awt` is a launcher fact, not a module
+  one.** `IaColorTokens` needs it, the Designer Launcher passes it on macOS,
+  and nobody has read the launcher's command line anywhere else. Without it
+  every token-coloured surface stays light while the rest goes dark.
+  `install()` throws `JvmNotOpened` for exactly the
+  `InaccessibleObjectException` case — the one failure the user can fix —
+  and the degraded status line carries the argument and where it goes in
+  the launcher, ahead of the log pointer. Verified by running the harness
+  with that opening removed: 1 of 23 phases fails, everything else
+  completes.
+- **`flatlaf.uiScale.enabled=false` is justified by macOS.** The comment
+  says system scaling covers it, which is true there and on Windows (Java
+  9+), and doubtful on a HiDPI Linux desktop, where FlatLaf user scaling is
+  the usual path. Deliberately left as is until a Linux `env:` block shows
+  what the JVM actually sees; if it does render wrong, the fix is a
+  platform conditional that keeps the retry, not a plain re-enable, and the
+  `theFlatLafScalingListenerIsNeverRegistered` pin becomes conditional too.
 
 [35]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/35
 
