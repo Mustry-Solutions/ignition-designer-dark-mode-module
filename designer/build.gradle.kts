@@ -139,7 +139,18 @@ val lafHarnessTask = tasks.register<Test>("lafHarness") {
     systemProperty("designerdarkmode.logFile",
         layout.buildDirectory.file("laf-harness-debug.log").get().asFile.absolutePath)
 
+    // A hung test should name itself. Since #85 the harness stalls in about
+    // half of CI runs, in a different PropertyKeyFieldTest method each time,
+    // and never locally. No single test takes more than a second, so anything
+    // past a minute is the hang; JUnit then prints a dump of every thread
+    // before interrupting the test (which a deadlock or a spin ignores — the
+    // outer watchdog, ops/laf-harness-watchdog.sh, handles that end).
+    systemProperty("junit.jupiter.execution.timeout.default", "60 s")
+    systemProperty("junit.jupiter.execution.timeout.thread.dump.enabled", "true")
+
     testLogging {
-        events("passed", "skipped", "failed")
+        // standardOut/standardError: the harness prints almost nothing, and
+        // JUnit's timeout thread dump goes through the test JVM's streams.
+        events("passed", "skipped", "failed", "standardOut", "standardError")
     }
 }
