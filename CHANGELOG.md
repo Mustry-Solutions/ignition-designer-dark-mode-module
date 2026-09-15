@@ -107,6 +107,18 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ### Fixed
 
+- **The look-and-feel harness no longer deadlocks in `PropertyKeyFieldTest`.**
+  About half of CI runs since the property-name lift stalled there until the
+  job cap cancelled them. PR #94's watchdog caught it: the test built a real
+  `JsonEditor` and laid it out on the test thread, which holds the AWT tree
+  lock inside `Container.preferredSize` while `BasicTextUI.getMaximumSize`
+  waits for a text field's document lock; meanwhile `expandAll()` had made
+  `NodeEditor` post its rebuild to the event dispatch thread, where a new key
+  field's `setText` holds that document lock and its revalidate waits for the
+  tree lock. The Designer only ever does any of this on the dispatch thread,
+  so the test now does too, in phases, letting the queue drain between
+  building the editor and inspecting it. Harness-only; no module code changed.
+
 - The README's screenshot pair is retaken from `main` after the property-name
   fix below (docs only). The previous dark image showed the very defect the
   forum reported — every Session Props name black on the dark panel — so the
