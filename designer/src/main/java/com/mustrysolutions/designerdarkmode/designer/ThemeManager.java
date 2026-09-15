@@ -1644,6 +1644,15 @@ public class ThemeManager {
             if (child instanceof java.awt.Container) {
                 refreshed += refreshComponentsLeftDark((java.awt.Container) child);
             }
+            if (child instanceof javax.swing.JTree) {
+                // A renderer is not in the hierarchy, so the walk cannot see
+                // its colours; and IA's PanelBasedTreeCellRenderer copies the
+                // Tree.* colours out of UIManager in its constructor and has
+                // no updateUI to re-read them. One created while the Designer
+                // was dark — the Tag Browser makes new ones — paints every
+                // row dark for the rest of a light session unless re-synced.
+                TreeIconRecolorer.syncRendererColors(((javax.swing.JTree) child).getCellRenderer());
+            }
             if (!isDarkLeftover(child)) {
                 continue;
             }
@@ -1740,11 +1749,31 @@ public class ThemeManager {
         return max - min < 24;
     }
 
-    /** Vision design canvases render user content; never restyle inside them. */
+    /**
+     * The Designer's design-canvas workspace ({@code WindowWorkspace} and the
+     * template workspace extend it): the tabbed pane whose tabs are Vision
+     * windows and templates.
+     */
+    // Package-private so ReflectiveSurfaceTest can assert this name still
+    // resolves against the Ignition the harness runs.
+    static final String DESIGNABLE_WORKSPACE =
+        "com.inductiveautomation.ignition.designer.designable.AbstractDesignableWorkspace";
+
+    /**
+     * Vision design canvases render user content; never restyle inside them.
+     *
+     * <p>"Inside" means under a Vision window or template — the things Vision
+     * serializes — or under the workspace that hosts them. It used to mean
+     * "any ancestor from a {@code factorypmi} package", which also covered
+     * Vision's component palette and property editor: Designer chrome, not
+     * user content, and the two filter fields a Designer showed dark after
+     * the Vision gate had dropped it back to light, because the leftover
+     * pass below skipped them.
+     */
     private static boolean insideVisionWorkspace(java.awt.Component component) {
         for (java.awt.Component p = component; p != null; p = p.getParent()) {
-            String name = p.getClass().getName();
-            if (name.contains("factorypmi") || name.contains("VisionDesign")) {
+            if (VisionGate.isVisionTopLevel(p)
+                    || ClassNames.extendsNamed(p.getClass(), DESIGNABLE_WORKSPACE)) {
                 return true;
             }
         }

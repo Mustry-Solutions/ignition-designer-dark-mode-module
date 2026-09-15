@@ -374,6 +374,18 @@ dispatch thread.
   could keep "dark" saved with a light Designer. The hook seeds under its
   `syncing` guard, and `ThemeManager.setDark` ignores requests after
   `shutdown()`.
+- **"Inside Vision" is the canvas, not the package.** The passes that lift
+  dark text and refresh dark leftovers must not touch Vision's user content,
+  and the first cut keyed that on any ancestor from a `factorypmi` package.
+  Vision's component palette and property editor are `factorypmi` classes
+  too, so after the Vision gate dropped a Designer to light their filter
+  fields stayed dark — the same JIDE parent-first quirk as #45, on the two
+  components the fix for #45 was told to skip. The test is now an ancestor
+  that is a Vision `TopLevelContainer` or the Designer's
+  `AbstractDesignableWorkspace`. Related: IA's `PanelBasedTreeCellRenderer`
+  reads the `Tree.*` colours once, in its constructor, and has no `updateUI`;
+  the Tag Browser creates new ones while dark, so the light restore re-syncs
+  the renderer of every tree it walks (`TreeIconRecolorer.syncRendererColors`).
 - **Toggle sometimes ignored.** With FlatLaf user scaling enabled, FlatLaf
   registers a permanent `UIScale` listener on the UI defaults; a later
   Synthetica `uninitialize()` fires `defaultFont = null` through it → NPE that

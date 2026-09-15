@@ -68,6 +68,7 @@ class ReflectiveSurfaceTest {
         // Vision jars are not a published artifact and are not on this
         // classpath, so that name is checked by hand (docs/QA-CHECKLIST.md, §N).
         named.put("VisionGate.workspaceManager", VisionGate.WORKSPACE_MANAGER);
+        named.put("ThemeManager.designableWorkspace", ThemeManager.DESIGNABLE_WORKSPACE);
         named.put("VisionGate.navigationListener", VisionGate.NAVIGATION_LISTENER);
 
         List<String> missing = new ArrayList<>();
