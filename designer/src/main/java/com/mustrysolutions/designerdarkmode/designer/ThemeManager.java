@@ -327,6 +327,12 @@ public class ThemeManager {
             return;
         }
         DebugLog.log("ThemeManager: switching to " + (dark ? "dark" : "light") + " mode.");
+        // The host facts a bug report from another platform needs — see
+        // EnvironmentProbe. Once per session; the per-switch font lines
+        // (here and at the end) are what the dark and light fonts get
+        // compared on.
+        EnvironmentProbe.logOnce();
+        DebugLog.log("before switch: " + EnvironmentProbe.fontLine());
         failedPhases.clear();
         attemptedPhases = 0;
         phaseTrace.clear();
@@ -529,6 +535,7 @@ public class ThemeManager {
             safely("statusBar", status::uninstall);
             safely("cachedPainters", () -> repointCachedThemePainters(false));
         }
+        DebugLog.log("after switch: " + EnvironmentProbe.fontLine());
         log.info(dark ? "Dark mode applied." : "Stock Designer theme restored.");
         reportOutcome(dark);
     }

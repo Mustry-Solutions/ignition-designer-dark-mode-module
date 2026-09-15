@@ -49,28 +49,6 @@ jobs:
         env:
           ORG_GRADLE_PROJECT_org.gradle.java.installations.auto-download: "false"
 
-      # Not part of `build`: the harness resolves the whole Designer dependency
-      # tree at runtime and needs its own JDK module openings, so `check` should
-      # not drag it in by accident. It still has to run somewhere, or it rots —
-      # and it is the only check here that exercises the switch sequence against
-      # the real Synthetica/JIDE/FlatLaf interaction rather than against stubs.
-      # Headless by construction; no display is set up for it on purpose.
-      # Twice, on purpose (#53). The module reaches Ignition and JIDE internals
-      # by NAME — classes, fields, methods that no compiler checks — so it has
-      # to be exercised against both ends of what it claims to support:
-      # 8.3.0 is the floor in requiredIgnitionVersion, and the default is the
-      # current release, which is what people actually run. A rename in a
-      # recent 8.3.x is invisible if you only ever test the floor.
-      - name: Headless look-and-feel harness (current Ignition)
-        run: ./gradlew :designer:lafHarness --no-daemon --stacktrace
-        env:
-          ORG_GRADLE_PROJECT_org.gradle.java.installations.auto-download: "false"
-
-      - name: Headless look-and-feel harness (support floor)
-        run: ./gradlew :designer:lafHarness -Pharness.sdk=8.3.0 --no-daemon --stacktrace
-        env:
-          ORG_GRADLE_PROJECT_org.gradle.java.installations.auto-download: "false"
-
       # Cheap guard on the two things most likely to regress silently in
       # module.xml: the EULA reference and the free-module flag. Both are set
       # in build.gradle.kts and neither has a test that would catch a
@@ -87,3 +65,74 @@ jobs:
             || { echo "::error::module.xml no longer declares freeModule=true"; exit 1; }
           unzip -l "$modl" | grep -q 'license.html' \
             || { echo "::error::license.html was not staged into the .modl"; exit 1; }
+
+  harness:
+    name: LaF harness (${{ matrix.os }})
+    # Not part of `build`: the harness resolves the whole Designer dependency
+    # tree at runtime and needs its own JDK module openings, so `check` should
+    # not drag it in by accident. It still has to run somewhere, or it rots —
+    # and it is the only check here that exercises the switch sequence against
+    # the real Synthetica/JIDE/FlatLaf interaction rather than against stubs.
+    # Headless by construction; no display is set up for it on purpose.
+    #
+    # On all three operating systems, because the module has only ever been
+    # watched on macOS and the things that differ per platform — which JDK
+    # packages the JVM opens, which font FlatLaf resolves, how Java2D
+    # rasterises — are things the harness sees and a Linux-only run does not.
+    # fail-fast is off so one platform's failure still shows the other two.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    # Resolving the Designer's dependency tree is the slow part, and the
+    # Windows runner is the slow platform.
+    timeout-minutes: 25
+    defaults:
+      run:
+        # Git Bash on Windows, so `./gradlew` and the flags read the same on
+        # every row of the matrix.
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Cache Gradle
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*') }}
+          restore-keys: gradle-${{ runner.os }}-
+
+      # Twice, on purpose (#53). The module reaches Ignition and JIDE internals
+      # by NAME — classes, fields, methods that no compiler checks — so it has
+      # to be exercised against both ends of what it claims to support:
+      # 8.3.0 is the floor in requiredIgnitionVersion, and the default is the
+      # current release, which is what people actually run. A rename in a
+      # recent 8.3.x is invisible if you only ever test the floor.
+      - name: Headless look-and-feel harness (current Ignition)
+        run: ./gradlew :designer:lafHarness --no-daemon --stacktrace
+        env:
+          ORG_GRADLE_PROJECT_org.gradle.java.installations.auto-download: "false"
+
+      - name: Headless look-and-feel harness (support floor)
+        run: ./gradlew :designer:lafHarness -Pharness.sdk=8.3.0 --no-daemon --stacktrace
+        env:
+          ORG_GRADLE_PROJECT_org.gradle.java.installations.auto-download: "false"
+
+      # The harness writes the same environment block a Designer would, so a
+      # failing platform's log says which opening or font it saw.
+      - name: Upload harness debug log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: laf-harness-debug-${{ matrix.os }}
+          path: designer/build/laf-harness-debug.log
+          if-no-files-found: ignore
