@@ -550,7 +550,8 @@ public class TreeIconRecolorer {
         // back to the smart invert when there is no pair to swap.
         boolean paired = child instanceof javax.swing.AbstractButton
             && swapEnabledDisabledIcons((javax.swing.AbstractButton) child);
-        if (!paired && icon != null && !variantIcons.contains(icon)) {
+        if (!paired && icon != null && !variantIcons.contains(icon)
+                && !paintedWithRestyledToken(icon)) {
             Icon variant = darkVariant(icon);
             if (variant != null) {
                 buttonIconOriginals.putIfAbsent(child, icon);
@@ -562,6 +563,49 @@ public class TreeIconRecolorer {
             }
         }
     }
+
+    /**
+     * Is this glyph already dark-adapted by the token pass, so the smart
+     * invert must leave it alone?
+     *
+     * <p>IA tints many of its 8.3 glyphs with a design token —
+     * {@code SvgIconUtil.getIcon(name, w, h, Colors.IconDefault)} — and the
+     * icon keeps that {@code Color} as its paint. {@link IaColorTokens}
+     * restyles the token instance in place, so under dark mode such a glyph
+     * renders light with no help from this pass. Handing it to the invert
+     * anyway turned it back into a dim grey: the Event Stream editor's
+     * Enabled / Disabled / show-test-panel toggles measured 174 after the
+     * token pass and 111 after this one (follow-up on #79), whichever side of
+     * the switch the editor was built on.
+     *
+     * <p>Judged by identity on the tint, not by how light the render is: a
+     * stock light glyph that was nearly invisible on light chrome (the
+     * QuickFilterField disc, #60) must still be inverted, and the two cases
+     * are not separable by brightness alone.
+     */
+    private static boolean paintedWithRestyledToken(Icon icon) {
+        if (!(icon instanceof SvgIconUtil.AbstractSvgIcon)) {
+            return false;
+        }
+        try {
+            if (swapColorField == null) {
+                java.lang.reflect.Field field =
+                    SvgIconUtil.AbstractSvgIcon.class.getDeclaredField(SWAP_COLOR_FIELD);
+                field.setAccessible(true);
+                swapColorField = field;
+            }
+            Object tint = swapColorField.get(icon);
+            return tint instanceof Color && IaColorTokens.isRestyledToken((Color) tint);
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    // Package-private so ReflectiveSurfaceTest can assert this name still
+    // resolves against the Ignition the harness runs.
+    static final String SWAP_COLOR_FIELD = "swapColor";
+
+    private static java.lang.reflect.Field swapColorField;
 
     /**
      * Recolor an icon that only arrives after this pass has run.

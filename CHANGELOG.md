@@ -29,6 +29,37 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ### Fixed
 
+- **The selected section of an Event Stream was unreadable**
+  ([#79](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/79)).
+  The strip of sections across the top of an Event Stream editor highlights the
+  selected or hovered section with a pale rounded card, painted by
+  `FlowCellContent.paintSelected` straight onto the Graphics from four
+  `private static final` literals (`#DDE5EB` selected, `#EBEFF2` hover) — so no
+  look-and-feel swap or component walk reaches it, and the reporter's inspector
+  dump came back clean. The section name inside is a plain label on
+  `Label.foreground`, light under dark mode: light text on a pale card. The
+  literals now join `IaColorTokens.CLASS_DARK`, the in-place mutation that
+  already handles the welcome workspace's identical tile selection; the card
+  goes the same selection blue, with a matching outline, and comes back to its
+  exact stock value on the light restore. Covered by `FlowCellSelectionTest`
+  in the headless harness, which renders a section and reads the pixels, on
+  the 8.3.0, 8.3.6 and 8.3.8 jars.
+
+- **Toggle-button glyphs tinted with a design token came out dim** — the
+  Event Stream editor's Enabled / Disabled / show-test-panel buttons
+  ([#79](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/79)
+  follow-up). IA builds those icons with
+  `SvgIconUtil.getIcon(name, 16, 16, Colors.IconDefault)`, and the icon keeps
+  that `Color` as its paint, so the token pass already renders them light
+  (measured 174). The button-icon pass then handed them to the smart invert,
+  which turned a light neutral glyph into a dim grey (111), whichever side of
+  the switch the editor was built on. `TreeIconRecolorer` now leaves alone any
+  IA SVG glyph whose tint is a token instance `IaColorTokens` restyles — judged
+  by identity on the tint, not by brightness, so the stock light glyphs that
+  must still be inverted (the QuickFilterField disc, #60) are unaffected.
+  Covered by `TokenTintedButtonIconTest` in the headless harness, both
+  orderings.
+
 - **The dark mode choice could be lost on Linux** if the Designer was
   force-quit, killed or crashed shortly after toggling. `ThemeManager` wrote
   the preference but never flushed it, and on Linux the backing store

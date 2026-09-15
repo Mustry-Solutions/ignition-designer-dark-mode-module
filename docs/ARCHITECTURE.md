@@ -110,7 +110,9 @@ Reflectively mutates the **shared `Color` instances** on
 component and painter holding a token then renders dark on its next repaint,
 whenever it was built. Also mutates specific hard-coded color statics in named
 classes (`CLASS_DARK` — e.g. `NodeEditor`'s gutter/hover colors, the welcome
-panel's tile-selection color). Originals are snapshotted and restored on light.
+panel's tile-selection color, the selected/hovered section card on an Event
+Stream editor's `FlowCellContent`). Originals are snapshotted and restored on
+light.
 
 **Never mutate `Base000`** — it is `java.awt.Color.WHITE` itself, and corrupting
 it would break white JVM-wide. `isJdkGlobal` refuses it and every other JDK
@@ -132,6 +134,13 @@ theme tint; saturated brand/status colors keep their hue), the renderer's cached
 color fields are re-synced from `UIManager`, and identity-`WHITE` backgrounds
 (the `Base000` token) are corrected. Also recolors toolbar/status-bar button and
 label icons. Restores everything on light.
+
+One exclusion: an IA SVG glyph whose tint is a token instance `IaColorTokens`
+restyles (`SvgIconUtil.getIcon(name, w, h, Colors.IconDefault)` and friends) is
+already light under dark mode, and the smart invert would turn it back into a
+dim grey — the Event Stream editor's Enabled/Disabled toggles (#79). The pass
+checks the tint by identity, not the render by brightness, so stock light glyphs
+that still need inverting (#60) are unaffected.
 
 ### CellRendererSanitizer
 The table/list counterpart. Wraps table (column + per-class default), header,
