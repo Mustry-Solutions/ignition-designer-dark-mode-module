@@ -64,6 +64,8 @@ class ReflectiveSurfaceTest {
         named.put("ThemeManager.jideFactory", ThemeManager.JIDE_LAF_FACTORY);
         named.put("ThemeManager.basicPainter", ThemeManager.BASIC_PAINTER);
         named.put("ThemeManager.themePainter", ThemeManager.THEME_PAINTER_TYPE);
+        named.put("ThemeManager.keyField", ThemeManager.KEY_FIELD_CLASS);
+        named.put("ThemeManager.borderlessField", ThemeManager.BORDERLESS_FIELD_CLASS);
 
         List<String> missing = new ArrayList<>();
         named.forEach((owner, className) -> {
@@ -171,6 +173,11 @@ class ReflectiveSurfaceTest {
         methods(missing, ThemeManager.JIDE_LAF_FACTORY, "installJideExtension");
         method(missing, ThemeManager.JIDE_LAF_FACTORY, "installJideExtension", int.class);
         methods(missing, ThemeManager.BASIC_PAINTER, "getInstance");
+        // The property-name lift: the colour it replaces and the setter it
+        // goes through (both on BorderlessField, reached via KeyEditorField).
+        fields(missing, ThemeManager.BORDERLESS_FIELD_CLASS, ThemeManager.UNEDITABLE_FOREGROUND_FIELD);
+        method(missing, ThemeManager.KEY_FIELD_CLASS, ThemeManager.UNEDITABLE_FOREGROUND_SETTER,
+            Color.class);
 
         // --- ScriptEditorTheme ---------------------------------------------
         methods(missing, ScriptEditorTheme.NAMED_THEME, "getTheme");
