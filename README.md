@@ -197,15 +197,18 @@ docs/                       Architecture and development guides
 Inductive Automation's Exchange already has a
 [Dark Mode for the Designer](https://inductiveautomation.com/exchange/2719/overview)
 by Justin Edwards — a well-polished Jython script, MIT licensed, that has been
-serving this need on **Ignition 8.1** since 2024. If you are on 8.1, use it.
+serving this need on Ignition 8.1 since 2024. Since version 1.3.0
+(3 September 2026) it runs on **8.3** as well. On 8.1 it is the only option;
+on 8.3 you have a choice.
 
-Designer Dark Mode differs in two ways. It targets **8.3**, and it is a module
-rather than a project-library script, so it installs once on the gateway
-instead of being imported into each project and needs no Vision client tag to
-persist. Under the hood it swaps the Designer's look and feel for
-[FlatLaf](https://www.formdev.com/flatlaf/) and restyles Ignition's own design
-tokens, rather than painting enumerated components one class at a time — which
-means surfaces nobody has explicitly catalogued come out dark by default.
+Designer Dark Mode differs in how it is delivered and how it themes. It is a
+module rather than a project-library script, so it installs once on the
+gateway instead of being imported into each project, is toggled from the Tools
+menu, and needs no Vision client tag to persist. Under the hood it swaps the
+Designer's look and feel for [FlatLaf](https://www.formdev.com/flatlaf/) and
+restyles Ignition's own design tokens, rather than painting enumerated
+components one class at a time — which means surfaces nobody has explicitly
+catalogued come out dark by default.
 
 That script's careful catalogue of where the Designer leaks light informed this
 project's testing, and is gratefully acknowledged.

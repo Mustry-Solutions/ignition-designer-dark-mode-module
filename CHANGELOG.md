@@ -27,6 +27,15 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   caught the Linux bug below. Covers both write sites and an unwritable
   backing store.
 
+### Changed
+
+- The docs no longer describe Justin Edwards's
+  [Exchange dark-mode script](https://inductiveautomation.com/exchange/2719/overview)
+  as 8.1-only. Its 1.3.0 release (3 September 2026) targets 8.3, so the
+  README's prior-art section now presents it as an alternative on 8.3 rather
+  than the 8.1 counterpart, and the contributing guide and QA checklist say
+  which release the borrowed class catalogue came from.
+
 ### Fixed
 
 - **The dark mode choice could be lost on Linux** if the Designer was

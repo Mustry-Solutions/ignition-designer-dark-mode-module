@@ -6,10 +6,12 @@ found on purpose before a release rather than reported as bugs afterwards.
 The surface list comes from the catalogue in the MIT-licensed
 [Dark Mode for the Designer](https://inductiveautomation.com/exchange/2719/overview)
 Exchange script, which enumerates 291 class names across 13 dispatch lists,
-each annotated with where it lives in the UI. Those class names are 8.1-era and
-many have shifted on 8.3 — **the UI locations have not**, so the locations are
-what this checklist tracks. Gratefully acknowledged; see
-[Prior art](../README.md#prior-art).
+each annotated with where it lives in the UI. The catalogue was taken from the
+script's 8.1-era release, and many of those class names have shifted on 8.3 —
+**the UI locations have not**, so the locations are what this checklist
+tracks. (The script's 1.3.0 release, September 2026, targets 8.3 itself; its
+class lists have not been re-diffed against this checklist.) Gratefully
+acknowledged; see [Prior art](../README.md#prior-art).
 
 This module themes top-down (look-and-feel swap plus token mutation) rather than
 by painting enumerated classes, so most of these should already be dark. The
