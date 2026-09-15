@@ -45,9 +45,37 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   node so the tests write to an in-memory one instead of the developer's own,
   and the startup apply moved out of the readiness poll into
   `applyStartupPreference()` so it can be driven without a live Designer.
-  No behaviour change.
+  They also assert the flush, not just the value: the value lands in the
+  in-memory node either way, so a test that only read it back could not have
+  caught the Linux bug below. Covers both write sites and an unwritable
+  backing store.
 
 ### Fixed
+
+- **The dark mode choice could be lost on Linux** if the Designer was
+  force-quit, killed or crashed shortly after toggling. `ThemeManager` wrote
+  the preference but never flushed it, and on Linux the backing store
+  (`FileSystemPreferences`) only writes through on a 30-second sync timer or a
+  shutdown hook — so the next launch came up in the theme the user had just
+  changed away from. Both write sites now flush. Reproduced and verified
+  against Ignition's own bundled Linux JRE 17. Windows (registry) and macOS
+  (cfprefsd) persist out of process and were never affected, which is why this
+  went unnoticed.
+- The README now says where the Dark Mode setting lives and how far it
+  reaches (docs only; no behaviour change). It is a `java.util.prefs` value on
+  the machine running the Designer, per OS user — not on the gateway, not in
+  the project — and it is one value for every gateway that user connects to:
+  a gateway with the module applies it, a gateway without the module never
+  loads the code and leaves it alone, and a failed apply against one gateway
+  resets it for all of them. None of that was written down outside a comment
+  in `ThemeManager`. The README's intro also read as contradicting itself:
+  "the choice is remembered between sessions" followed two sentences later by
+  "relaunching always gives a clean stock theme, whichever way you left it".
+  The second sentence dates from when it sat next to a since-fixed restore
+  limitation; it now says what it meant — a relaunch starts from stock and
+  re-applies dark only if the setting asks for it. `ARCHITECTURE.md` and the
+  bricked-launch recovery note in `DEVELOPMENT.md` cross-reference the new
+  section.
 
 - A second documentation pass, this one over statements that contradict
   themselves rather than the code (docs only; no behaviour change). A "four

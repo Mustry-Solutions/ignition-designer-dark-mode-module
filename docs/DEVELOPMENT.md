@@ -340,7 +340,9 @@ preference so it starts light: remove the `java.util.prefs` node
 `com/mustrysolutions/designerdarkmode/designer` (a tiny one-off program using
 `Preferences.userRoot().node(...).removeNode()`). `ThemeManager` also
 auto-reverts the preference when an apply fails in the essential phase, so this
-is rarely needed.
+is rarely needed. The node belongs to the OS user, not to a gateway, so
+removing it resets dark mode for every gateway that user opens a Designer
+against (see [Where the setting is stored](../README.md#where-the-setting-is-stored)).
 
 ## Signing
 
