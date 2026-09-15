@@ -98,6 +98,13 @@ public class ThemeManager {
      * when the switch only partly worked.
      */
     private final java.util.List<String> failedPhases = new java.util.ArrayList<>();
+
+    /**
+     * What the user can do about a failed phase, when there is something.
+     * Set by {@link #safely} for the failures that carry one (a JVM that has
+     * not opened {@code java.awt}); null otherwise. Cleared per switch.
+     */
+    private String failureHint;
     private int attemptedPhases;
 
     /**
@@ -334,6 +341,7 @@ public class ThemeManager {
         EnvironmentProbe.logOnce();
         DebugLog.log("before switch: " + EnvironmentProbe.fontLine());
         failedPhases.clear();
+        failureHint = null;
         attemptedPhases = 0;
         phaseTrace.clear();
         // Held only for the abort path below: the exact overrides phase 0 drops,
@@ -560,7 +568,7 @@ public class ThemeManager {
             status.clear();
             return;
         }
-        String message = degradedMessage(dark, failedPhases, attemptedPhases);
+        String message = degradedMessage(dark, failedPhases, attemptedPhases, failureHint);
         log.warn(message);
         DebugLog.log(message);
         status.message(message);
@@ -568,9 +576,21 @@ public class ThemeManager {
 
     /** One line: what worked, what did not, and where to read about it. */
     static String degradedMessage(boolean dark, java.util.List<String> failed, int attempted) {
+        return degradedMessage(dark, failed, attempted, null);
+    }
+
+    /**
+     * The same line, with what to do about it when a failure said. The hint
+     * goes before the log pointer: a user who can fix it from the status bar
+     * should not have to open the log to find that out.
+     */
+    static String degradedMessage(boolean dark, java.util.List<String> failed, int attempted,
+            String hint) {
         return (dark ? "Dark mode applied" : "Stock theme restored")
             + " with " + failed.size() + " of " + attempted + " steps failing ("
-            + String.join(", ", failed) + "). Details in " + DebugLog.path();
+            + String.join(", ", failed) + "). "
+            + (hint == null ? "" : Character.toUpperCase(hint.charAt(0)) + hint.substring(1) + ". ")
+            + "Details in " + DebugLog.path();
     }
 
     /** Note a phase that does not run under {@link #safely} (it has its own guard). */
@@ -595,9 +615,17 @@ public class ThemeManager {
             task.run();
         } catch (Throwable t) {
             failedPhases.add(phase);
+            if (t instanceof IaColorTokens.JvmNotOpened) {
+                failureHint = t.getMessage();
+            }
             log.warn("Theme phase '" + phase + "' failed.", t);
             DebugLog.log("Theme phase " + phase + " FAILED.", t);
         }
+    }
+
+    /** The hint carried by the last switch's failures, if any. */
+    String failureHint() {
+        return failureHint;
     }
 
     /**
