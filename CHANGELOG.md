@@ -12,6 +12,14 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ### Added
 
+- `PropertyKeyFieldTest` in the look-and-feel harness: builds a real
+  `JsonEditor` over a session-props-shaped document, in both orders the
+  Designer uses (rows before the switch, rows after it), and asserts the
+  property names are readable, that the stock black comes back on the light
+  restore, and — rendered to pixels — that the name column paints no black
+  glyphs. Two of its cases model the runtime states that defeated the old
+  lift and failed against the previous code.
+
 - Unit tests for the theme preference — the one piece of state the module keeps
   between launches, and until now the only behaviour with no test of its own.
   They cover the `setDark`/`isDarkModeEnabled` round trip, the rule that the
@@ -37,6 +45,27 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   which release the borrowed class catalogue came from.
 
 ### Fixed
+
+- **Property names in the Perspective property editor are readable.** Raised
+  on the forum against the announcement's own screenshot: every key in the
+  Session Props editor — `host`, `locale`, `authenticated` — was pure black on
+  the dark panel, a contrast ratio of about 1.9:1, while the values beside
+  them were fine. It had passed a by-eye QA row. Each name is a
+  `KeyEditorField`, a borderless `JTextField` whose base class keeps two
+  private text colours and applies the *uneditable* one from
+  `setEditable(false)` straight through `JTextField.setForeground`, bypassing
+  its own override; the key class sets that colour to `Color.BLACK` and locks
+  every schema'd key. The module's generic foreground lift lost both ways: it
+  only fires over a dark background, and a text field with no background of
+  its own reports the filter wrapper's permanent amber instead (the state #23
+  documented in this editor); and when it did fire it rewrote only the
+  editable colour, so the next `setEditable(false)` put the black back. The
+  walk now recognises the field by class name, replaces the uneditable colour
+  through its public setter, lifts whatever is showing regardless of the
+  background, and restores both on the light switch. Values are untouched.
+  Proven headlessly for both defeat paths and confirmed by eye in a Designer
+  on 8.3.6 (2026-09-15): names light under dark, black again after the
+  switch back.
 
 - **The dark mode choice could be lost on Linux** if the Designer was
   force-quit, killed or crashed shortly after toggling. `ThemeManager` wrote

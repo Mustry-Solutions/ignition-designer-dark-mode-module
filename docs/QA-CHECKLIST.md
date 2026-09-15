@@ -152,7 +152,8 @@ check an editor of each kind rather than assuming "the editors" are covered.
 | View editor canvas | Open any view | — | — | `n/a` on 2026-08-31 only because the dev project had no views. A saved view (`qa-dark-mode`) exists since 2026-09-01, so this is now an ordinary unchecked row, not a gap in the Designer |
 | Component palette | Right dock | — | — | Guard hierarchy walks against `FilterablePalette` (see [Out of scope](#out-of-scope)) |
 | Property editor tree | Right dock, view open | `pass` | `2026-09-01` | Checked properly this time, with a view open: PROPS/CUSTOM/PARAMS, value colouring, Add Property links |
-| Property key editor field | Click a property name | — | — | |
+| Property key editor field | Click a property name | — | — | The name's text colour is now lifted by class (see the row below); check that editing a key still shows light text and that the light restore puts black back |
+| Property NAMES (Session Props, PROPS) | Right dock, Perspective selected or a view open | `fixed` | `2026-09-15` | Black on dark, ~1.9:1, raised on the forum against the 0.1.0 announcement screenshot and still black in the 0.2.0 README screenshot — the 2026-09-01 `pass` above missed it. Headless proof in `PropertyKeyFieldTest`; confirmed by eye on 8.3.6, light under dark and black again after the switch back |
 | Binding editor dialog | Click a property's binding icon | — | — | Still unchecked: needs a component on the canvas, and adding one needs a palette drag the automation cannot do |
 | Component scope / node picker in a binding | Inside the binding editor **(unverified)** | — | — | |
 | Style editor | Project Browser → Styles | — | — | |
