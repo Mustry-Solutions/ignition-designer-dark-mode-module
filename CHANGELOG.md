@@ -20,7 +20,12 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   window — `<o cls="com.formdev.flatlaf.ui.FlatButtonBorder"/>` — and a Vision
   client, which has no FlatLaf, fails to open it
   (`ClassNotFoundException`). Reproduced headlessly against the real Vision
-  jars; the mechanism is IA's, and no restyling on our side reaches it.
+  jars; the mechanism is IA's, and no restyling on our side reaches it. A
+  serializer-side cure for the crash does exist (refreshing the platform's
+  clean-copy cache at each switch, verified headlessly), but it leaves Vision
+  baking the module's dark colour constants into freshly opened components,
+  so dark mode inside Vision stays a follow-up
+  ([ARCHITECTURE.md](docs/ARCHITECTURE.md#visiongate)).
 
   So the module now stays out of Vision's way. `VisionGate` refuses **Tools →
   Dark Mode** while a Vision window or template is open or the Vision
@@ -31,9 +36,15 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   deserialized under FlatLaf; and a Vision window that is attached under dark
   mode by any other path still ends dark mode, with a "close and reopen"
   notice, since that window has already been through the round trip. A dark
-  preference is kept, not applied, when the Designer comes up on Vision. Vision
-  and the Designer's `WorkspaceManager` are reached by class name, so a
-  Designer without Vision loses the gate rather than the module.
+  preference is kept, not applied, when the Designer comes up on Vision, and
+  kept when a dark Designer drops out for Vision — only a refused click resets
+  it. The gate is asked again at the moment the theme is installed, one turn
+  after the click, since a Vision selection can land in between. The Tools
+  menu is seeded without firing a switch, because the Designer rebuilds
+  module menus during its own teardown and a kept preference used to read as
+  a click on the way out. Vision and the Designer's `WorkspaceManager` are
+  reached by class name, so a Designer without Vision loses the gate rather
+  than the module.
 
 - Unit tests for the theme preference — the one piece of state the module keeps
   between launches, and until now the only behaviour with no test of its own.

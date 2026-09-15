@@ -25,8 +25,9 @@ import org.junit.jupiter.api.Test;
  * <p>The verdict itself is {@link VisionGateTest}'s subject; here it is
  * dictated, and what is asserted is the wiring: a refused switch leaves the
  * Designer light with the preference and the menu agreeing, a startup blocked
- * by Vision keeps the preference for a later launch, and leaving dark mode
- * for Vision is a complete switch back — not a look-and-feel swap on its own.
+ * by Vision keeps the preference for a later launch, leaving dark mode for
+ * Vision is a complete switch back that also keeps the preference, and the
+ * gate is consulted again at the moment the theme is actually installed.
  */
 class VisionGateSwitchTest {
 
@@ -35,7 +36,7 @@ class VisionGateSwitchTest {
     private Preferences prefs;
     private DictatedGate gate;
     private ThemeManager manager;
-    private RecordingListener listener;
+    private RecordingThemeStateListener listener;
     private LookAndFeel original;
 
     @BeforeEach
@@ -43,15 +44,22 @@ class VisionGateSwitchTest {
         prefs = new InMemoryPreferences();
         gate = new DictatedGate();
         manager = new ThemeManager(prefs, gate);
-        listener = new RecordingListener();
+        listener = new RecordingThemeStateListener();
         manager.setThemeStateListener(listener);
         original = UIManager.getLookAndFeel();
+        // A known not-dark look and feel, standing in for the Designer's
+        // Synthetica (not on this classpath by design): the assertions turn on
+        // FlatLaf being absent or present, so inheriting whatever an earlier
+        // test left installed would make them mean nothing.
         UIManager.setLookAndFeel(new MetalLookAndFeel());
         manager.captureStockLaf();
     }
 
     @AfterEach
     void tearDown() throws Exception {
+        // Dark mode writes ~200 UIManager developer defaults; the light half
+        // of the switch is what clears them, so unwind through it rather than
+        // leaving them behind for the next test.
         if (UIManager.getLookAndFeel() instanceof FlatDarkLaf) {
             manager.apply(false);
         }
@@ -77,6 +85,26 @@ class VisionGateSwitchTest {
             "the menu must not stay ticked for a theme that was refused");
         assertEquals(List.of(VisionGate.refusalMessage("a Vision window or template is open")),
             gate.explained, "the user clicked, so the user is told why nothing happened");
+    }
+
+    @Test
+    @DisplayName("the gate is asked again when the theme is actually installed, one turn after the click")
+    void gateIsAskedAgainWhenTheSwitchActuallyRuns() throws Exception {
+        manager.applyStartupPreference();
+        gate.reason = null;
+
+        manager.setDark(true);
+        // A click on a Vision window already queued behind the menu click:
+        // it runs after the click has been handled and before the install
+        // that the click deferred by one turn.
+        SwingUtilities.invokeLater(() -> gate.reason = "the Vision workspace is selected");
+        drainEventQueue();
+
+        assertFalse(UIManager.getLookAndFeel() instanceof FlatDarkLaf,
+            "the verdict from the click was stale by the time the theme was installed");
+        assertFalse(prefs.getBoolean(KEY, true));
+        assertEquals(List.of(false), listener.darkActive, "the menu was disabled for the switch and must come back unticked");
+        assertEquals(List.of(VisionGate.refusalMessage("the Vision workspace is selected")), gate.explained);
     }
 
     @Test
@@ -108,8 +136,8 @@ class VisionGateSwitchTest {
     }
 
     @Test
-    @DisplayName("leaving dark mode for Vision is a full switch back, squared with the preference")
-    void leavingForVisionIsACompleteRestore() {
+    @DisplayName("leaving dark mode for Vision is a full switch back that keeps the preference")
+    void leavingForVisionRestoresTheThemeButKeepsThePreference() {
         prefs.putBoolean(KEY, true);
         manager.applyStartupPreference();
         assertTrue(UIManager.getLookAndFeel() instanceof FlatDarkLaf, "precondition");
@@ -117,9 +145,33 @@ class VisionGateSwitchTest {
         manager.leaveDarkForVision("the Vision workspace was opened", false);
 
         assertFalse(UIManager.getLookAndFeel() instanceof FlatDarkLaf);
-        assertFalse(prefs.getBoolean(KEY, true),
-            "the Designer is light now; the preference must say so");
+        assertTrue(prefs.getBoolean(KEY, false),
+            "nothing failed and the user still prefers dark: one visit to Vision must not "
+                + "turn every future launch light, the same rule a blocked startup follows");
+        assertEquals(List.of(true, false), listener.darkActive,
+            "the menu follows the screen, which is light");
+    }
+
+    @Test
+    @DisplayName("dark already on with Vision in play: a re-asserted dark request drops out instead of claiming a refusal")
+    void reassertedDarkWhileDarkOnVisionDropsOut() throws Exception {
+        prefs.putBoolean(KEY, true);
+        gate.reason = null;
+        manager.applyStartupPreference();
+        assertTrue(UIManager.getLookAndFeel() instanceof FlatDarkLaf, "precondition");
+
+        // Vision came into play without the navigation watch seeing it, and
+        // something re-asserts the preference (a rebuilt menu, say).
+        gate.reason = "the Vision workspace is selected";
+        manager.setDark(true);
+        drainEventQueue();
+
+        assertFalse(UIManager.getLookAndFeel() instanceof FlatDarkLaf,
+            "Vision wins: dark mode must end, not be reported as never applied");
+        assertTrue(prefs.getBoolean(KEY, false), "a drop-out keeps the preference");
         assertEquals(List.of(true, false), listener.darkActive);
+        assertEquals(List.of(VisionGate.dropOutMessage("the Vision workspace is selected", false)),
+            gate.explained, "the user is told dark mode was turned off, not that it was refused");
     }
 
     @Test
@@ -131,6 +183,24 @@ class VisionGateSwitchTest {
 
         assertFalse(UIManager.getLookAndFeel() instanceof FlatDarkLaf);
         assertEquals(List.of(), listener.darkActive, "no switch happened, so nothing was reported");
+    }
+
+    @Test
+    @DisplayName("a dark request after shutdown is ignored, preference included")
+    void setDarkAfterShutdownIsIgnored() throws Exception {
+        manager.applyStartupPreference();
+        manager.shutdown();
+        drainEventQueue();
+
+        // The Designer rebuilds module menus during teardown; a rebuilt menu
+        // re-asserting a kept preference must not start a switch on a module
+        // that has already put the Designer back.
+        manager.setDark(true);
+        drainEventQueue();
+
+        assertFalse(UIManager.getLookAndFeel() instanceof FlatDarkLaf);
+        assertFalse(prefs.getBoolean(KEY, false), "nothing may be written after shutdown");
+        assertEquals(List.of(), listener.darkActive);
     }
 
     /** Two turns: setDark defers to the EDT, and beginSwitch defers apply one more turn. */
@@ -157,20 +227,6 @@ class VisionGateSwitchTest {
 
         @Override
         void watchNavigation(Runnable onVisionActivated) {
-        }
-    }
-
-    private static final class RecordingListener implements ThemeManager.ThemeStateListener {
-
-        private final List<Boolean> darkActive = new ArrayList<>();
-
-        @Override
-        public void switchStarted() {
-        }
-
-        @Override
-        public void switchFinished(boolean dark) {
-            darkActive.add(dark);
         }
     }
 }

@@ -31,6 +31,7 @@ fi
 
 info "Saved Vision resources in '${PROJECT}':"
 bad=0
+unreadable=0
 while IFS= read -r file; do
   # Whether the resource is XML or binary, class names are stored as plain
   # strings, so a printable-text sweep catches both encodings. LC_ALL=C: under
@@ -40,8 +41,8 @@ while IFS= read -r file; do
   text="$(docker exec "${CONTAINER_NAME}" cat "${file}" | gzip -dc 2>/dev/null \
     | LC_ALL=C tr -c '[:print:]\n' '\n' || true)"
   if [[ -z "${text}" ]]; then
-    err "${file#"${VISION_DIR}"/}: could not read the resource; nothing was checked"
-    bad=$((bad + 1))
+    err "${file#"${VISION_DIR}"/}: not a gzip stream; nothing was checked (Vision cannot open it either)"
+    unreadable=$((unreadable + 1))
     continue
   fi
   flatlaf="$(printf '%s\n' "${text}" | LC_ALL=C grep -c 'com\.formdev' || true)"
@@ -56,8 +57,9 @@ while IFS= read -r file; do
   fi
 done <<< "${files}"
 
-if [[ "${bad}" -gt 0 ]]; then
-  err "${bad} resource(s) corrupted. Fix them by reverting the resource, not by editing under dark mode again."
+if [[ "${bad}" -gt 0 || "${unreadable}" -gt 0 ]]; then
+  [[ "${bad}" -gt 0 ]] && err "${bad} resource(s) corrupted. Fix them by reverting the resource, not by editing under dark mode again."
+  [[ "${unreadable}" -gt 0 ]] && err "${unreadable} resource(s) could not be read; every saved window and template is a gzip stream, so revert those too."
   exit 2
 fi
 ok "No FlatLaf leakage. Font/colour counts should match what you set by hand."

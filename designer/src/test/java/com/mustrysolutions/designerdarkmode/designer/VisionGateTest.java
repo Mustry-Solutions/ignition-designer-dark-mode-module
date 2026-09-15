@@ -69,24 +69,22 @@ class VisionGateTest {
     }
 
     @Test
-    @DisplayName("counting sees every open window and template, wherever they are docked")
-    void countsAcrossTheTree() {
-        JPanel desktop = new JPanel();
-        desktop.add(new StandInWindow());
-        desktop.add(new StandInWindow());
+    @DisplayName("the blocking check finds a window or template wherever it is docked")
+    void unboundedSearchFindsAWindowAnywhere() {
+        StandInTemplate template = new StandInTemplate();
         JPanel elsewhere = new JPanel();
-        elsewhere.add(new StandInTemplate());
+        elsewhere.add(new JPanel());
+        elsewhere.add(template);
         JPanel root = new JPanel();
-        root.add(desktop);
-        root.add(elsewhere);
         root.add(new JPanel());
+        root.add(elsewhere);
 
-        assertEquals(3, VisionGate.countVisionTopLevels(root));
-        assertEquals(0, VisionGate.countVisionTopLevels(new JPanel()));
+        assertSame(template, VisionGate.findVisionTopLevel(root, Integer.MAX_VALUE));
+        assertNull(VisionGate.findVisionTopLevel(new JPanel(), Integer.MAX_VALUE));
     }
 
     @Test
-    @DisplayName("open windows block, and the reason counts them")
+    @DisplayName("an open window or template blocks, however many there are")
     void openWindowsBlock() {
         JPanel root = new JPanel();
         root.add(new StandInWindow());
@@ -95,7 +93,7 @@ class VisionGateTest {
         assertEquals("a Vision window or template is open", gate.blockingReason());
 
         root.add(new StandInTemplate());
-        assertEquals("2 Vision windows or templates are open", gate.blockingReason());
+        assertEquals("a Vision window or template is open", gate.blockingReason());
     }
 
     @Test

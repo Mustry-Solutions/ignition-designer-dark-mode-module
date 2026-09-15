@@ -60,13 +60,21 @@ class VisionGate {
     /** {@code WindowWorkspace.getKey()} — the workspace both windows and templates open in. */
     static final String VISION_WORKSPACE_KEY = "windows";
 
-    /** How far below an attached component to look for a Vision window. */
+    /**
+     * How far below an attached component to look for a Vision window.
+     *
+     * <p>The window or template is normally the attached component itself
+     * (an {@code FPMIWindow} goes straight onto the desktop pane, a template
+     * into its holder); the margin covers a wrapper or two, such as a scroll
+     * pane's viewport and view. Bounded because this runs for every container
+     * attached anywhere in the Designer while dark mode is on.
+     */
     static final int ATTACH_SEARCH_DEPTH = 4;
 
     private final Supplier<Object> frame;
 
-    private Object workspaceManager;
-    private Object navigationListener;
+    /** Removes the navigation listener {@link #watchNavigation} added, or {@code null}. */
+    private Runnable unwatch;
 
     /** The gate over a frame that is not there yet: nothing to check, nothing to watch. */
     VisionGate() {
@@ -91,14 +99,10 @@ class VisionGate {
      * the switch's tree update would still reach it.
      */
     String blockingReason() {
-        int open = 0;
         for (Container root : roots()) {
-            open += countVisionTopLevels(root);
-        }
-        if (open > 0) {
-            return open == 1
-                ? "a Vision window or template is open"
-                : open + " Vision windows or templates are open";
+            if (findVisionTopLevel(root, Integer.MAX_VALUE) != null) {
+                return "a Vision window or template is open";
+            }
         }
         if (VISION_WORKSPACE_KEY.equalsIgnoreCase(selectedWorkspaceKey())) {
             return "the Vision workspace is selected";
@@ -176,7 +180,7 @@ class VisionGate {
      * between is what keeps FlatLaf out of the window.
      */
     void watchNavigation(Runnable onVisionActivated) {
-        if (navigationListener != null) {
+        if (unwatch != null) {
             return;
         }
         try {
@@ -212,8 +216,14 @@ class VisionGate {
                 listenerType.getClassLoader(), new Class<?>[] {listenerType}, handler);
             manager.getClass().getMethod("addNavigationListener", listenerType)
                 .invoke(manager, listener);
-            workspaceManager = manager;
-            navigationListener = listener;
+            Method remove = manager.getClass().getMethod("removeNavigationListener", listenerType);
+            unwatch = () -> {
+                try {
+                    remove.invoke(manager, listener);
+                } catch (Exception e) {
+                    DebugLog.detail("Vision gate: could not remove the navigation listener.", e);
+                }
+            };
             DebugLog.detail("Vision gate: watching workspace navigation.");
         } catch (Throwable t) {
             DebugLog.log("Vision gate: could not watch workspace navigation; "
@@ -222,19 +232,9 @@ class VisionGate {
     }
 
     void unwatchNavigation() {
-        if (navigationListener == null) {
-            return;
-        }
-        try {
-            Class<?> listenerType = Class.forName(NAVIGATION_LISTENER, true,
-                workspaceManager.getClass().getClassLoader());
-            workspaceManager.getClass().getMethod("removeNavigationListener", listenerType)
-                .invoke(workspaceManager, navigationListener);
-        } catch (Throwable t) {
-            DebugLog.detail("Vision gate: could not remove the navigation listener.", t);
-        } finally {
-            navigationListener = null;
-            workspaceManager = null;
+        if (unwatch != null) {
+            unwatch.run();
+            unwatch = null;
         }
     }
 
@@ -269,30 +269,24 @@ class VisionGate {
         Method getWorkspace = designer.getClass().getMethod("getWorkspace");
         getWorkspace.setAccessible(true);
         Object manager = getWorkspace.invoke(designer);
-        return manager != null && isNamed(manager.getClass(), WORKSPACE_MANAGER) ? manager : null;
+        return manager != null && ClassNames.extendsNamed(manager.getClass(), WORKSPACE_MANAGER)
+            ? manager : null;
     }
 
     // --- detection -----------------------------------------------------------
 
     /** True for a Vision window or template: anything Vision serializes as a resource. */
     static boolean isVisionTopLevel(Component component) {
-        if (component == null) {
-            return false;
-        }
-        for (Class<?> type = component.getClass(); type != null; type = type.getSuperclass()) {
-            for (Class<?> iface : type.getInterfaces()) {
-                if (implementsNamed(iface, TOP_LEVEL_CONTAINER)) {
-                    return true;
-                }
-            }
-        }
-        return false;
+        return component != null
+            && ClassNames.implementsNamed(component.getClass(), TOP_LEVEL_CONTAINER);
     }
 
     /**
      * The first Vision window or template at or under {@code root}, looking at
-     * most {@code maxDepth} levels down, or {@code null}. Bounded because it is
-     * called for every container attached under dark mode.
+     * most {@code maxDepth} levels down, or {@code null}. Does not descend into
+     * one. Bounded for the attach-time check, which runs for every container
+     * attached under dark mode; unbounded for a blocking check over the whole
+     * Designer.
      */
     static Component findVisionTopLevel(Component root, int maxDepth) {
         if (isVisionTopLevel(root)) {
@@ -310,37 +304,4 @@ class VisionGate {
         return null;
     }
 
-    /** Every Vision window or template under {@code root}. Does not descend into one. */
-    static int countVisionTopLevels(Container root) {
-        int count = 0;
-        for (Component child : root.getComponents()) {
-            if (isVisionTopLevel(child)) {
-                count++;
-            } else if (child instanceof Container) {
-                count += countVisionTopLevels((Container) child);
-            }
-        }
-        return count;
-    }
-
-    private static boolean implementsNamed(Class<?> iface, String name) {
-        if (name.equals(iface.getName())) {
-            return true;
-        }
-        for (Class<?> parent : iface.getInterfaces()) {
-            if (implementsNamed(parent, name)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static boolean isNamed(Class<?> type, String name) {
-        for (Class<?> t = type; t != null; t = t.getSuperclass()) {
-            if (name.equals(t.getName())) {
-                return true;
-            }
-        }
-        return false;
-    }
 }
