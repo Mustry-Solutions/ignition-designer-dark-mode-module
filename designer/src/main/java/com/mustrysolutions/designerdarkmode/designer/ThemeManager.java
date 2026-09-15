@@ -1000,6 +1000,25 @@ public class ThemeManager {
         // A key named "darkShadow" holding #DDDDDD. Whatever it draws, a light
         // shadow under a dark theme is wrong on its face.
         "JideTabbedPane.darkShadow",
+        // Light on WINDOWS only, found by the harness's #22 check the first
+        // time it ran there: JIDE fills these from the Windows desktop colours
+        // (#F0F0F0 is the system "control", #ABDAFF its selection highlight)
+        // rather than from the look and feel, so none of the passes above
+        // reach them. On macOS and Linux they are absent or already dark. A
+        // Windows Designer without these shows a light status bar, light
+        // side-pane buttons, a light selected dock tab, and light menu hover.
+        "Content.background",
+        "JideLabel.background",
+        "StatusBar.background",
+        "HeaderBox.background",
+        "JideTabbedPane.selectedTabBackground",
+        "SidePane.buttonBackground",
+        "SidePane.selectedButtonBackground",
+        "CollapsiblePane.emphasizedBackground",
+        "PopupMenuSeparator.background",
+        "Menu.mouseHoverBackground",
+        "CheckBoxMenuItem.mouseHoverBackground",
+        "RadioButtonMenuItem.mouseHoverBackground",
     };
 
     /**
@@ -1073,6 +1092,25 @@ public class ThemeManager {
         UIManager.put("SidePane.foreground", foreground);
         UIManager.put("CommandBarSeparator.background", border);
         UIManager.put("JideTabbedPane.darkShadow", background.darker());
+
+        // The Windows desktop-colour keys (see JIDE_DARK_KEYS). Surfaces take
+        // the panel colour, the selected tab and side-pane button the same
+        // raised tone as a selected toolbar button, and hover the menu
+        // selection colour so a hovered item reads like a selected one.
+        java.awt.Color hover = orDefault(
+            UIManager.getColor("MenuItem.selectionBackground"), activeTitleBackground);
+        UIManager.put("Content.background", background);
+        UIManager.put("JideLabel.background", background);
+        UIManager.put("StatusBar.background", background);
+        UIManager.put("HeaderBox.background", background);
+        UIManager.put("PopupMenuSeparator.background", background);
+        UIManager.put("JideTabbedPane.selectedTabBackground", selected);
+        UIManager.put("SidePane.buttonBackground", background);
+        UIManager.put("SidePane.selectedButtonBackground", selected);
+        UIManager.put("CollapsiblePane.emphasizedBackground", activeTitleBackground);
+        UIManager.put("Menu.mouseHoverBackground", hover);
+        UIManager.put("CheckBoxMenuItem.mouseHoverBackground", hover);
+        UIManager.put("RadioButtonMenuItem.mouseHoverBackground", hover);
     }
 
     /** Log which UI/painter actually drives the dock title bars right now. */

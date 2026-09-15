@@ -138,6 +138,11 @@ val lafHarnessTask = tasks.register<Test>("lafHarness") {
     // never minutes.
     systemProperty("junit.jupiter.execution.timeout.default", "3m")
     systemProperty("junit.jupiter.execution.timeout.mode", "enabled")
+    // The timed-out test's own stack showed a paint blocked in
+    // AbstractDocument.readLock — one half of a deadlock. The other half is
+    // on some other thread, so dump them all (to stdout, which lands in the
+    // JUnit XML) before the interrupt.
+    systemProperty("junit.jupiter.execution.timeout.threaddump.enabled", "true")
 
     // No display, and none needed: everything asserted here lives in UIManager
     // and in the module's own state. Window.getWindows() is simply empty, so
