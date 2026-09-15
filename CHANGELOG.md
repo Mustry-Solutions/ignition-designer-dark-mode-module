@@ -12,14 +12,20 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ### Added
 
-- Tests for the saved theme choice, which previously had none. They assert the
-  flush rather than the value: the value lands in the in-memory node either
-  way, so a test that only checked it could not have caught the Linux bug
-  below. Covers the save, the deferred-switch path, an unwritable backing
-  store, and the light default. `ThemeManager` gained a package-private
-  constructor taking a `Preferences` node so a test can use a throwaway one —
-  the production node is per OS user, and a test writing to it would toggle the
-  developer's own Designer.
+- Unit tests for the theme preference — the one piece of state the module keeps
+  between launches, and until now the only behaviour with no test of its own.
+  They cover the `setDark`/`isDarkModeEnabled` round trip, the rule that the
+  saved value follows the theme actually INSTALLED rather than the one
+  requested (a switch that fails must not come back at the next launch), and
+  that the startup path applies dark only when the preference asks for it.
+  `ThemeManager` gained a package-private constructor taking the `Preferences`
+  node so the tests write to an in-memory one instead of the developer's own,
+  and the startup apply moved out of the readiness poll into
+  `applyStartupPreference()` so it can be driven without a live Designer.
+  They also assert the flush, not just the value: the value lands in the
+  in-memory node either way, so a test that only read it back could not have
+  caught the Linux bug below. Covers both write sites and an unwritable
+  backing store.
 
 ### Fixed
 
@@ -32,11 +38,39 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   against Ignition's own bundled Linux JRE 17. Windows (registry) and macOS
   (cfprefsd) persist out of process and were never affected, which is why this
   went unnoticed.
-- The README claimed both that the theme choice is remembered between sessions
-  and that "relaunching always gives a clean stock theme, whichever way you
-  left it". The second was wrong: a relaunch starts from the stock theme and
-  re-applies dark on top when dark is saved. The sentence had been compressed
-  from one that described the *restore* path, and lost its meaning in the edit.
+- The README now says where the Dark Mode setting lives and how far it
+  reaches (docs only; no behaviour change). It is a `java.util.prefs` value on
+  the machine running the Designer, per OS user — not on the gateway, not in
+  the project — and it is one value for every gateway that user connects to:
+  a gateway with the module applies it, a gateway without the module never
+  loads the code and leaves it alone, and a failed apply against one gateway
+  resets it for all of them. None of that was written down outside a comment
+  in `ThemeManager`. The README's intro also read as contradicting itself:
+  "the choice is remembered between sessions" followed two sentences later by
+  "relaunching always gives a clean stock theme, whichever way you left it".
+  The second sentence dates from when it sat next to a since-fixed restore
+  limitation; it now says what it meant — a relaunch starts from stock and
+  re-applies dark only if the setting asks for it. `ARCHITECTURE.md` and the
+  bricked-launch recovery note in `DEVELOPMENT.md` cross-reference the new
+  section.
+
+- A second documentation pass, this one over statements that contradict
+  themselves rather than the code (docs only; no behaviour change). A "four
+  invariants" list in 0.2.0's own notes that introduced six; a "two more"
+  in the README that introduced one; a "two tiers" in `ARCHITECTURE.md`
+  followed by three bullets; the same §E row twice in the QA checklist,
+  disagreeing with itself about whether it is blocked; the README's project
+  layout, which had drifted five classes and both test source sets behind
+  `designer/src`; the QA Runs table, now newest-first; and two Notes cells
+  with a stray leading colon.
+
+  `DEVELOPMENT.md`'s mutation figure was re-measured rather than re-guessed:
+  reintroducing #23's ordering fails five assertions, not "three of the six"
+  (`ThemeSwitchCycleTest` has had ten since #53). It now names the tests
+  instead of counting them, so it does not go stale again the next time the
+  harness grows. The 1297-defaults-left-null figure is unchanged and still
+  exact.
+
 - Documentation corrections found by a sweep of the docs against the code
   (docs only; no behaviour change). The build docs still named Gradle 8.14
   after the wrapper moved to 9.7.1. Three places — `docker-compose.yml`,
@@ -101,12 +135,12 @@ by name still exists.
   FlatLaf jars — no gateway, no Designer, no screenshots — and diffs every
   resolvable `UIManager` default across a light→dark→light cycle. The unit
   tests only ever saw stub look and feels, so every bug this module has had
-  (#14, #17, #19, #22, #23) had to be found by deploying and looking. Four
+  (#14, #17, #19, #22, #23) had to be found by deploying and looking. Six
   invariants are now pinned instead: a full cycle restores every default, the
   FlatLaf overrides are cleared while FlatLaf is still installed (the ordering
-  #23 got wrong), repeated cycles converge, and JIDE's `Theme.painter` map
-  comes back to its stock entries, the standard Swing colours actually go dark,
-  and no `UIManager` key naming a background stays light under dark mode —
+  #23 got wrong), repeated cycles converge, JIDE's `Theme.painter` map comes
+  back to its stock entries, the standard Swing colours actually go dark, and
+  no `UIManager` key naming a background stays light under dark mode —
   which is [#22](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/22)
   turned from a manual dump into an assertion over 174 keys. It runs in CI.
 

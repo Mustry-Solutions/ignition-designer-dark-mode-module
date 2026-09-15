@@ -135,18 +135,16 @@ public class ThemeManager {
     private final ConsoleTextTheme consoleText = new ConsoleTextTheme();
     private final BlockWorkspaceTheme blockWorkspaces = new BlockWorkspaceTheme();
 
+    /** The theme choice persists in this user's own preference node. */
     public ThemeManager() {
         this(Preferences.userNodeForPackage(ThemeManager.class));
     }
 
     /**
-     * Test seam: point the theme preference at a throwaway node.
+     * Test seam: persist somewhere that is not the developer's own preferences.
      *
-     * <p>Only exists so tests can exercise the real save path without writing
-     * to the developer's own {@code darkMode} setting — the node is per OS
-     * user, so a test that used the production node would turn the developer's
-     * Designer dark (or light) as a side effect. Production always goes through
-     * the no-arg constructor.
+     * <p>The production node is shared with every Designer this user runs, so a
+     * test that wrote to it would toggle the dark mode of whoever ran the build.
      */
     ThemeManager(Preferences prefs) {
         this.prefs = prefs;
@@ -228,8 +226,13 @@ public class ThemeManager {
      * installed. The preference follows reality rather than the request: a
      * switch that failed must not be retried at every launch, and the Tools
      * menu must not carry a checkmark for a theme the Designer is not in.
+     *
+     * <p>Package-private so {@code ThemePreferencePersistenceTest} can call it
+     * with a look and feel the switch did not produce — the whole contract is
+     * that the saved value follows what is INSTALLED rather than what was
+     * asked for, and nothing else can observe that difference.
      */
-    private void finishSwitch() {
+    void finishSwitch() {
         boolean darkActive = isDarkActive();
         savePreference(darkActive);
         stateListener.switchFinished(darkActive);
@@ -302,11 +305,7 @@ public class ThemeManager {
                     DebugLog.detail("Startup apply: designer UI ready after "
                         + polls[0] + " polls (" + docks + " dock frame(s), "
                         + trees + " tree(s)).");
-                    uiReady = true;
-                    if (isDarkModeEnabled()) {
-                        apply(true);
-                        finishSwitch();
-                    }
+                    applyStartupPreference();
                     return;
                 }
             } else {
@@ -317,14 +316,32 @@ public class ThemeManager {
                 DebugLog.log("Startup apply: readiness never detected after " + polls[0]
                     + " polls (" + docks + " dock frame(s), " + trees + " tree(s)); "
                     + "applying anyway. If dark mode looked delayed at launch, this is why.");
-                uiReady = true;
-                if (isDarkModeEnabled()) {
-                    apply(true);
-                    finishSwitch();
-                }
+                applyStartupPreference();
             }
         });
         timer.start();
+    }
+
+    /**
+     * The startup apply, once the Designer is ready to be themed.
+     *
+     * <p>Dark is applied only when the saved preference asks for it: this runs
+     * at every launch, and a Designer that never chose dark must come up
+     * untouched. {@link #finishSwitch} follows for the same reason it follows a
+     * user-driven switch — an apply that did not produce dark rewrites the
+     * preference to light, so a broken dark state is not retried at every
+     * launch.
+     *
+     * <p>Package-private, and free of {@link DesignerContext}, so a test can
+     * drive it directly: the readiness poll around it needs a live Designer
+     * frame, this does not.
+     */
+    void applyStartupPreference() {
+        uiReady = true;
+        if (isDarkModeEnabled()) {
+            apply(true);
+            finishSwitch();
+        }
     }
 
     /**

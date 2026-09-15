@@ -20,12 +20,14 @@ whole Designer — dock panels, trees, tables, menus, the Perspective component
 palette and property editor, the tag browser and tag editor, the script editors
 and output console, dialogs, and icons — to a dark theme built on
 [FlatLaf](https://www.formdev.com/flatlaf/). The choice is remembered between
-sessions, per computer and OS user account — see
-[Where the setting is stored](#where-the-setting-is-stored).
+sessions: a Designer you left dark comes back dark, and one you left light
+comes back light.
 
-Toggling back restores the stock Designer. A relaunch always starts from the
-stock theme and re-applies dark on top of it, so nothing carries over from the
-last session but the choice itself.
+Toggling back restores the stock Designer. Because a relaunch always starts
+from the stock theme and applies dark on top of it only if the setting asks for
+it, a relaunch is also the sure way to clear any residue a toggle-off left
+behind. See [Where the setting is stored](#where-the-setting-is-stored) for
+what "remembered" means when you work against more than one gateway.
 
 Because Ignition's own UI hard-codes many light colors in ways a normal look and
 feel swap cannot reach, the module does substantial work under the hood to make
@@ -49,7 +51,7 @@ users will actually see:
   it follows the session's own theme, not the Designer's;
 - **Symbol Factory thumbnails**, which are the symbol artwork itself.
 
-Two more, following the prior art's own judgement (see
+One more, following the prior art's own judgement (see
 [Prior art](#prior-art)): the Vision **property tables** are deliberately not
 themed, because colouring them looks spotty and makes them harder to use.
 
@@ -83,13 +85,16 @@ service, no tags, and no scripting functions, and it changes nothing for
 Perspective sessions, Vision clients, or anyone else using your gateway. To
 remove it: **Config → Modules → Uninstall**, and relaunch the Designer.
 
-### Where the setting is stored
+## Where the setting is stored
 
-The toggle is saved for the **OS user account on that computer**. It is not
-per-gateway and not per-project, and there is no gateway-wide default to set.
+The Dark Mode choice is saved **on the computer running the Designer, per
+operating-system user**, through Java's `java.util.prefs` API. It is not stored
+on the gateway, not in the project, and not in a tag. Nothing on the gateway
+changes when you toggle it, and a colleague launching the Designer against the
+same gateway from their own machine or account gets their own setting.
 
-It lives in the standard Java preference store, under the node
-`com/mustrysolutions/designerdarkmode/designer`, key `darkMode`:
+It is the preference node `com/mustrysolutions/designerdarkmode/designer`, key
+`darkMode`:
 
 | OS | Where |
 |---|---|
@@ -97,13 +102,23 @@ It lives in the standard Java preference store, under the node
 | macOS | `~/Library/Preferences/com.mustrysolutions.designerdarkmode.plist` |
 | Linux | `~/.java/.userPrefs/com/mustrysolutions/designerdarkmode/designer/prefs.xml` |
 
-So one person turning dark mode on gets it in **every Designer they launch on
-that machine** — every gateway they connect to, every project they open. Nobody
-else is affected: not a colleague at the next desk, and not the same person
-signed in to a different computer, who each choose for themselves.
+It is **one setting for every gateway you connect to**, not one per gateway.
+The saved value does not record which gateway it was set from, so turning dark
+mode on while connected to one gateway turns it on for the Designer of every
+other gateway you open, as long as that gateway has the module installed. A
+gateway *without* the module never loads this code, so its Designer stays
+stock; the saved value is left untouched and applies again the next time you
+open a gateway that has the module.
 
-The gateway does have to have the module installed for the setting to do
-anything, so a Designer opened against a gateway without it comes up stock.
+One consequence of the shared value: after every toggle and every launch the
+module rewrites the setting to match the theme that is actually installed. If
+applying dark mode fails on one gateway (for example after an Ignition upgrade
+the module does not yet support), the setting flips back to light, and that
+flip also applies to the Designers of your other gateways until you toggle it
+on again.
+
+If you need to reset it by hand, see
+[Recovering from a bricked launch](docs/DEVELOPMENT.md#recovering-from-a-bricked-launch).
 
 ## Build
 
@@ -149,12 +164,19 @@ designer/                   The only scope: Designer-side code
     IaColorTokens            Reflectively restyles Ignition's hard-coded colors
     TreeIconRecolorer        Dark-adapts tree icons and cell renderers
     CellRendererSanitizer    Dark-adapts table/list cells and renderer delegates
-    ScriptEditorTheme        Applies Ignition's own dark theme to the code editors
+    ScriptEditorTheme        Dark-themes the Python editors (RSyntaxTextArea)
+    CodeEditorTheme          Dark-themes the SQL/expression editors (JIDE CodeEditor)
     ConsoleTextTheme         Recolours the console output styles
+    DiagnosticsChartTheme    Dark-adapts the Diagnostics chart axes and background
+    BlockWorkspaceTheme      Dark-adapts alarm pipeline and SFC blocks
+    DesignerStatus           Reports switch progress and failures in the status bar
     ComponentInspector       Debug tool: dumps the component under the cursor
+    TreeUpdateDiagnostic     Explains a failed updateComponentTreeUI
     DebugLog                 Append-only debug log
     MoonIcon                 The menu item's icon
   src/main/resources/.../    Bundle strings (menu/action labels)
+  src/test/java/.../         Unit tests: colour predicates, snapshot/restore
+  src/lafHarness/java/.../   Headless harness against the real Synthetica/JIDE/FlatLaf
 ops/                        Disposable Docker gateway for local testing
 docs/                       Architecture and development guides
 ```

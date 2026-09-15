@@ -91,6 +91,18 @@ per-phase error isolation, the JIDE/Synthetica/FlatLaf plumbing, the
 `UIManager` key overrides (dock, collapsible-pane, and container keys), the
 component watcher, and the popup / stale-delegate handling.
 
+The preference node is `Preferences.userNodeForPackage(ThemeManager.class)`:
+it lives on the machine running the Designer, under the OS user's own
+preference store, and holds a single boolean. Nothing gateway-specific goes
+into the path or the key, so the value is shared by every Designer that user
+launches against any gateway carrying the module; a gateway without the module
+never loads `ThemeManager` and simply ignores it. `finishSwitch()` writes the
+node after every switch and every startup apply, so a failed apply against one
+gateway resets the value for all of them (see
+[When Ignition changes underneath us](#when-ignition-changes-underneath-us)).
+Keying the node by gateway would be the change to make if a per-gateway
+setting is ever wanted.
+
 ### IaColorTokens
 Reflectively mutates the **shared `Color` instances** on
 `IgnitionLookAndFeel$Colors` in place — the Designer JVM runs with
@@ -330,11 +342,11 @@ tiers when one stops resolving:
   field costs one unthemed surface and a warning, not a broken switch. The
   failed pass names are collected and summarised in the status bar, so a
   half-dark Designer comes with an explanation rather than only a log line.
-- **Afterwards, either way.** `finishSwitch()` squares the preference and the
-  Tools menu checkmark with the look and feel that is *actually* installed. The
-  checkmark used to track the request, so a switch that failed left it claiming
-  a theme the Designer was not in, and the preference retried it at every
-  launch.
+
+Afterwards, either way, `finishSwitch()` squares the preference and the Tools
+menu checkmark with the look and feel that is *actually* installed. The
+checkmark used to track the request, so a switch that failed left it claiming a
+theme the Designer was not in, and the preference retried it at every launch.
 
 That shapes how to debug a regression after an Ignition upgrade. A surface that
 has gone light is usually a name that no longer resolves: check

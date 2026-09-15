@@ -180,9 +180,11 @@ testing only the latest would let the module drift off its own support claim.
 **Validate a new invariant with a mutation.** A green test proves nothing until
 you have seen it go red for the right reason. Break the thing it claims to
 protect — reorder a phase, delete a restore call — and check that the test you
-just wrote is the one that fails. Reintroducing [#23][23]'s ordering fails three
-of the six, with 1297 of 1740 defaults left null; a test that survives the bug it
-is named after is decoration.
+just wrote is the one that fails. Reintroducing [#23][23]'s ordering fails five
+assertions — three in `ThemeSwitchCycleTest` and both of
+`LookAndFeelDefaultsTableTest`'s — and leaves 1297 defaults null; a test that
+survives the bug it is named after is decoration. Name the tests rather than
+counting them here: the counts move every time the harness grows.
 
 Doing that across fifteen mutations mapped the harness's blind spots, which are
 worth knowing before you trust a pass:
@@ -338,7 +340,9 @@ preference so it starts light: remove the `java.util.prefs` node
 `com/mustrysolutions/designerdarkmode/designer` (a tiny one-off program using
 `Preferences.userRoot().node(...).removeNode()`). `ThemeManager` also
 auto-reverts the preference when an apply fails in the essential phase, so this
-is rarely needed.
+is rarely needed. The node belongs to the OS user, not to a gateway, so
+removing it resets dark mode for every gateway that user opens a Designer
+against (see [Where the setting is stored](../README.md#where-the-setting-is-stored)).
 
 ## Signing
 
