@@ -23,6 +23,8 @@ Newest first.
 |---|---|---|---|---|
 | 2026-09-01 (afternoon) | 8.3.6 | 12.3.6 | `b01d80eb` | #57 and the editor-resilience fix confirmed by eye. Third popup source verified (Perspective canvas). A **saved** view added to the dev project so §E stops being blocked by an empty project |
 | 2026-09-01 | 8.3.6 | 12.3.6 | `b510440` | Closing the gaps left by the 2026-08-31 sweep (#41). Created a Perspective view so §E had something to open; Symbol Factory; one more heavyweight popup. **Right-click is confirmed un-automatable** — see [§L](#l-popup-sweep) |
+| 2026-09-15 | 8.3.6 | 12.3.6 | worktree, uncommitted (same build as 2026-09-02) | Second §N run by Sam after the gateway had been down for two weeks: the refusal with the Vision workspace selected and the navigation drop-out fired again per the log; `ops/vision-check.sh` clean. Found and fixed the checker's locale bug (macOS `tr` under UTF-8 emptied the sweep, so every file passed vacuously). Relaunch, template and fallback rows still unrecorded |
+| 2026-09-02 | 8.3.6 | 12.3.6 | worktree, uncommitted | First run of §N, the Vision gate, by Sam in a live Designer after the headless reproduction. The navigation path, both refusals and a clean save confirmed by the log and `ops/vision-check.sh`; the relaunch, template and fallback rows not yet recorded |
 | 2026-08-31 (evening) | 8.3.6 | 12.3.6 | `b510440` | Verification pass by eye in a real Designer for #47, #48, #50, #51, #52 and the late-attach fix. All confirmed. Two rounds: the first found #50 only half-fixed (chart background still white) and the Vision filters dark in light mode |
 | 2026-08-31 | 8.3.6 | 12.3.6 | `76c4600` (`main`, release candidate) | Driven with computer use, 12:01–12:13 UTC. §A, §B (Properties, Export, Diagnostics), §C, §D console + autocomplete, §E property editor, §F palette/inspector, §J Image Management, §K Query Browser, toggle-off. **Two new `light` results — see [Diagnostics](#b-menus-dialogs-project-settings) and [Query Browser](#k-database-and-queries).** §L not re-verified (see [Note on this run](#note-on-the-2026-08-31-run)) |
 | 2026-08-29 | 8.3.6 | 12.3.6 | `f4104b54`, built at `33cf8c7` — **10 commits behind `main`**, so without #36/#37/#38 | Three Designer sittings (13:22, 13:40, 14:15 UTC): §L popups, Alarm Pipeline Editor, Translation Manager, dataset editor, named-query selector |
@@ -160,7 +162,7 @@ check an editor of each kind rather than assuming "the editors" are covered.
 
 | Surface | Where | Result | Last checked | Notes |
 |---|---|---|---|---|
-| Window editor chrome | Open any Vision window | — | — | The canvas itself is deliberately not themed (README). 2026-08-31: the workspace home page ("Create a New Window") is `pass`, but no window was opened |
+| Window editor chrome | Open any Vision window | `n/a` | `2026-09-02` | Cannot be dark any more: opening a Vision window ends dark mode (§N). The rows below can only be checked with the Vision workspace showing and no window open |
 | Component palette | Left/right dock with a window open | `pass` | `2026-08-31` | Vision workspace open (no window) |
 | Property Inspector | Right dock | `pass` | `2026-08-31` | empty but dark |
 | Border chooser (9 sub-panels) | Property Inspector → border property | — | — | Check every tab of the chooser |
@@ -371,6 +373,34 @@ either theme — nothing else in this checklist would catch them.
 | Degraded-switch status message | Status bar, after a partial failure | — | — | The `N of M steps failing` line. Hard to trigger on purpose; check it is legible if you ever see it |
 | First launch, before the theme applies | Startup, with dark mode saved | `skip` | `2026-08-31` | The theme is applied only once the UI is ready, so the Designer is briefly stock-themed at launch. That is by design — applying earlier kills the launch |
 | Debug log is being written | `~/.ignition/designer-dark-mode.log` | `pass` | `2026-08-31` | Worth confirming at the start of a sweep: no log means no chain dumps when you need one |
+
+## N. Vision gate
+
+Not a theming check: the module must **stay out of Vision**, because a Vision
+window saved under FlatLaf cannot be opened by a Vision client
+([ARCHITECTURE.md](ARCHITECTURE.md#visiongate)). Needs a project with at least
+one Vision window and one Vision template. Every row is pass/fail by eye plus
+one line in `~/.ignition/designer-dark-mode.log` (`Vision gate: …`).
+
+| Step | Expect | Result | Last checked | Notes |
+|---|---|---|---|---|
+| Light Designer, Perspective workspace showing, no Vision window open. **Tools → Dark Mode** | Dark mode applies as before | — | — | Control |
+| Dark Designer. Single-click a Vision window in the project browser | The Designer turns light BEFORE the window opens; status bar `Dark mode was turned off because the Vision workspace was opened…`; a dialog explains, once per session; Tools → Dark Mode unticked | `pass` | `2026-09-02` | The gate's main path. Log: `Vision gate: leaving dark mode because the Vision workspace was opened.` Fired twice in the first run, 8.3.6 / Vision 12.3.6 |
+| Now double-click that window, edit a label's text, save | `ops/vision-check.sh` reports no FlatLaf classes and no `setFont`/`setForeground` calls you did not make; a Vision client, if you have one, opens it | `pass` | `2026-09-02` | This is the whole point. The script reads every saved window and template straight out of the dev gateway's project. First run: window and template both clean, one hand-set colour on the window |
+| Light Designer with a Vision window open (any workspace showing). **Tools → Dark Mode** | Refused: dialog + status bar `Dark mode was not applied: a Vision window or template is open…`; menu stays unticked | `pass` | `2026-09-02` | Log: `Vision gate: Dark mode was not applied…` |
+| Close the window, stay in the Vision workspace. **Tools → Dark Mode** | Refused: `…the Vision workspace is selected` | `pass` | `2026-09-02` | |
+| Leave for Perspective. **Tools → Dark Mode** | Applies | — | — | |
+| Dark Designer. Open a Vision **template** (single-click first) | Same as the window row: light before it opens | — | — | Templates serialize too |
+| Dark preference saved, quit with a Vision window open, relaunch | The Designer comes up LIGHT with the status bar `Dark mode was not applied…`; Tools → Dark Mode unticked; close the window, leave Vision, tick it: applies. Quit and relaunch from Perspective: comes up dark | — | — | The preference survives a blocked launch; the menu follows the screen |
+| Dark Designer. Open a Vision window by a path that skips the project browser: **Find/Replace** result, or `system.nav`-free scripting via the Script Console `context.getWorkspaceManager`… | Dark mode ends as the window attaches; status bar adds `Close and reopen the window before editing it.` | — | — | The fallback. Whichever path you find that opens a window without selecting the workspace first, record it here |
+| Designer without the Vision module | Dark mode behaves as before; log has no `Vision gate:` errors | — | — | The gate resolves Vision by name and must cost nothing when it is absent |
+
+**By hand, once per Ignition version:** the interface the gate keys on is
+`com.inductiveautomation.vision.api.client.components.model.TopLevelContainer`,
+implemented by `FPMIWindow` and `VisionTemplate`. It cannot be pinned by
+`ReflectiveSurfaceTest` (no Vision jar on the harness classpath), so confirm it
+is still there with `javap` against the `vision-client` jar in
+`~/.ignition/cache/resources/modules/com.inductiveautomation.vision/`.
 
 ## Findings from the sweeps
 
@@ -595,5 +625,5 @@ rediscovering:
   spotty, and can be difficult to use."* Record these as `skip` unless we have a
   reason to disagree.
 
-Also out of scope by our own choice: **the Vision design canvas**, which renders
-your own window content — theming it would misrepresent what your users will see.
+Also out of scope, and now enforced rather than chosen: **Vision windows and
+templates** are never edited under dark mode at all (§N).

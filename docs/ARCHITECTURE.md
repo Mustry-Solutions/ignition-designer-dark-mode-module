@@ -221,6 +221,61 @@ literal, so the inspector shows nothing wrong while the screen does. The pass
 darkens the fills rather than correcting the labels, judged on each colour's own
 luminance.
 
+### VisionGate
+Not a theming pass: the reason dark mode and Vision are kept apart, and the
+mechanism that keeps them so.
+
+Vision saves a window by serializing every component property that differs
+from a *clean copy* of the component's class (`XMLSerializer.getCleanCopy`),
+and it caches that clean copy in a **static map for the life of the Designer**,
+constructed under whatever look and feel was installed the first time the
+class was saved. Property equality is `equals`, except that a border whose
+class is literally named `SynthBorder` is deemed equal to anything — a stock
+look-and-feel assumption baked into `AbstractEqualityDelegateSupport`. FlatLaf
+borders extend `BasicBorders$MarginBorder`, not `BorderUIResource`, so they
+miss both that exception and the `BorderUIResourceDelegate`, and get written
+by class name. The consequences, reproduced headlessly against the real
+`vision-client`/`vision-designer` jars (2026-09-02):
+
+- a stock-born window saved after switching to FlatLaf gains `setFont
+  Helvetica Neue 13`, `setForeground`, `setBackground`, `setButtonBG`,
+  `setMargin` and `<o cls="com.formdev.flatlaf.ui.FlatButtonBorder"/>` on
+  every component;
+- that XML fails to load without FlatLaf on the classpath — every Vision
+  client, and every Designer without this module — with
+  `ClassNotFoundException`, not a warning;
+- in the harness, a window deserialized under FlatLaf and then restored to
+  stock still failed to save (`Unable to create clean copy of
+  de.javasoft.plaf.synthetica.ScalableFont`). A live 8.3.6 Designer hands
+  components a plain `FontUIResource` rather than Synthetica's `ScalableFont`
+  (the module logs the class at startup), so that particular failure is a
+  harness artefact — but the gate treats the round trip as damage anyway,
+  because the clean-copy cache makes any toggle-then-save suspect.
+
+Hence the gate, in three parts, all in `VisionGate` and its three call sites
+in `ThemeManager`:
+
+1. **Refuse** — `beginSwitch(true)` and `applyStartupPreference()` ask
+   `blockingReason()`: any `TopLevelContainer` (the interface both
+   `FPMIWindow` and `VisionTemplate` implement) under any window, or the
+   `WorkspaceManager`'s selected workspace keyed `windows`. A refused click
+   resets the preference and the menu; a refused startup keeps the preference.
+2. **Leave first** — `watchNavigation` adds a `WorkspaceNavigationListener`
+   proxy to the `WorkspaceManager`. Selecting a Vision node in the project
+   browser activates the `windows` workspace on the FIRST click, synchronously;
+   the window is deserialized on the second. `leaveDarkForVision` runs
+   `apply(false)` right there, in the listener, so the window is born under
+   Synthetica. Deferring it one event turn would race the second click.
+3. **Catch the rest** — the dark-mode component watcher checks every attached
+   container (four levels deep) for a `TopLevelContainer`; a hit ends dark
+   mode on the next turn and tells the user to close and reopen the window.
+
+Everything Vision-side is reached by name — `TopLevelContainer`,
+`WorkspaceManager`, `IgnitionDesigner.getWorkspace()` — so a Designer without
+Vision loses the gate, not the module. The Designer-side names are pinned by
+`ReflectiveSurfaceTest`; the Vision one cannot be (its jars are not a published
+artifact) and is checked by hand in the QA checklist, §N.
+
 ### ComponentInspector
 Debug only. **Cmd/Ctrl+Shift+I** (or `+F12`) dumps the component chain under the
 mouse to the debug log — class, background/foreground with `UIResource` vs

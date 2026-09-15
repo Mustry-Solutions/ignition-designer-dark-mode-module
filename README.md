@@ -38,18 +38,33 @@ The same Designer, toggled off and on:
 
 ## Known limitations
 
+**Dark mode and Vision do not mix, and the module keeps them apart.** A Vision
+window saved from a FlatLaf Designer picks up FlatLaf's fonts, colours and
+border classes as if you had set them by hand, and a Vision client cannot open
+it at all (`ClassNotFoundException: com.formdev.flatlaf.ui.FlatButtonBorder`).
+The cause is the platform's window serializer, which compares every property
+against a "clean copy" cached for the life of the Designer, and nothing on our
+side can reach it. So:
+
+- **Tools → Dark Mode is refused** while any Vision window or template is open,
+  or while the Vision workspace is selected. The status bar and a dialog say why.
+- **A dark Designer turns itself light** the moment you navigate to Vision in
+  the project browser, before the window you are opening is loaded. Turn dark
+  mode back on once you have left Vision and closed its windows.
+- If a Vision window still reaches the screen under dark mode, the module turns
+  light and asks you to **close and reopen that window** before editing it.
+
+Perspective, scripting, tags, reports, pipelines and everything else are
+unaffected. The details, and the headless reproduction, are in
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#visiongate).
+
 Some surfaces are left light **on purpose**, because they render *your* content
 rather than the Designer's chrome, and theming them would misrepresent what your
 users will actually see:
 
-- the **Vision design canvas**, which shows your window content;
 - the **Perspective view canvas**, which renders the view as a session would —
   it follows the session's own theme, not the Designer's;
 - **Symbol Factory thumbnails**, which are the symbol artwork itself.
-
-One more, following the prior art's own judgement (see
-[Prior art](#prior-art)): the Vision **property tables** are deliberately not
-themed, because colouring them looks spotty and makes them harder to use.
 
 Genuinely open, rather than deliberate: the Perspective view editor's **rulers
 and surround** stay light. They are chrome rather than content, so they arguably

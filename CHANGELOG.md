@@ -12,6 +12,29 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ### Added
 
+- **A gate between dark mode and Vision.** Paul Griffith's warning on the
+  announcement thread was right, and reproducible: the platform's window
+  serializer compares every component property against a clean copy cached in
+  a static map for the life of the Designer, so once FlatLaf has been installed
+  a Vision save writes FlatLaf's font, colours and border classes into the
+  window — `<o cls="com.formdev.flatlaf.ui.FlatButtonBorder"/>` — and a Vision
+  client, which has no FlatLaf, fails to open it
+  (`ClassNotFoundException`). Reproduced headlessly against the real Vision
+  jars; the mechanism is IA's, and no restyling on our side reaches it.
+
+  So the module now stays out of Vision's way. `VisionGate` refuses **Tools →
+  Dark Mode** while a Vision window or template is open or the Vision
+  workspace is selected (status bar plus a dialog, preference and menu reset
+  to light); a dark Designer drops to the stock theme synchronously from the
+  workspace manager's navigation listener when the user selects Vision in the
+  project browser — the first click of a double click, before the window is
+  deserialized under FlatLaf; and a Vision window that is attached under dark
+  mode by any other path still ends dark mode, with a "close and reopen"
+  notice, since that window has already been through the round trip. A dark
+  preference is kept, not applied, when the Designer comes up on Vision. Vision
+  and the Designer's `WorkspaceManager` are reached by class name, so a
+  Designer without Vision loses the gate rather than the module.
+
 - Unit tests for the theme preference — the one piece of state the module keeps
   between launches, and until now the only behaviour with no test of its own.
   They cover the `setDark`/`isDarkModeEnabled` round trip, the rule that the
