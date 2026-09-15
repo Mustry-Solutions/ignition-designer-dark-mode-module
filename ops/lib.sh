@@ -9,9 +9,9 @@ PROJECT_ROOT="$(cd "${OPS_DIR}/.." && pwd)"
 MODULES_DIR="${OPS_DIR}/modules"
 
 # Local self-signed signing material for development (gitignored). On a fresh
-# gateway the certificate is accepted once in the commissioning wizard
-# (setup.sh); after that it persists in the gateway data volume. These are
-# throwaway dev creds.
+# gateway the certificate is accepted unattended, by seeding its fingerprint into
+# data/modules.json (see accept_staged_module below); after that it persists in
+# the gateway data volume. These are throwaway dev creds.
 SIGNING_DIR="${OPS_DIR}/signing"
 KEYSTORE_FILE="${SIGNING_DIR}/dev-keystore.p12"
 CERT_FILE="${SIGNING_DIR}/dev-cert.pem"

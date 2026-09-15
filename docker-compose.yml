@@ -3,9 +3,10 @@
 # Runs a disposable Ignition 8.3.6 gateway in Docker. DEVELOPMENT ONLY: it accepts
 # the EULA automatically and uses a fixed weak admin password. Do NOT use in production.
 #
-# The module is self-signed with a local dev certificate (see ops/lib.sh). On a fresh
-# gateway you accept that certificate once during the commissioning wizard; after that
-# it persists in the data volume and reloads automatically on every redeploy.
+# The module is self-signed with a local dev certificate (see ops/lib.sh). Nothing is
+# clicked through: setup.sh seeds that certificate's fingerprint and the module's EULA
+# hash straight into data/modules.json, so a fresh gateway never parks in commissioning.
+# The seeded acceptance persists in the data volume and reloads on every redeploy.
 #
 # Drive it with the scripts in ./ops (setup.sh / deploy.sh / teardown.sh / ...).
 

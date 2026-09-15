@@ -10,11 +10,78 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ## [Unreleased]
 
-Portability. The module has only ever been watched on macOS; these changes
-make what would differ elsewhere observable, and fix the two things that
-demonstrably did.
-
 ### Added
+
+- **A gate between dark mode and Vision.** Paul Griffith's warning on the
+  announcement thread was right, and reproducible: the platform's window
+  serializer compares every component property against a clean copy cached in
+  a static map for the life of the Designer, so once FlatLaf has been installed
+  a Vision save writes FlatLaf's font, colours and border classes into the
+  window — `<o cls="com.formdev.flatlaf.ui.FlatButtonBorder"/>` — and a Vision
+  client, which has no FlatLaf, fails to open it
+  (`ClassNotFoundException`). Reproduced headlessly against the real Vision
+  jars; the mechanism is IA's, and no restyling on our side reaches it. A
+  serializer-side cure for the crash does exist (refreshing the platform's
+  clean-copy cache at each switch, verified headlessly), but it leaves Vision
+  baking the module's dark colour constants into freshly opened components,
+  so dark mode inside Vision stays a follow-up
+  ([ARCHITECTURE.md](docs/ARCHITECTURE.md#visiongate)).
+
+  So the module now stays out of Vision's way. `VisionGate` refuses **Tools →
+  Dark Mode** while a Vision window or template is open or the Vision
+  workspace is selected (status bar plus a dialog, preference and menu reset
+  to light); a dark Designer drops to the stock theme synchronously from the
+  workspace manager's navigation listener when the user selects Vision in the
+  project browser — the first click of a double click, before the window is
+  deserialized under FlatLaf; and a Vision window that is attached under dark
+  mode by any other path still ends dark mode, with a "close and reopen"
+  notice, since that window has already been through the round trip. A dark
+  preference is kept, not applied, when the Designer comes up on Vision, and
+  kept when a dark Designer drops out for Vision — only a refused click resets
+  it. The gate is asked again at the moment the theme is installed, one turn
+  after the click, since a Vision selection can land in between. The Tools
+  menu is seeded without firing a switch, because the Designer rebuilds
+  module menus during its own teardown and a kept preference used to read as
+  a click on the way out. Vision and the Designer's `WorkspaceManager` are
+  reached by class name, so a Designer without Vision loses the gate rather
+  than the module.
+
+- `PropertyKeyFieldTest` in the look-and-feel harness: builds a real
+  `JsonEditor` over a session-props-shaped document, in both orders the
+  Designer uses (rows before the switch, rows after it), and asserts the
+  property names are readable, that the stock black comes back on the light
+  restore, and — rendered to pixels — that the name column paints no black
+  glyphs. Two of its cases model the runtime states that defeated the old
+  lift and failed against the previous code.
+
+- **Vision's palette and property-editor filters, and the Tag Browser's rows,
+  come back light after the Vision gate drops dark mode.** Found in the first
+  live run of the gate. Two mechanisms, both reproduced in the harness:
+  the child-first leftover pass that fixes #45 skipped anything under a
+  `factorypmi` package, which was meant to protect Vision's user content but
+  also covered Vision's own dock frames — "inside Vision" now means under a
+  Vision window or template or the workspace that hosts them; and IA's
+  `PanelBasedTreeCellRenderer` (the Tag Browser's renderer) copies the
+  `Tree.*` colours out of UIManager in its constructor with no `updateUI` to
+  re-read them, so a renderer the Tag Browser created while the Designer was
+  dark painted every row dark for the rest of the session — the light
+  restore now re-syncs the renderer of every tree it walks, not only the ones
+  the icon pass had wrapped.
+
+- Unit tests for the theme preference — the one piece of state the module keeps
+  between launches, and until now the only behaviour with no test of its own.
+  They cover the `setDark`/`isDarkModeEnabled` round trip, the rule that the
+  saved value follows the theme actually INSTALLED rather than the one
+  requested (a switch that fails must not come back at the next launch), and
+  that the startup path applies dark only when the preference asks for it.
+  `ThemeManager` gained a package-private constructor taking the `Preferences`
+  node so the tests write to an in-memory one instead of the developer's own,
+  and the startup apply moved out of the readiness poll into
+  `applyStartupPreference()` so it can be driven without a live Designer.
+  They also assert the flush, not just the value: the value lands in the
+  in-memory node either way, so a test that only read it back could not have
+  caught the Linux bug below. Covers both write sites and an unwritable
+  backing store.
 
 - **The debug log opens with an environment block.** OS, JRE, the
   module-system and look-and-feel JVM arguments, which `java.desktop`
@@ -30,19 +97,108 @@ demonstrably did.
   surface stayed light with nothing to say why. Now the status line names the
   argument and where it goes.
 
+### Changed
+
+- The docs no longer describe Justin Edwards's
+  [Exchange dark-mode script](https://inductiveautomation.com/exchange/2719/overview)
+  as 8.1-only. Its 1.3.0 release (3 September 2026) targets 8.3, so the
+  README's prior-art section now presents it as an alternative on 8.3 rather
+  than the 8.1 counterpart, and the contributing guide and QA checklist say
+  which release the borrowed class catalogue came from.
+
+- The native **title bar and window frame stay light on Windows and Linux**,
+  by decision. The QA checklist gained an OS column and the three surfaces
+  that only exist off macOS.
+
 ### Fixed
+
+- The README's screenshot pair is retaken from `main` after the property-name
+  fix below (docs only). The previous dark image showed the very defect the
+  forum reported — every Session Props name black on the dark panel — so the
+  "after" half of the before/after pair was itself a bug report. Same frame,
+  same recipe (`docs/images/README.md`), 8.3.6; the dark name column now
+  measures about 7:1 from the pixels where the old one measured 1.9:1.
+
+- **Property names in the Perspective property editor are readable.** Raised
+  on the forum against the announcement's own screenshot: every key in the
+  Session Props editor — `host`, `locale`, `authenticated` — was pure black on
+  the dark panel, a contrast ratio of about 1.9:1, while the values beside
+  them were fine. It had passed a by-eye QA row. Each name is a
+  `KeyEditorField`, a borderless `JTextField` whose base class keeps two
+  private text colours and applies the *uneditable* one from
+  `setEditable(false)` straight through `JTextField.setForeground`, bypassing
+  its own override; the key class sets that colour to `Color.BLACK` and locks
+  every schema'd key. The module's generic foreground lift lost both ways: it
+  only fires over a dark background, and a text field with no background of
+  its own reports the filter wrapper's permanent amber instead (the state #23
+  documented in this editor); and when it did fire it rewrote only the
+  editable colour, so the next `setEditable(false)` put the black back. The
+  walk now recognises the field by class name, replaces the uneditable colour
+  through its public setter, lifts whatever is showing regardless of the
+  background, and restores both on the light switch. Values are untouched.
+  Proven headlessly for both defeat paths and confirmed by eye in a Designer
+  on 8.3.6 (2026-09-15): names light under dark, black again after the
+  switch back.
+
+- **The dark mode choice could be lost on Linux** if the Designer was
+  force-quit, killed or crashed shortly after toggling. `ThemeManager` wrote
+  the preference but never flushed it, and on Linux the backing store
+  (`FileSystemPreferences`) only writes through on a 30-second sync timer or a
+  shutdown hook — so the next launch came up in the theme the user had just
+  changed away from. Both write sites now flush. Reproduced and verified
+  against Ignition's own bundled Linux JRE 17. Windows (registry) and macOS
+  (cfprefsd) persist out of process and were never affected, which is why this
+  went unnoticed.
+- The README now says where the Dark Mode setting lives and how far it
+  reaches (docs only; no behaviour change). It is a `java.util.prefs` value on
+  the machine running the Designer, per OS user — not on the gateway, not in
+  the project — and it is one value for every gateway that user connects to:
+  a gateway with the module applies it, a gateway without the module never
+  loads the code and leaves it alone, and a failed apply against one gateway
+  resets it for all of them. None of that was written down outside a comment
+  in `ThemeManager`. The README's intro also read as contradicting itself:
+  "the choice is remembered between sessions" followed two sentences later by
+  "relaunching always gives a clean stock theme, whichever way you left it".
+  The second sentence dates from when it sat next to a since-fixed restore
+  limitation; it now says what it meant — a relaunch starts from stock and
+  re-applies dark only if the setting asks for it. `ARCHITECTURE.md` and the
+  bricked-launch recovery note in `DEVELOPMENT.md` cross-reference the new
+  section.
+
+- A second documentation pass, this one over statements that contradict
+  themselves rather than the code (docs only; no behaviour change). A "four
+  invariants" list in 0.2.0's own notes that introduced six; a "two more"
+  in the README that introduced one; a "two tiers" in `ARCHITECTURE.md`
+  followed by three bullets; the same §E row twice in the QA checklist,
+  disagreeing with itself about whether it is blocked; the README's project
+  layout, which had drifted five classes and both test source sets behind
+  `designer/src`; the QA Runs table, now newest-first; and two Notes cells
+  with a stray leading colon.
+
+  `DEVELOPMENT.md`'s mutation figure was re-measured rather than re-guessed:
+  reintroducing #23's ordering fails five assertions, not "three of the six"
+  (`ThemeSwitchCycleTest` has had ten since #53). It now names the tests
+  instead of counting them, so it does not go stale again the next time the
+  harness grows. The 1297-defaults-left-null figure is unchanged and still
+  exact.
+
+- Documentation corrections found by a sweep of the docs against the code
+  (docs only; no behaviour change). The build docs still named Gradle 8.14
+  after the wrapper moved to 9.7.1. Three places — `docker-compose.yml`,
+  `ops/lib.sh` and `ops/README.md` — still described accepting the dev
+  certificate in the commissioning wizard, which `accept_staged_module`
+  removed: the fingerprint and EULA hash are seeded into `data/modules.json`
+  and nothing is clicked. The QA checklist said in two places that JIDE's
+  `CodeEditor` is untouched by this module, which `CodeEditorTheme` stopped
+  being true in 0.2.0, and its deep link into `ThemeManager` pointed at a line
+  the file no longer has — now named by method instead, so it cannot drift
+  again.
 
 - **Dark mode keeps the Designer's font.** FlatLaf substituted the operating
   system's UI font (`Dialog 12` → `Helvetica Neue 13` on macOS; Segoe UI at
   the desktop's size on Windows), so every toggle changed text metrics, not
   just colours. The stock font is now pinned across the switch, and the pin
   carries Synthetica's scale factor with it on a scaled display.
-
-### Documented
-
-- The native **title bar and window frame stay light on Windows and Linux**,
-  by decision. The QA checklist gained an OS column and the three surfaces
-  that only exist off macOS.
 
 ## [0.2.0] - 2026-09-01
 
@@ -96,12 +252,12 @@ by name still exists.
   FlatLaf jars — no gateway, no Designer, no screenshots — and diffs every
   resolvable `UIManager` default across a light→dark→light cycle. The unit
   tests only ever saw stub look and feels, so every bug this module has had
-  (#14, #17, #19, #22, #23) had to be found by deploying and looking. Four
+  (#14, #17, #19, #22, #23) had to be found by deploying and looking. Six
   invariants are now pinned instead: a full cycle restores every default, the
   FlatLaf overrides are cleared while FlatLaf is still installed (the ordering
-  #23 got wrong), repeated cycles converge, and JIDE's `Theme.painter` map
-  comes back to its stock entries, the standard Swing colours actually go dark,
-  and no `UIManager` key naming a background stays light under dark mode —
+  #23 got wrong), repeated cycles converge, JIDE's `Theme.painter` map comes
+  back to its stock entries, the standard Swing colours actually go dark, and
+  no `UIManager` key naming a background stays light under dark mode —
   which is [#22](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/22)
   turned from a manual dump into an assertion over 174 keys. It runs in CI.
 

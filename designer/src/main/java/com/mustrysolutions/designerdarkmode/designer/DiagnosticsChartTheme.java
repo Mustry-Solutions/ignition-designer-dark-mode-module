@@ -125,12 +125,7 @@ final class DiagnosticsChartTheme {
     }
 
     private static boolean isDiagnosticsChart(Component component) {
-        for (Class<?> type = component.getClass(); type != null; type = type.getSuperclass()) {
-            if (CHART_PANEL.equals(type.getName())) {
-                return true;
-            }
-        }
-        return false;
+        return ClassNames.extendsNamed(component.getClass(), CHART_PANEL);
     }
 
     private void theme(Object chart) {
