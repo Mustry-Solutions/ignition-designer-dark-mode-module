@@ -6,7 +6,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.prefs.Preferences;
 
 import javax.swing.LookAndFeel;
 import javax.swing.UIManager;
@@ -28,6 +27,14 @@ import org.junit.jupiter.api.Test;
  * would come back at every launch — the same broken switch, against a Designer
  * the user can no longer read, with no obvious way out.
  *
+ * <p>The other rule is that every write is flushed, not left for a timer. On
+ * Linux the backing store is {@code FileSystemPreferences}, which writes
+ * through only on a 30-second sync timer or a shutdown hook; a Designer
+ * force-quit, killed or crashed inside that window came back in the theme the
+ * user had just changed away from. Windows (registry) and macOS (cfprefsd)
+ * persist out of process and hid it. The value is in the node either way, so
+ * those tests assert the flush count rather than the value.
+ *
  * <p>Everything here runs against an {@link InMemoryPreferences} node rather
  * than the developer's own. What the switch DOES to the Designer is the
  * headless harness's job ({@code src/lafHarness}); this covers the wiring
@@ -42,7 +49,7 @@ class ThemePreferencePersistenceTest {
      */
     private static final String KEY = "darkMode";
 
-    private Preferences prefs;
+    private InMemoryPreferences prefs;
     private ThemeManager manager;
     private RecordingListener listener;
     private LookAndFeel original;
@@ -94,6 +101,49 @@ class ThemePreferencePersistenceTest {
 
         assertFalse(manager.isDarkModeEnabled());
         assertFalse(prefs.getBoolean(KEY, true));
+    }
+
+    /**
+     * The write happens before the "is the UI up yet?" gate, not after it:
+     * {@code startup} was never called here, so {@code setDark} defers the
+     * switch itself. If the save were deferred with it, a click that arrived
+     * early would be forgotten entirely on a force-quit.
+     */
+    @Test
+    @DisplayName("setDark flushes the preference, on and off, even when the switch is deferred")
+    void setDarkFlushesEveryWrite() {
+        manager.setDark(true);
+        assertEquals(1, prefs.flushes, "the choice should be flushed, not left to a timer");
+
+        manager.setDark(false);
+        assertEquals(2, prefs.flushes, "turning it back off must be as durable as turning it on");
+    }
+
+    @Test
+    @DisplayName("finishSwitch flushes the value it reconciles")
+    void finishSwitchFlushes() {
+        manager.finishSwitch();
+
+        assertEquals(1, prefs.flushes,
+            "the reconciled value is the one the next launch reads, so it must reach disk too");
+    }
+
+    /**
+     * A backing store that cannot be written is not a reason to break the
+     * toggle. {@code setDark} runs off the Tools menu click, so an exception
+     * escaping it would leave the menu item and the Designer disagreeing —
+     * a worse outcome than a preference that may not outlive the session.
+     */
+    @Test
+    @DisplayName("a failing backing store does not break the toggle")
+    void toleratesAFailingBackingStore() {
+        prefs.failFlush = true;
+
+        manager.setDark(true);
+
+        assertTrue(manager.isDarkModeEnabled(),
+            "the in-memory node is still correct, so the session is unaffected");
+        assertEquals(1, prefs.flushes, "the flush should have been attempted");
     }
 
     @Test

@@ -30,7 +30,19 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   node so the tests write to an in-memory one instead of the developer's own,
   and the startup apply moved out of the readiness poll into
   `applyStartupPreference()` so it can be driven without a live Designer.
-  No behaviour change.
+  They also assert the flush, not just the value: the value lands in the
+  in-memory node either way, so a test that only read it back could not have
+  caught the Linux bug below. Covers both write sites and an unwritable
+  backing store.
+
+### Changed
+
+- The docs no longer describe Justin Edwards's
+  [Exchange dark-mode script](https://inductiveautomation.com/exchange/2719/overview)
+  as 8.1-only. Its 1.3.0 release (3 September 2026) targets 8.3, so the
+  README's prior-art section now presents it as an alternative on 8.3 rather
+  than the 8.1 counterpart, and the contributing guide and QA checklist say
+  which release the borrowed class catalogue came from.
 
 ### Fixed
 
@@ -55,6 +67,15 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   on 8.3.6 (2026-09-15): names light under dark, black again after the
   switch back.
 
+- **The dark mode choice could be lost on Linux** if the Designer was
+  force-quit, killed or crashed shortly after toggling. `ThemeManager` wrote
+  the preference but never flushed it, and on Linux the backing store
+  (`FileSystemPreferences`) only writes through on a 30-second sync timer or a
+  shutdown hook — so the next launch came up in the theme the user had just
+  changed away from. Both write sites now flush. Reproduced and verified
+  against Ignition's own bundled Linux JRE 17. Windows (registry) and macOS
+  (cfprefsd) persist out of process and were never affected, which is why this
+  went unnoticed.
 - The README now says where the Dark Mode setting lives and how far it
   reaches (docs only; no behaviour change). It is a `java.util.prefs` value on
   the machine running the Designer, per OS user — not on the gateway, not in
