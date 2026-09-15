@@ -46,6 +46,14 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   reached by class name, so a Designer without Vision loses the gate rather
   than the module.
 
+- `PropertyKeyFieldTest` in the look-and-feel harness: builds a real
+  `JsonEditor` over a session-props-shaped document, in both orders the
+  Designer uses (rows before the switch, rows after it), and asserts the
+  property names are readable, that the stock black comes back on the light
+  restore, and — rendered to pixels — that the name column paints no black
+  glyphs. Two of its cases model the runtime states that defeated the old
+  lift and failed against the previous code.
+
 - Unit tests for the theme preference — the one piece of state the module keeps
   between launches, and until now the only behaviour with no test of its own.
   They cover the `setDark`/`isDarkModeEnabled` round trip, the rule that the
@@ -61,7 +69,44 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   caught the Linux bug below. Covers both write sites and an unwritable
   backing store.
 
+### Changed
+
+- The docs no longer describe Justin Edwards's
+  [Exchange dark-mode script](https://inductiveautomation.com/exchange/2719/overview)
+  as 8.1-only. Its 1.3.0 release (3 September 2026) targets 8.3, so the
+  README's prior-art section now presents it as an alternative on 8.3 rather
+  than the 8.1 counterpart, and the contributing guide and QA checklist say
+  which release the borrowed class catalogue came from.
+
 ### Fixed
+
+- The README's screenshot pair is retaken from `main` after the property-name
+  fix below (docs only). The previous dark image showed the very defect the
+  forum reported — every Session Props name black on the dark panel — so the
+  "after" half of the before/after pair was itself a bug report. Same frame,
+  same recipe (`docs/images/README.md`), 8.3.6; the dark name column now
+  measures about 7:1 from the pixels where the old one measured 1.9:1.
+
+- **Property names in the Perspective property editor are readable.** Raised
+  on the forum against the announcement's own screenshot: every key in the
+  Session Props editor — `host`, `locale`, `authenticated` — was pure black on
+  the dark panel, a contrast ratio of about 1.9:1, while the values beside
+  them were fine. It had passed a by-eye QA row. Each name is a
+  `KeyEditorField`, a borderless `JTextField` whose base class keeps two
+  private text colours and applies the *uneditable* one from
+  `setEditable(false)` straight through `JTextField.setForeground`, bypassing
+  its own override; the key class sets that colour to `Color.BLACK` and locks
+  every schema'd key. The module's generic foreground lift lost both ways: it
+  only fires over a dark background, and a text field with no background of
+  its own reports the filter wrapper's permanent amber instead (the state #23
+  documented in this editor); and when it did fire it rewrote only the
+  editable colour, so the next `setEditable(false)` put the black back. The
+  walk now recognises the field by class name, replaces the uneditable colour
+  through its public setter, lifts whatever is showing regardless of the
+  background, and restores both on the light switch. Values are untouched.
+  Proven headlessly for both defeat paths and confirmed by eye in a Designer
+  on 8.3.6 (2026-09-15): names light under dark, black again after the
+  switch back.
 
 - **The dark mode choice could be lost on Linux** if the Designer was
   force-quit, killed or crashed shortly after toggling. `ThemeManager` wrote

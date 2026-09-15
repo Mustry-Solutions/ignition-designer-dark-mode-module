@@ -1399,6 +1399,11 @@ public class ThemeManager {
             // background. Draining this inside the loop above stranded
             // #DDE0E3 text on any component lifted by another branch, which
             // in light mode reads as permanently disabled.
+            // Key fields first: their uneditable colour goes back through the
+            // setter, then the foreground restore below puts the editable
+            // colour (and what is showing) back through setForeground.
+            liftedKeyFieldUneditable.forEach(this::restoreUneditableForeground);
+            liftedKeyFieldUneditable.clear();
             liftedForegrounds.forEach(java.awt.Component::setForeground);
             liftedForegrounds.clear();
             swappedBorders.forEach(javax.swing.JComponent::setBorder);
@@ -1423,6 +1428,27 @@ public class ThemeManager {
     private final java.util.Map<java.awt.Component, java.awt.Color> liftedForegrounds =
         new java.util.WeakHashMap<>();
     private static final java.awt.Color LIGHT_FOREGROUND = new java.awt.Color(0xDDE0E3);
+
+    /**
+     * The property NAME field of Ignition's JSON property editor — every row
+     * of the Perspective property editor, session props included. A
+     * borderless {@code JTextField} whose class fixes BOTH of its text colours
+     * to {@code Color.BLACK} and re-applies the uneditable one, bypassing
+     * {@code setForeground}, whenever its editability is set.
+     */
+    // Package-private so ReflectiveSurfaceTest can assert this name still
+    // resolves against the Ignition the harness runs.
+    static final String KEY_FIELD_CLASS =
+        "com.inductiveautomation.ignition.client.jsonedit.KeyEditorField";
+    /** Its base class, which owns the two colours. */
+    static final String BORDERLESS_FIELD_CLASS =
+        "com.inductiveautomation.ignition.client.jsonedit.BorderlessField";
+    static final String UNEDITABLE_FOREGROUND_SETTER = "setUneditableForeground";
+    static final String UNEDITABLE_FOREGROUND_FIELD = "uneditableForeground";
+
+    /** Key fields whose uneditable colour was replaced -> the stock colour. */
+    private final java.util.Map<javax.swing.JComponent, java.awt.Color> liftedKeyFieldUneditable =
+        new java.util.WeakHashMap<>();
 
     /**
      * Replace a border drawn in the {@code Color.WHITE} instance with the same
@@ -1572,7 +1598,11 @@ public class ThemeManager {
                 swapWhiteBorder(component);
                 java.awt.Color foreground = component.isForegroundSet()
                     ? component.getForeground() : null;
-                if (foreground instanceof javax.swing.plaf.UIResource
+                if (isPropertyKeyField(component)) {
+                    // A property NAME in the JSON property editor. Neither
+                    // branch below can keep it readable — see the method.
+                    liftPropertyKeyField(component);
+                } else if (foreground instanceof javax.swing.plaf.UIResource
                         && luminance(foreground) < DARK_FOREGROUND_LUMINANCE
                         && !staleUiresForegrounds.containsKey(component)) {
                     staleUiresForegrounds.put(component, foreground);
@@ -1766,6 +1796,105 @@ public class ThemeManager {
                 && !liftedForegrounds.containsKey(component)) {
             liftedForegrounds.put(component, foreground);
             component.setForeground(LIGHT_FOREGROUND);
+        }
+    }
+
+    /** A {@code KeyEditorField} or a subclass (Perspective wraps it in one). */
+    private static boolean isPropertyKeyField(javax.swing.JComponent component) {
+        if (!(component instanceof javax.swing.JTextField)) {
+            return false;
+        }
+        for (Class<?> c = component.getClass(); c != null; c = c.getSuperclass()) {
+            if (KEY_FIELD_CLASS.equals(c.getName())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Make a property name readable under dark mode, and remember how to undo
+     * it.
+     *
+     * <p>Reported on the forum against the announcement's own screenshot:
+     * every property name in the Perspective property editor was black on
+     * the dark panel, a contrast ratio of about 1.9:1, while the values
+     * beside them were fine. The name is a {@code KeyEditorField}, whose
+     * base class {@code BorderlessField} keeps two private colours —
+     * editable and uneditable — and applies one of them from {@code
+     * setEditable(boolean)} straight through {@code JTextField.setForeground},
+     * bypassing its own override. {@code KeyEditorField}'s constructor sets
+     * the uneditable colour to {@code Color.BLACK} (the editable one already
+     * is) and then calls {@code setEditable(false)} for every key the schema
+     * locks, which is every built-in property.
+     *
+     * <p>The generic lift in the walk is defeated two ways, both pinned in
+     * {@code PropertyKeyFieldTest}:
+     *
+     * <ul>
+     *   <li>it only fires when the field's background is dark, and a text
+     *       field with no background of its own — what {@code BasicTextUI}
+     *       leaves when {@code TextField.background} resolves to nothing, the
+     *       state #23 documented in this editor — reports its parent's: the
+     *       filter wrapper's permanent amber, which is not dark;</li>
+     *   <li>even when it fires, it only rewrites the editable colour (the
+     *       override stores whatever {@code setForeground} is given), so the
+     *       next {@code setEditable(false)} puts the black back.</li>
+     * </ul>
+     *
+     * <p>So the uneditable colour is replaced through its public setter, and
+     * the field is lifted regardless of what its background reports — a
+     * property name is unambiguously chrome, never user content. The values
+     * beside it are left alone: they go through the same base class but are
+     * handed {@code Color.GRAY} and per-type colours that read fine on dark.
+     * Everything is reached by name and fails soft, like every other pass.
+     */
+    private void liftPropertyKeyField(javax.swing.JComponent field) {
+        if (liftedKeyFieldUneditable.containsKey(field)) {
+            return;
+        }
+        try {
+            java.lang.reflect.Field uneditable = null;
+            for (Class<?> c = field.getClass(); c != null && uneditable == null; c = c.getSuperclass()) {
+                if (BORDERLESS_FIELD_CLASS.equals(c.getName())) {
+                    uneditable = c.getDeclaredField(UNEDITABLE_FOREGROUND_FIELD);
+                }
+            }
+            if (uneditable == null) {
+                throw new NoSuchFieldException(
+                    BORDERLESS_FIELD_CLASS + "." + UNEDITABLE_FOREGROUND_FIELD);
+            }
+            uneditable.setAccessible(true);
+            java.awt.Color stock = (java.awt.Color) uneditable.get(field);
+            java.lang.reflect.Method setter =
+                field.getClass().getMethod(UNEDITABLE_FOREGROUND_SETTER, java.awt.Color.class);
+            if (stock != null && luminance(stock) < DARK_FOREGROUND_LUMINANCE) {
+                liftedKeyFieldUneditable.put(field, stock);
+                setter.invoke(field, LIGHT_FOREGROUND);
+            }
+            // The editable colour, and whichever of the two is showing now.
+            // BorderlessField.setForeground stores its argument as the
+            // editable colour, so one call covers both.
+            java.awt.Color showing = field.getForeground();
+            if (showing != null && !(showing instanceof javax.swing.plaf.UIResource)
+                    && luminance(showing) < DARK_FOREGROUND_LUMINANCE
+                    && !liftedForegrounds.containsKey(field)) {
+                liftedForegrounds.put(field, showing);
+                field.setForeground(LIGHT_FOREGROUND);
+            }
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            DebugLog.log("Property key field lift failed for "
+                + field.getClass().getName() + "; its name stays as Ignition drew it.", e);
+        }
+    }
+
+    private void restoreUneditableForeground(javax.swing.JComponent field, java.awt.Color stock) {
+        try {
+            field.getClass().getMethod(UNEDITABLE_FOREGROUND_SETTER, java.awt.Color.class)
+                .invoke(field, stock);
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            DebugLog.log("Property key field restore failed for "
+                + field.getClass().getName(), e);
         }
     }
 
