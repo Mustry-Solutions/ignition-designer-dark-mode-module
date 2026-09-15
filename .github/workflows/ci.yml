@@ -15,7 +15,8 @@ jobs:
     name: Build & test
     runs-on: ubuntu-latest
     # Normal runs finish in well under a minute; the cap stops a wedged job
-    # from burning the 6-hour GitHub default.
+    # from burning the 6-hour GitHub default. The harness runs in its own
+    # matrix job below, with its own watchdog.
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
@@ -117,26 +118,39 @@ jobs:
       # 8.3.0 is the floor in requiredIgnitionVersion, and the default is the
       # current release, which is what people actually run. A rename in a
       # recent 8.3.x is invisible if you only ever test the floor.
+      #
+      # Through a watchdog, not plain gradlew (#94): a hang used to sit until
+      # the job cap cancelled it, leaving nothing to read. The wrapper
+      # thread-dumps every Gradle JVM after the deadline and fails the step.
+      # The deadline is raised from its 300 s default because the Windows and
+      # macOS runners resolve the whole Designer dependency tree cold, which
+      # alone takes a few minutes; a healthy warm run is ~35 s. Where pgrep is
+      # missing (Git Bash on Windows) the watchdog still fails the step, just
+      # without a jstack — JUnit's own per-test timeout dump, which runs
+      # inside the test JVM, covers that case on every platform.
       - name: Headless look-and-feel harness (current Ignition)
-        run: ./gradlew :designer:lafHarness --no-daemon --stacktrace
+        run: ops/laf-harness-watchdog.sh
         env:
+          HARNESS_DEADLINE_SECONDS: "900"
           ORG_GRADLE_PROJECT_org.gradle.java.installations.auto-download: "false"
 
       - name: Headless look-and-feel harness (support floor)
-        run: ./gradlew :designer:lafHarness -Pharness.sdk=8.3.0 --no-daemon --stacktrace
+        run: ops/laf-harness-watchdog.sh -Pharness.sdk=8.3.0
         env:
+          HARNESS_DEADLINE_SECONDS: "900"
           ORG_GRADLE_PROJECT_org.gradle.java.installations.auto-download: "false"
 
-      # The harness writes the same environment block a Designer would, so a
-      # failing platform's log says which opening or font it saw. The JUnit
-      # XML carries the full stack traces, for a failure that the console
-      # output truncates.
-      - name: Upload harness debug log and test results
+      # Thread dumps from the watchdog, JUnit's per-test results (full stack
+      # traces, and its own timeout dump in <system-out>), and the module's
+      # debug log — whose environment block is what a failing platform is
+      # read against.
+      - name: Upload harness diagnostics
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: laf-harness-${{ matrix.os }}
-          path: |
-            designer/build/laf-harness-debug.log
-            designer/build/test-results/lafHarness
           if-no-files-found: ignore
+          path: |
+            build/laf-harness-threads-*.txt
+            designer/build/test-results/lafHarness/
+            designer/build/laf-harness-debug.log

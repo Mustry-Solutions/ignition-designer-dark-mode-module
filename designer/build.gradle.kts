@@ -128,22 +128,6 @@ val lafHarnessTask = tasks.register<Test>("lafHarness") {
         "--add-opens", "java.desktop/java.awt=ALL-UNNAMED",
     )
 
-    // A test that hangs must fail with the stuck thread's stack, not sit
-    // until the CI job is cancelled with nothing to read. The Linux row has
-    // done exactly that — 49 switches in 15 seconds, then 24 minutes of
-    // silence inside HardCodedDarkTextTest — and so has every push to main
-    // since 2026-09-15, intermittently. JUnit's timeout interrupts the test
-    // thread and reports where it was, which is the evidence a cancelled job
-    // throws away. Generous, because one cycle on a cold runner is seconds,
-    // never minutes.
-    systemProperty("junit.jupiter.execution.timeout.default", "3m")
-    systemProperty("junit.jupiter.execution.timeout.mode", "enabled")
-    // The timed-out test's own stack showed a paint blocked in
-    // AbstractDocument.readLock — one half of a deadlock. The other half is
-    // on some other thread, so dump them all (to stdout, which lands in the
-    // JUnit XML) before the interrupt.
-    systemProperty("junit.jupiter.execution.timeout.threaddump.enabled", "true")
-
     // No display, and none needed: everything asserted here lives in UIManager
     // and in the module's own state. Window.getWindows() is simply empty, so
     // the component walks run and find nothing.
@@ -155,9 +139,20 @@ val lafHarnessTask = tasks.register<Test>("lafHarness") {
     systemProperty("designerdarkmode.logFile",
         layout.buildDirectory.file("laf-harness-debug.log").get().asFile.absolutePath)
 
+    // A hung test should name itself. Since #85 the harness stalls in about
+    // half of CI runs, in a different PropertyKeyFieldTest method each time,
+    // and never locally. No single test takes more than a second, so anything
+    // past a minute is the hang; JUnit then prints a dump of every thread
+    // before interrupting the test (which a deadlock or a spin ignores — the
+    // outer watchdog, ops/laf-harness-watchdog.sh, handles that end).
+    systemProperty("junit.jupiter.execution.timeout.default", "60 s")
+    systemProperty("junit.jupiter.execution.timeout.threaddump.enabled", "true")
+
     testLogging {
-        events("passed", "skipped", "failed")
-        // Full traces, because the harness now runs on platforms nobody has a
+        // standardOut/standardError: the harness prints almost nothing, and
+        // JUnit's timeout thread dump goes through the test JVM's streams.
+        events("passed", "skipped", "failed", "standardOut", "standardError")
+        // Full traces, because the harness runs on platforms nobody has a
         // shell on. Gradle's short format keeps the top frame only, and the
         // first Windows run failed 58 tests with "HeadlessException at
         // ThemeSwitchCycleTest.java:51" — the harness's own line, not the

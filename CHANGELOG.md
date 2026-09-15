@@ -99,6 +99,19 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ### Changed
 
+- **CI's harness steps run under a watchdog that thread-dumps a hang.** Since
+  the property-name lift landed, roughly half of CI runs stall inside
+  `PropertyKeyFieldTest` — a different method each time, on both the current
+  and the 8.3.0 harness SDK, never locally in seventy attempts — and sat there
+  until the job's 15-minute cap cancelled them, which left no evidence at all.
+  `ops/laf-harness-watchdog.sh` now gives up after five minutes, `jstack -l`s
+  the Gradle daemon and the test executor (the executor's dump goes straight
+  into the step log), fails the step, and the dumps ship as a
+  `laf-harness-diagnostics` artifact with JUnit's XML and the module's debug
+  log. JUnit's own 60-second per-test timeout with `threaddump.enabled` is
+  layered underneath so the hung test names itself. Nothing here fixes the
+  hang; it produces the thread dump the fix needs.
+
 - The docs no longer describe Justin Edwards's
   [Exchange dark-mode script](https://inductiveautomation.com/exchange/2719/overview)
   as 8.1-only. Its 1.3.0 release (3 September 2026) targets 8.3, so the
@@ -111,6 +124,18 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   that only exist off macOS.
 
 ### Fixed
+
+- **The look-and-feel harness no longer deadlocks in `PropertyKeyFieldTest`.**
+  About half of CI runs since the property-name lift stalled there until the
+  job cap cancelled them. PR #94's watchdog caught it: the test built a real
+  `JsonEditor` and laid it out on the test thread, which holds the AWT tree
+  lock inside `Container.preferredSize` while `BasicTextUI.getMaximumSize`
+  waits for a text field's document lock; meanwhile `expandAll()` had made
+  `NodeEditor` post its rebuild to the event dispatch thread, where a new key
+  field's `setText` holds that document lock and its revalidate waits for the
+  tree lock. The Designer only ever does any of this on the dispatch thread,
+  so the test now does too, in phases, letting the queue drain between
+  building the editor and inspecting it. Harness-only; no module code changed.
 
 - The README's screenshot pair is retaken from `main` after the property-name
   fix below (docs only). The previous dark image showed the very defect the
