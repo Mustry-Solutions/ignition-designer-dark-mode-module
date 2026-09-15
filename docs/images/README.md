@@ -13,8 +13,9 @@ Filenames are stable on purpose: replacing them in place keeps every existing
 reference — README, issues, release notes — pointing at the current image. Do
 not add dates or version numbers.
 
-The current pair was captured on 2026-08-31 against 0.2.0. Two things to check
-in a replacement, both of which have gone wrong before:
+The current pair was captured on 2026-09-15 against `main` at #85 (the
+property-name fix), on 8.3.6. Three things to check in a replacement, all of
+which have gone wrong before:
 
 - **No trial badge in the status bar.** A later capture of the same frame was
   rejected for showing a red "Trial Expired" — the Reporting module's trial,
@@ -22,6 +23,11 @@ in a replacement, both of which have gone wrong before:
   a README it reads as though this module is trial-limited.
 - **Tags in the Tag Browser.** An empty one wastes the panel that shows off the
   tree theming.
+- **Measure the property names, don't eyeball them.** The 0.2.0 pair shipped
+  with every name in the Session Props editor pure black on the dark panel
+  (about 1.9:1) and nobody noticed until a forum reader did. Crop the name
+  column of the dark image and compute the contrast from the pixels; the
+  current pair reads about 7:1 there after the downscale.
 
 ## Reproducing them
 

@@ -46,6 +46,13 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ### Fixed
 
+- The README's screenshot pair is retaken from `main` after the property-name
+  fix below (docs only). The previous dark image showed the very defect the
+  forum reported — every Session Props name black on the dark panel — so the
+  "after" half of the before/after pair was itself a bug report. Same frame,
+  same recipe (`docs/images/README.md`), 8.3.6; the dark name column now
+  measures about 7:1 from the pixels where the old one measured 1.9:1.
+
 - **Property names in the Perspective property editor are readable.** Raised
   on the forum against the announcement's own screenshot: every key in the
   Session Props editor — `host`, `locale`, `authenticated` — was pure black on
