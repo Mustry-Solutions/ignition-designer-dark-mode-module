@@ -93,11 +93,18 @@ class VisionGateSwitchTest {
         manager.applyStartupPreference();
         gate.reason = null;
 
-        manager.setDark(true);
-        // A click on a Vision window already queued behind the menu click:
-        // it runs after the click has been handled and before the install
-        // that the click deferred by one turn.
-        SwingUtilities.invokeLater(() -> gate.reason = "the Vision workspace is selected");
+        // Both from ONE event-thread turn, in this order, because the order is
+        // the test. A click on a Vision window is already queued behind the
+        // menu click; the menu click's handler (setDark, synchronous on the
+        // event thread) then queues the install behind it. Posting them from
+        // the test thread instead races the event thread: on an idle machine
+        // it handles the menu click before the Vision click is queued, the
+        // install runs first, and dark mode lands — which is exactly the
+        // sequence a real Designer never produces.
+        SwingUtilities.invokeAndWait(() -> {
+            SwingUtilities.invokeLater(() -> gate.reason = "the Vision workspace is selected");
+            manager.setDark(true);
+        });
         drainEventQueue();
 
         assertFalse(UIManager.getLookAndFeel() instanceof FlatDarkLaf,
