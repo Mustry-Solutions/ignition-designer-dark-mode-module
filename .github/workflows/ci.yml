@@ -128,11 +128,15 @@ jobs:
           ORG_GRADLE_PROJECT_org.gradle.java.installations.auto-download: "false"
 
       # The harness writes the same environment block a Designer would, so a
-      # failing platform's log says which opening or font it saw.
-      - name: Upload harness debug log
+      # failing platform's log says which opening or font it saw. The JUnit
+      # XML carries the full stack traces, for a failure that the console
+      # output truncates.
+      - name: Upload harness debug log and test results
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: laf-harness-debug-${{ matrix.os }}
-          path: designer/build/laf-harness-debug.log
+          name: laf-harness-${{ matrix.os }}
+          path: |
+            designer/build/laf-harness-debug.log
+            designer/build/test-results/lafHarness
           if-no-files-found: ignore
