@@ -212,7 +212,13 @@ public class TreeIconRecolorer {
     }
 
     /** Push the current UIManager tree palette into the renderer's cached fields. */
-    private void syncRendererColors(TreeCellRenderer renderer) {
+    /**
+     * Push the current {@code Tree.*} colours into a renderer's cached fields.
+     * Package-private: the light restore's leftover pass calls it for every
+     * tree it walks, since a renderer created under dark mode after this
+     * class wrapped the trees is never one of {@link #touchedRenderers}.
+     */
+    static void syncRendererColors(TreeCellRenderer renderer) {
         Color background = UIManager.getColor("Tree.background");
         Color foreground = UIManager.getColor("Tree.foreground");
         Color selectionBackground = UIManager.getColor("Tree.selectionBackground");

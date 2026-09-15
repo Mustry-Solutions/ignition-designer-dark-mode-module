@@ -389,6 +389,7 @@ one line in `~/.ignition/designer-dark-mode.log` (`Vision gate: …`).
 |---|---|---|---|---|
 | Light Designer, Perspective workspace showing, no Vision window open. **Tools → Dark Mode** | Dark mode applies as before | — | — | Control |
 | Dark Designer. Single-click a Vision window in the project browser | The Designer turns light BEFORE the window opens; status bar `Dark mode was turned off because the Vision workspace was opened…`; a dialog explains, once per session; Tools → Dark Mode unticked. Quit from here and relaunch away from Vision: comes up dark (the preference is kept by a drop-out) | `pass` (preference row unrecorded) | `2026-09-02` | The gate's main path. Log: `Vision gate: leaving dark mode because the Vision workspace was opened.` Fired twice in the first run, 8.3.6 / Vision 12.3.6 |
+| Straight after the drop-out, look at the Vision workspace's own chrome: the Component Palette filter, the Vision Property Editor filter, and the Tag Browser rows | All light. The two filters are white fields; tag rows have no dark boxes behind their names | — | — | Found dark on the first live run (2026-09-15): the leftover pass skipped anything under a `factorypmi` package, and a `TagRenderer` created while dark kept FlatLaf's tree colours. Both reproduced and fixed in the harness (`LightRestoreComponentStateTest`) |
 | Now double-click that window, edit a label's text, save | `ops/vision-check.sh` reports no FlatLaf classes and no `setFont`/`setForeground` calls you did not make; a Vision client, if you have one, opens it | `pass` | `2026-09-02` | This is the whole point. The script reads every saved window and template straight out of the dev gateway's project. First run: window and template both clean, one hand-set colour on the window |
 | Light Designer with a Vision window open (any workspace showing). **Tools → Dark Mode** | Refused: dialog + status bar `Dark mode was not applied: a Vision window or template is open…`; menu stays unticked | `pass` | `2026-09-02` | Log: `Vision gate: Dark mode was not applied…` |
 | Close the window, stay in the Vision workspace. **Tools → Dark Mode** | Refused: `…the Vision workspace is selected` | `pass` | `2026-09-02` | |
@@ -475,6 +476,14 @@ dark-leftover pass on a debounce when something is attached.
 toggle while looking at one workspace: toggle to light, then visit each
 workspace in turn — Vision, Perspective, SFC, pipelines — and look at the filter
 fields and dock chrome in each.
+
+Seen again on 2026-09-15 after the Vision gate's drop-out, for a different
+reason: the leftover pass itself excluded anything under a `factorypmi`
+package (meant for Vision's user content, but the palette and property
+editor live there too), and the Tag Browser's rows stayed dark because IA's
+`PanelBasedTreeCellRenderer` copies the `Tree.*` colours at construction and
+a renderer built under dark was never re-synced. Both are pinned in
+`LightRestoreComponentStateTest` now.
 
 ### Note on the 2026-08-31 run
 

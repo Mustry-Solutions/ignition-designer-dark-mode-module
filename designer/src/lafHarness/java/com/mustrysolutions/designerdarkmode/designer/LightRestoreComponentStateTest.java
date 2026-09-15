@@ -24,6 +24,7 @@ import javax.swing.table.TableCellRenderer;
 
 import com.formdev.flatlaf.FlatDarkLaf;
 import com.inductiveautomation.ignition.client.util.gui.SimpleTreeTable;
+import com.inductiveautomation.ignition.client.util.gui.tree.PanelBasedTreeCellRenderer;
 import com.jidesoft.grid.QuickFilterField;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -122,6 +123,69 @@ class LightRestoreComponentStateTest {
 
         assertEquals(List.of(), darkComponents(panel),
             "these components kept a dark look-and-feel colour through the light restore");
+    }
+
+    @Test
+    @DisplayName("a filter field inside Vision's own chrome comes back too — the palette is not user content")
+    void filterFieldInsideVisionChromeComesBack() {
+        // The Vision component palette (CollapsiblePanePalette) holds a
+        // QuickFilterField, and the property editor's filter is the same
+        // JIDE family. Both live under a factorypmi package, which the
+        // module's "inside Vision" test keyed on — so the child-first
+        // leftover pass that fixes #45 skipped exactly the two fields a
+        // Designer shows dark after the Vision gate's drop-out.
+        com.inductiveautomation.factorypmi.designer.palette.views.StandInPalette palette =
+            new com.inductiveautomation.factorypmi.designer.palette.views.StandInPalette();
+        palette.setLayout(new java.awt.BorderLayout());
+        palette.add(new QuickFilterField() {
+            @Override
+            public void applyFilter(String text) {
+            }
+        }, java.awt.BorderLayout.NORTH);
+        JPanel panel = new JPanel(new java.awt.BorderLayout());
+        panel.add(palette, java.awt.BorderLayout.CENTER);
+        panel.setSize(336, 240);
+
+        goDark(panel);
+        assertNotEquals(List.of(), darkComponents(panel),
+            "nothing went dark, so finding nothing dark afterwards proves nothing");
+
+        goLight(panel);
+
+        assertEquals(List.of(), darkComponents(panel),
+            "Vision's palette and property-editor filters kept a dark look-and-feel colour");
+    }
+
+    @Test
+    @DisplayName("a tree renderer created under dark mode comes back with the light tree colours")
+    void rendererBornUnderDarkComesBack() {
+        // IA's PanelBasedTreeCellRenderer (the Tag Browser's TagRenderer
+        // extends it) copies five Tree.* colours out of UIManager in its
+        // constructor and never re-reads them: unlike DefaultTreeCellRenderer
+        // it has no updateUI. The Tag Browser creates new renderers while the
+        // Designer is dark, and every one of them paints its rows dark for
+        // the rest of the session once the theme is light again.
+        JPanel panel = designerPanel();
+        goDark(panel);
+
+        PanelBasedTreeCellRenderer bornDark = new PanelBasedTreeCellRenderer();
+        JTree tree = new JTree();
+        tree.setCellRenderer(bornDark);
+        panel.add(tree, java.awt.BorderLayout.SOUTH);
+        assertTrue(ThemeManager.luminance(bornDark.getBackgroundNonSelectionColor()) < 100,
+            "precondition: a renderer built under dark holds a dark Tree.textBackground");
+
+        goLight(panel);
+
+        PanelBasedTreeCellRenderer stock = new PanelBasedTreeCellRenderer();
+        assertEquals(colour(stock.getBackgroundNonSelectionColor()), colour(bornDark.getBackgroundNonSelectionColor()),
+            "non-selection background: what the Tag Browser's rows paint");
+        assertEquals(colour(stock.getBackgroundSelectionColor()), colour(bornDark.getBackgroundSelectionColor()),
+            "selection background");
+        assertEquals(colour(stock.getTextNonSelectionColor()), colour(bornDark.getTextNonSelectionColor()),
+            "text colour");
+        assertEquals(colour(stock.getTextSelectionColor()), colour(bornDark.getTextSelectionColor()),
+            "selected text colour");
     }
 
     /**

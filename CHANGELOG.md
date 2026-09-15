@@ -54,6 +54,20 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   glyphs. Two of its cases model the runtime states that defeated the old
   lift and failed against the previous code.
 
+- **Vision's palette and property-editor filters, and the Tag Browser's rows,
+  come back light after the Vision gate drops dark mode.** Found in the first
+  live run of the gate. Two mechanisms, both reproduced in the harness:
+  the child-first leftover pass that fixes #45 skipped anything under a
+  `factorypmi` package, which was meant to protect Vision's user content but
+  also covered Vision's own dock frames — "inside Vision" now means under a
+  Vision window or template or the workspace that hosts them; and IA's
+  `PanelBasedTreeCellRenderer` (the Tag Browser's renderer) copies the
+  `Tree.*` colours out of UIManager in its constructor with no `updateUI` to
+  re-read them, so a renderer the Tag Browser created while the Designer was
+  dark painted every row dark for the rest of the session — the light
+  restore now re-syncs the renderer of every tree it walks, not only the ones
+  the icon pass had wrapped.
+
 - Unit tests for the theme preference — the one piece of state the module keeps
   between launches, and until now the only behaviour with no test of its own.
   They cover the `setDark`/`isDarkModeEnabled` round trip, the rule that the
