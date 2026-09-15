@@ -146,7 +146,7 @@ val lafHarnessTask = tasks.register<Test>("lafHarness") {
     // before interrupting the test (which a deadlock or a spin ignores — the
     // outer watchdog, ops/laf-harness-watchdog.sh, handles that end).
     systemProperty("junit.jupiter.execution.timeout.default", "60 s")
-    systemProperty("junit.jupiter.execution.timeout.thread.dump.enabled", "true")
+    systemProperty("junit.jupiter.execution.timeout.threaddump.enabled", "true")
 
     testLogging {
         // standardOut/standardError: the harness prints almost nothing, and

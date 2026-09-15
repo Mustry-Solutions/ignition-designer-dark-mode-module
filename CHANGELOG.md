@@ -94,7 +94,7 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   the Gradle daemon and the test executor (the executor's dump goes straight
   into the step log), fails the step, and the dumps ship as a
   `laf-harness-diagnostics` artifact with JUnit's XML and the module's debug
-  log. JUnit's own 60-second per-test timeout with `thread.dump.enabled` is
+  log. JUnit's own 60-second per-test timeout with `threaddump.enabled` is
   layered underneath so the hung test names itself. Nothing here fixes the
   hang; it produces the thread dump the fix needs.
 
