@@ -40,6 +40,15 @@ final class DesignerLookAndFeel {
      * skipped it would start from a state no Designer is ever in.
      */
     static void installStock() throws Exception {
+        // Synthetica's font scaling asks the screen for its DPI — on Windows
+        // only, through Toolkit.getScreenResolution(), which is the one call a
+        // HeadlessToolkit refuses (Linux reads a GNOME desktop property that is
+        // simply null headless; macOS assumes 96). The first Windows CI run
+        // failed 58 of 62 tests in this line with a HeadlessException out of
+        // SyntheticaLookAndFeel.scaleFontSize. The property is read from
+        // UIManager (SyntheticaLookAndFeel.lookup); a real Designer has a
+        // display and never needs it.
+        UIManager.put("Synthetica.font.respectSystemDPI", Boolean.FALSE);
         de.javasoft.plaf.synthetica.SyntheticaLookAndFeel
             .setLookAndFeel(STOCK_LAF_CLASS, true, true);
         de.javasoft.plaf.synthetica.SyntheticaLookAndFeel.setFont("Dialog", 12);

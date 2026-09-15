@@ -128,6 +128,17 @@ val lafHarnessTask = tasks.register<Test>("lafHarness") {
         "--add-opens", "java.desktop/java.awt=ALL-UNNAMED",
     )
 
+    // A test that hangs must fail with the stuck thread's stack, not sit
+    // until the CI job is cancelled with nothing to read. The Linux row has
+    // done exactly that — 49 switches in 15 seconds, then 24 minutes of
+    // silence inside HardCodedDarkTextTest — and so has every push to main
+    // since 2026-09-15, intermittently. JUnit's timeout interrupts the test
+    // thread and reports where it was, which is the evidence a cancelled job
+    // throws away. Generous, because one cycle on a cold runner is seconds,
+    // never minutes.
+    systemProperty("junit.jupiter.execution.timeout.default", "3m")
+    systemProperty("junit.jupiter.execution.timeout.mode", "enabled")
+
     // No display, and none needed: everything asserted here lives in UIManager
     // and in the module's own state. Window.getWindows() is simply empty, so
     // the component walks run and find nothing.
