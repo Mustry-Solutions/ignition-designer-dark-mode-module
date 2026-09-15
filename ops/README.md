@@ -12,6 +12,7 @@ auto-accepted EULA. Never point this at anything real.
 | `logs.sh` | Tail gateway logs. |
 | `teardown.sh` | Stop the gateway (`--purge` also wipes its data volume). |
 | `vision-check.sh [project]` | Scan the project's saved Vision windows and templates for FlatLaf leakage (the corruption the Vision gate prevents; see QA checklist §N). |
+| `laf-harness-watchdog.sh [gradle args]` | Run `:designer:lafHarness` with a deadline; on a hang it thread-dumps every Gradle JVM into `build/laf-harness-threads-*.txt` and fails. CI uses this instead of calling Gradle directly, because the harness sometimes hangs and a cancelled job leaves no evidence. |
 
 The gateway publishes on **http://localhost:8088** (HTTPS 8043), Ignition's own defaults — configurable in
 `../.env` (copy `../.env.example` if you already run a gateway on 8088).

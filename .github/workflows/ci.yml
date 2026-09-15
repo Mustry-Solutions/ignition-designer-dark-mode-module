@@ -14,8 +14,9 @@ jobs:
   build:
     name: Build & test
     runs-on: ubuntu-latest
-    # Normal runs finish in well under a minute; the cap stops a wedged job
-    # from burning the 6-hour GitHub default.
+    # Normal runs finish in two to three minutes; the cap stops a wedged job
+    # from burning the 6-hour GitHub default. The harness steps have their own,
+    # shorter watchdog (see below), so hitting this cap means something else.
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
@@ -61,15 +62,35 @@ jobs:
       # 8.3.0 is the floor in requiredIgnitionVersion, and the default is the
       # current release, which is what people actually run. A rename in a
       # recent 8.3.x is invisible if you only ever test the floor.
+      #
+      # Through a watchdog, not plain gradlew: since #85 the harness hangs in
+      # roughly half of runs (inside PropertyKeyFieldTest; not reproducible
+      # locally), and a job that sits until timeout-minutes cancels it leaves
+      # no evidence. The wrapper thread-dumps every Gradle JVM after five
+      # minutes and fails the step, so a hang shows up as a red step with a
+      # stack in the log and in the artifact below.
       - name: Headless look-and-feel harness (current Ignition)
-        run: ./gradlew :designer:lafHarness --no-daemon --stacktrace
+        run: ops/laf-harness-watchdog.sh
         env:
           ORG_GRADLE_PROJECT_org.gradle.java.installations.auto-download: "false"
 
       - name: Headless look-and-feel harness (support floor)
-        run: ./gradlew :designer:lafHarness -Pharness.sdk=8.3.0 --no-daemon --stacktrace
+        run: ops/laf-harness-watchdog.sh -Pharness.sdk=8.3.0
         env:
           ORG_GRADLE_PROJECT_org.gradle.java.installations.auto-download: "false"
+
+      # Thread dumps from the watchdog, JUnit's per-test results (which carry
+      # its own timeout dump in <system-out>), and the module's debug log.
+      - name: Upload harness diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: laf-harness-diagnostics
+          if-no-files-found: ignore
+          path: |
+            build/laf-harness-threads-*.txt
+            designer/build/test-results/lafHarness/
+            designer/build/laf-harness-debug.log
 
       # Cheap guard on the two things most likely to regress silently in
       # module.xml: the EULA reference and the free-module flag. Both are set
