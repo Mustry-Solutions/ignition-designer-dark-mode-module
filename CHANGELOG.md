@@ -12,6 +12,62 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ### Added
 
+- **A gate between dark mode and Vision.** Paul Griffith's warning on the
+  announcement thread was right, and reproducible: the platform's window
+  serializer compares every component property against a clean copy cached in
+  a static map for the life of the Designer, so once FlatLaf has been installed
+  a Vision save writes FlatLaf's font, colours and border classes into the
+  window — `<o cls="com.formdev.flatlaf.ui.FlatButtonBorder"/>` — and a Vision
+  client, which has no FlatLaf, fails to open it
+  (`ClassNotFoundException`). Reproduced headlessly against the real Vision
+  jars; the mechanism is IA's, and no restyling on our side reaches it. A
+  serializer-side cure for the crash does exist (refreshing the platform's
+  clean-copy cache at each switch, verified headlessly), but it leaves Vision
+  baking the module's dark colour constants into freshly opened components,
+  so dark mode inside Vision stays a follow-up
+  ([ARCHITECTURE.md](docs/ARCHITECTURE.md#visiongate)).
+
+  So the module now stays out of Vision's way. `VisionGate` refuses **Tools →
+  Dark Mode** while a Vision window or template is open or the Vision
+  workspace is selected (status bar plus a dialog, preference and menu reset
+  to light); a dark Designer drops to the stock theme synchronously from the
+  workspace manager's navigation listener when the user selects Vision in the
+  project browser — the first click of a double click, before the window is
+  deserialized under FlatLaf; and a Vision window that is attached under dark
+  mode by any other path still ends dark mode, with a "close and reopen"
+  notice, since that window has already been through the round trip. A dark
+  preference is kept, not applied, when the Designer comes up on Vision, and
+  kept when a dark Designer drops out for Vision — only a refused click resets
+  it. The gate is asked again at the moment the theme is installed, one turn
+  after the click, since a Vision selection can land in between. The Tools
+  menu is seeded without firing a switch, because the Designer rebuilds
+  module menus during its own teardown and a kept preference used to read as
+  a click on the way out. Vision and the Designer's `WorkspaceManager` are
+  reached by class name, so a Designer without Vision loses the gate rather
+  than the module.
+
+- `PropertyKeyFieldTest` in the look-and-feel harness: builds a real
+  `JsonEditor` over a session-props-shaped document, in both orders the
+  Designer uses (rows before the switch, rows after it), and asserts the
+  property names are readable, that the stock black comes back on the light
+  restore, and — rendered to pixels — that the name column paints no black
+  glyphs. Two of its cases model the runtime states that defeated the old
+  lift and failed against the previous code.
+
+- **Vision's palette and property-editor filters, and the Tag Browser's rows,
+  come back light after the Vision gate drops dark mode.** Found in the first
+  live run of the gate. Two mechanisms, both reproduced in the harness:
+  the child-first leftover pass that fixes #45 skipped anything under a
+  `factorypmi` package, which was meant to protect Vision's user content but
+  also covered Vision's own dock frames — "inside Vision" now means under a
+  Vision window or template or the workspace that hosts them; and IA's
+  `PanelBasedTreeCellRenderer` (the Tag Browser's renderer) copies the
+  `Tree.*` colours out of UIManager in its constructor with no `updateUI` to
+  re-read them, so a renderer the Tag Browser created while the Designer was
+  dark painted every row dark for the rest of the session — the light
+  restore now re-syncs the renderer of every tree it walks, not only the ones
+  the icon pass had wrapped.
+
 - Unit tests for the theme preference — the one piece of state the module keeps
   between launches, and until now the only behaviour with no test of its own.
   They cover the `setDark`/`isDarkModeEnabled` round trip, the rule that the
@@ -43,6 +99,34 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   "still unchecked" table. All are unverified until someone opens them.
 
 ### Fixed
+
+- The README's screenshot pair is retaken from `main` after the property-name
+  fix below (docs only). The previous dark image showed the very defect the
+  forum reported — every Session Props name black on the dark panel — so the
+  "after" half of the before/after pair was itself a bug report. Same frame,
+  same recipe (`docs/images/README.md`), 8.3.6; the dark name column now
+  measures about 7:1 from the pixels where the old one measured 1.9:1.
+
+- **Property names in the Perspective property editor are readable.** Raised
+  on the forum against the announcement's own screenshot: every key in the
+  Session Props editor — `host`, `locale`, `authenticated` — was pure black on
+  the dark panel, a contrast ratio of about 1.9:1, while the values beside
+  them were fine. It had passed a by-eye QA row. Each name is a
+  `KeyEditorField`, a borderless `JTextField` whose base class keeps two
+  private text colours and applies the *uneditable* one from
+  `setEditable(false)` straight through `JTextField.setForeground`, bypassing
+  its own override; the key class sets that colour to `Color.BLACK` and locks
+  every schema'd key. The module's generic foreground lift lost both ways: it
+  only fires over a dark background, and a text field with no background of
+  its own reports the filter wrapper's permanent amber instead (the state #23
+  documented in this editor); and when it did fire it rewrote only the
+  editable colour, so the next `setEditable(false)` put the black back. The
+  walk now recognises the field by class name, replaces the uneditable colour
+  through its public setter, lifts whatever is showing regardless of the
+  background, and restores both on the light switch. Values are untouched.
+  Proven headlessly for both defeat paths and confirmed by eye in a Designer
+  on 8.3.6 (2026-09-15): names light under dark, black again after the
+  switch back.
 
 - **The dark mode choice could be lost on Linux** if the Designer was
   force-quit, killed or crashed shortly after toggling. `ThemeManager` wrote
