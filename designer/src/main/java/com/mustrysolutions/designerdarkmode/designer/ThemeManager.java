@@ -374,6 +374,10 @@ public class ThemeManager {
             if (dark) {
                 trace("painterSnapshot");
                 snapshotThemePainters();
+                // Read now, while the stock look and feel is still the one
+                // answering: this is the font the Designer has been drawing
+                // with, and the one dark mode keeps (see below).
+                java.awt.Font stockFont = UIManager.getFont("Label.font");
                 trace("lookAndFeel");
                 try {
                     UIManager.setLookAndFeel(new FlatDarkLaf());
@@ -385,6 +389,8 @@ public class ThemeManager {
                     DebugLog.log("setLookAndFeel(FlatDarkLaf) failed once; retrying.", first);
                     UIManager.setLookAndFeel(new FlatDarkLaf());
                 }
+                trace("stockFont");
+                keepStockFont(stockFont);
             } else {
                 trace("lookAndFeel");
                 try {
@@ -642,6 +648,38 @@ public class ThemeManager {
      */
     void captureStockLaf() {
         stockLaf = UIManager.getLookAndFeel();
+    }
+
+    /**
+     * Keep the Designer's own font under dark mode, so the switch changes
+     * colour and nothing else.
+     *
+     * <p>Left to itself FlatLaf picks the operating system's UI font — the
+     * harness log on macOS shows Synthetica's {@code Dialog 12pt} becoming
+     * {@code Helvetica Neue 13pt} — and the stock restore puts
+     * {@code Dialog 12} back by name ({@link #restoreStockLaf}). Both family
+     * and size therefore change on every toggle, and how far depends on the
+     * platform: a point on macOS, where it goes unnoticed; on Windows the
+     * pick is Segoe UI at the desktop's message-font size, and text that
+     * grows shifts row heights and clips labels in the Designer's fixed-size
+     * panels. Pinning the stock font is also what carries Synthetica's own
+     * scale factor into FlatLaf on a display where it is not 1.0, since the
+     * font read before the swap is already the scaled one.
+     *
+     * <p>{@code defaultFont} is FlatLaf's base: every {@code *.font} default
+     * is an active value derived from it, so this one developer-defaults
+     * entry re-fonts the whole table. It has to land before
+     * {@link #snapshotMenuDefaults} resolves those active values into the
+     * snapshot, and it needs no explicit clear on the light switch —
+     * {@code defaultFont} is in the snapshot, so {@link #applyMenuDefaults}
+     * removes it with the rest.
+     */
+    private void keepStockFont(java.awt.Font stockFont) {
+        if (stockFont == null) {
+            DebugLog.log("No stock Label.font to keep; dark mode uses FlatLaf's own font.");
+            return;
+        }
+        UIManager.put("defaultFont", new javax.swing.plaf.FontUIResource(stockFont));
     }
 
     /**
