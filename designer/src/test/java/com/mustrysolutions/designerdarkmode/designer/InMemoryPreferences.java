@@ -3,6 +3,7 @@ package com.mustrysolutions.designerdarkmode.designer;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.prefs.AbstractPreferences;
+import java.util.prefs.BackingStoreException;
 
 /**
  * A {@link java.util.prefs.Preferences} node that lives and dies with the test.
@@ -14,10 +15,21 @@ import java.util.prefs.AbstractPreferences;
  * on a CI box with no writable one there is nothing to warn about either.
  *
  * <p>Flat by design: the module stores exactly one key.
+ *
+ * <p>It also counts flushes, because on Linux a value that is only PUT is not
+ * yet on disk: {@code FileSystemPreferences} writes through on a 30-second
+ * timer or a shutdown hook, and a force-quit inside that window loses it. A
+ * test that only read the value back could not tell the difference.
  */
 final class InMemoryPreferences extends AbstractPreferences {
 
     private final Map<String, String> values = new HashMap<>();
+
+    /** How many times the code under test asked for a write-through. */
+    int flushes;
+
+    /** Makes the backing store unwritable, as a full disk or bad ACL would. */
+    boolean failFlush;
 
     InMemoryPreferences() {
         super(null, "");
@@ -63,6 +75,10 @@ final class InMemoryPreferences extends AbstractPreferences {
     }
 
     @Override
-    protected void flushSpi() {
+    protected void flushSpi() throws BackingStoreException {
+        flushes++;
+        if (failFlush) {
+            throw new BackingStoreException("backing store unavailable");
+        }
     }
 }

@@ -93,6 +93,15 @@ on the gateway, not in the project, and not in a tag. Nothing on the gateway
 changes when you toggle it, and a colleague launching the Designer against the
 same gateway from their own machine or account gets their own setting.
 
+It is the preference node `com/mustrysolutions/designerdarkmode/designer`, key
+`darkMode`:
+
+| OS | Where |
+|---|---|
+| Windows | `HKEY_CURRENT_USER\Software\JavaSoft\Prefs\com\mustrysolutions\designerdarkmode\designer` |
+| macOS | `~/Library/Preferences/com.mustrysolutions.designerdarkmode.plist` |
+| Linux | `~/.java/.userPrefs/com/mustrysolutions/designerdarkmode/designer/prefs.xml` |
+
 It is **one setting for every gateway you connect to**, not one per gateway.
 The saved value does not record which gateway it was set from, so turning dark
 mode on while connected to one gateway turns it on for the Designer of every
