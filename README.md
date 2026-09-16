@@ -65,6 +65,20 @@ Perspective, scripting, tags, reports, pipelines and everything else are
 unaffected. The details, and the headless reproduction, are in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#visiongate).
 
+**Do not use this module and the Exchange dark-mode script in the same
+project.** [Dark Mode for the Designer](https://inductiveautomation.com/exchange/2719/overview)
+(see [Prior art](#prior-art)) is a project-library script plus a Vision client
+tag, so a project that imported it keeps running it in every Designer that
+opens the project, whether or not this module is installed. The tag adds its
+own **View → Dark Mode** checkbox shortly after launch. Ticked alongside
+Tools → Dark Mode, the script paints explicit colours over this module's theme,
+and its own light setting paints explicit white, and neither is anything this
+module's toggle-off can undo. Before turning dark mode on in such a project,
+remove the script's `designerPatch` Vision client tag; the `darkModePatch`
+project library script does nothing on its own and can stay. Detecting the
+script at startup is tracked in
+[#89](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/89).
+
 Some surfaces are left light **on purpose**, because they render *your* content
 rather than the Designer's chrome, and theming them would misrepresent what your
 users will actually see:
@@ -241,6 +255,13 @@ Designer's look and feel for [FlatLaf](https://www.formdev.com/flatlaf/) and
 restyles Ignition's own design tokens, rather than painting enumerated
 components one class at a time — which means surfaces nobody has explicitly
 catalogued come out dark by default.
+
+One difference cuts the other way. Because the script never swaps the look and
+feel, the Vision serializer problem described under
+[Known limitations](#known-limitations) does not arise with it, and on a
+project that is mostly Vision it remains the better choice today. The two are
+not meant to run in the same project; that section says why and what to
+remove.
 
 That script's careful catalogue of where the Designer leaks light informed this
 project's testing, and is gratefully acknowledged.
