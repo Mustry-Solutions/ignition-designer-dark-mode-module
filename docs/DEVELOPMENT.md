@@ -171,8 +171,10 @@ feel shows up as `setBorder`, `setFont` and colour calls the test never made.
 No Vision jar is needed — but the serializer wants a `BeanInfo` naming a
 component's properties, or it walks all of a `JButton`'s and dies on
 `actionMap`, so `SerializerProbeButton` carries a Vision-style one listing the
-five that matter. Reach for this shape for anything about what a save
-*writes*; neither the defaults diff nor component state can see it.
+five that matter. `TokenColorOnSaveTest` uses the same instrument for the
+colour objects Vision copies at palette drop, reproducing `initialize()`
+verbatim. Reach for this shape for anything about what a save *writes*;
+neither the defaults diff nor component state can see it.
 
 ### The reflective surface, and which Ignition the harness runs against
 

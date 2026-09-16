@@ -5,6 +5,7 @@ import java.awt.event.ItemEvent;
 import com.inductiveautomation.ignition.client.util.action.StateChangeAction;
 import com.inductiveautomation.ignition.common.BundleUtil;
 import com.inductiveautomation.ignition.common.licensing.LicenseState;
+import com.inductiveautomation.ignition.common.xmlserialization.serialization.XMLSerializer;
 import com.inductiveautomation.ignition.designer.model.AbstractDesignerModuleHook;
 import com.inductiveautomation.ignition.designer.model.DesignerContext;
 import com.inductiveautomation.ignition.designer.model.menu.JMenuMerge;
@@ -62,6 +63,16 @@ public class DesignerDarkModeHook extends AbstractDesignerModuleHook {
         themes.shutdown();
         BundleUtil.get().removeBundle(BUNDLE_PREFIX);
         DebugLog.close();
+    }
+
+    /**
+     * Every save builds a fresh serializer and offers it to each module here.
+     * A restyled design token that Vision copied into a component is written
+     * with its stock colour (#92, part 2) — see {@link TokenColorDelegate}.
+     */
+    @Override
+    public void configureSerializer(XMLSerializer serializer) {
+        TokenColorDelegate.register(serializer, themes.stockTokenRgb());
     }
 
     @Override

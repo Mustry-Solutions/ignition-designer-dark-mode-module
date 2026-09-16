@@ -332,31 +332,39 @@ saves after the switch back — while hand-set values (`setButtonBG`,
 `setText`) still round-trip. The crash, in other words, is curable from
 here.
 
-What is not: a window LOADED under dark still saves `setForeground #DDE0E3`
-on its buttons. `PMIButton.initialize()` copies the static
-`IgnitionLookAndFeel$Colors.ButtonForeground` object into the button's
-foreground; `IaColorTokens` rewrites that object to Base900 (#DDE0E3) under
-dark, while the clean copy's foreground is FlatLaf's `Button.foreground`
-UIResource (#DDDDDD), so the two differ and the DARK text colour is baked
-into the window — light-grey text in a light Vision client. Under the stock
-theme the constant equals the look-and-feel default, which is the assumption
-Vision relies on. Nine `factorypmi.application.components` classes read
-`Colors.*` this way: `PMIButton`, `PMIToggleButton`, `PMINStateButton`,
-`PMIControlButton`, `PMIMultiStateIndicator` (button colours and the
-indicator colours), `PMICheckBox` and `PMIRadioButton` (Base100),
-`PMIProgressBar` (Base100, Base900, Primary), `PMITextArea` (Base000,
-NonEditableBackground). Dark mode inside Vision therefore needs the cache
-refresh AND either FlatLaf defaults kept equal to the rewritten constants for
-those keys or those constants left alone in Vision, plus one more thing the
-probe surfaced: after the light restore a text field still held Tahoma 11
-while the defaults said Dialog 12 until a second `updateComponentTreeUI` —
-the restore's phase order leaves fonts stale, which would write `setFont`
-into any window open across the switch. The three are tracked as #92. The
-cache refresh is the first to ship
-([SerializerCleanCopies](#serializercleancopies)); the gate stays until the
-other two do, so today the refresh is a safety net for the one-turn gap and
-the attach-time fallback rather than something a user can see. The probe
-recipe is in the project notes.
+What the refresh does not cure: a button DROPPED FROM THE PALETTE under
+dark saves `setForeground #DDE0E3`. `PMIButton.initialize()` — whose only
+caller is the palette, `JavaBeanPaletteItem.createJavaBean`; a loaded window
+never runs it — copies the static `IgnitionLookAndFeel$Colors.ButtonForeground`
+OBJECT into the button's foreground; `IaColorTokens` has rewritten that
+object to Base900 (#DDE0E3) in place, while the clean copy's foreground is
+FlatLaf's `Button.foreground` UIResource (#DDDDDD), so the two differ and the
+DARK text colour is written into the window — light-grey text in a light
+Vision client. Under the stock theme the token equals the look-and-feel
+default, which is the assumption Vision relies on. Because the component
+holds the token object itself, the light restore puts it back in place too:
+only a save made WHILE dark bakes the dark value. A scan of the Vision 12.3.8
+jars finds the pattern in `PMIButton`, `PMIToggleButton`, `PMIControlButton`,
+`PMIMomentaryButton2`, `PMI2StateButton`, `PMINStateButton` and
+`PMIMultiStateIndicator` (button colours, and the state datasets they build
+from `ButtonBackground`, `ButtonForeground`, `Background`, `Indicator*`),
+`PMICheckBox` and `PMIRadioButton` (Base100), `PMIProgressBar` (Base100,
+Base900, Primary), `PMITabStrip` (Base100, Base900) and, on load of a legacy
+window, `ComponentDeserializationHandler`; of the tokens involved the module
+restyles Base100 (`Background`, `ButtonBackground`), Base900
+(`ButtonForeground`), `DisabledBackground` and `NonEditableBackground`.
+That is cured at the point of writing
+([TokenColorDelegate](#tokencolordelegate)): the token object is recognised
+by identity and written with its stock value.
+
+One more thing the probe surfaced: after the light restore a text field
+still held Tahoma 11 while the defaults said Dialog 12 until a second
+`updateComponentTreeUI` — the restore's phase order leaves fonts stale, which
+would write `setFont` into any window open across the switch. The three are
+tracked as #92. The cache refresh and the token substitution have shipped;
+the gate stays until the font restore does, so today both are safety nets
+for the one-turn gap and the attach-time fallback rather than something a
+user can see. The probe recipe is in the project notes.
 
 ### SerializerCleanCopies
 The first of the three #92 pieces: the platform serializer's clean-copy cache
@@ -380,6 +388,29 @@ round-trips. The class is reached by name; if the field moves, the phase fails
 visibly (status bar and debug log) rather than leaving a stale cache behind a
 passing switch. Each switch logs `SerializerCleanCopies: dropped N clean
 copies`.
+
+### TokenColorDelegate
+The second #92 piece. Vision hands a component dropped from the palette the
+static `IgnitionLookAndFeel$Colors` objects themselves (`PMIButton
+.initialize()`: `setForeground(Colors.ButtonForeground)`; the state datasets
+of the multi-state components; a check box's default background; a progress
+bar's text colour), and under dark mode `IaColorTokens` has rewritten those
+same objects in place, so a save made while dark writes the dark value into
+the window. The delegate replaces the serializer's `java.awt.Color` entry on
+every save (`DesignerModuleHook.configureSerializer`, which the Designer
+calls on the fresh serializer it builds per save) with one that asks the
+token pass, BY IDENTITY, for the colour's stock value and hands the
+platform's own encoder a copy holding that instead. A user-picked colour at
+the same RGB is a different object and is written as picked; dataset cells
+go through the same path, since the platform serializes them one object at a
+time. Pass-through while nothing is restyled, so it is registered light or
+dark and the XML is byte-for-byte the platform's when the theme is stock
+(asserted). The saved window then carries the stock value where a stock
+Designer would have written nothing — an explicit colour equal to the
+default, harmless on every client; that residue is Vision copying an object
+rather than reading a default and cannot be removed here. `TokenColorOnSaveTest`
+reproduces `initialize()` verbatim on `SerializerProbeButton` and on a
+`BasicDataset` cell, with the control save first.
 
 ### ComponentInspector
 Debug only. **Cmd/Ctrl+Shift+I** (or `+F12`) dumps the component chain under the

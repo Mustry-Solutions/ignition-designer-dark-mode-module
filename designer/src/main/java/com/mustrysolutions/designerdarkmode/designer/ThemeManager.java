@@ -812,6 +812,16 @@ public class ThemeManager {
             + "Details in " + DebugLog.path();
     }
 
+    /**
+     * The token pass's stock-colour lookup, for the save-time substitution the
+     * hook registers on every serializer ({@link TokenColorDelegate}). Kept
+     * off this class's own surface so the platform serializer types stay out
+     * of it: the unit tests load this class without the platform jars.
+     */
+    java.util.function.Function<java.awt.Color, Integer> stockTokenRgb() {
+        return tokens::stockRgb;
+    }
+
     /** Note a phase that does not run under {@link #safely} (it has its own guard). */
     private void trace(String phase) {
         phaseTrace.add(phase);

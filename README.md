@@ -48,10 +48,13 @@ border classes as if you had set them by hand, and a Vision client cannot open
 it at all (`ClassNotFoundException: com.formdev.flatlaf.ui.FlatButtonBorder`).
 The cause is the platform's window serializer, which compares every property
 against a "clean copy" cached for the life of the Designer. The module now
-refreshes that cache at every switch, which cures the crash — but not the
-rest: Vision also copies the Designer's colour constants into components as a
-window opens, and dark mode rewrites those. So, for now, the module still
-stays out of Vision's way:
+refreshes that cache at every switch, which cures the crash, and writes the
+Designer's colour constants — which Vision copies into components dropped
+from the palette, and dark mode rewrites — with their stock values when a
+window is saved. What remains is the light restore: it leaves fonts stale
+until a second pass over the components, and would write a font into any
+window open across the switch. So, for now, the module still stays out of
+Vision's way:
 
 - **Tools → Dark Mode is refused** while any Vision window or template is open,
   or while the Vision workspace is selected. The status bar and a dialog say why.

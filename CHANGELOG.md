@@ -30,6 +30,24 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   changes on screen yet. The debug log gains one line per switch,
   `SerializerCleanCopies: dropped N clean copies`.
 
+- **A restyled design token that Vision copied into a component is saved
+  with its stock colour** (#92, part 2 of 3). Vision hands a component
+  dropped from the palette the static `IgnitionLookAndFeel$Colors` objects
+  themselves — a button's foreground and background, the state colours of
+  the multi-state components, a check box's default background — and dark
+  mode rewrites those objects in place, so a save made while dark wrote the
+  dark values into the window: light-grey text on a light Vision client.
+  Loaded windows were never affected; the earlier write-up said they were,
+  and was wrong — `initialize()` has one caller, the palette. On every save
+  the module now replaces the serializer's `java.awt.Color` delegate with
+  one that recognises a restyled token by identity and hands the platform's
+  own encoder its stock value. A colour the user picked is a different
+  object and is written as picked; dataset cells are covered by the same
+  path; with nothing restyled the XML is byte-for-byte the platform's. Proven
+  in the harness against the platform serializer with `initialize()`
+  reproduced verbatim. `VisionGate` still stays: the light restore leaves
+  fonts stale (part 3).
+
 ## [0.3.0] - 2026-09-16
 
 A Vision-safety and portability release. Dark mode now keeps out of Vision's
