@@ -6,10 +6,15 @@ found on purpose before a release rather than reported as bugs afterwards.
 The surface list comes from the catalogue in the MIT-licensed
 [Dark Mode for the Designer](https://inductiveautomation.com/exchange/2719/overview)
 Exchange script, which enumerates 291 class names across 13 dispatch lists,
-each annotated with where it lives in the UI. Those class names are 8.1-era and
-many have shifted on 8.3 — **the UI locations have not**, so the locations are
-what this checklist tracks. Gratefully acknowledged; see
-[Prior art](../README.md#prior-art).
+each annotated with where it lives in the UI. The catalogue was taken from the
+script's 8.1-era release, and many of those class names have shifted on 8.3 —
+**the UI locations have not**, so the locations are what this checklist
+tracks. The script's 1.3.0 release (3 September 2026) targets 8.3 itself; it
+was diffed against 1.0.6 on 2026-09-15 and adds 24 class names, all on Vision
+customizers, the Vision binding and security dialogs, and the gateway message
+handler dialog. Those are now rows here, marked **(1.3.0)** and unverified.
+It also stops forcing a foreground on the Perspective binding icons (see §E).
+Gratefully acknowledged; see [Prior art](../README.md#prior-art).
 
 This module themes top-down (look-and-feel swap plus token mutation) rather than
 by painting enumerated classes, so most of these should already be dark. The
@@ -19,13 +24,16 @@ value is knowing *where to look*.
 
 Newest first.
 
-| Date | Ignition | Vision | Module | Scope covered |
-|---|---|---|---|---|
-| 2026-09-01 (afternoon) | 8.3.6 | 12.3.6 | `b01d80eb` | #57 and the editor-resilience fix confirmed by eye. Third popup source verified (Perspective canvas). A **saved** view added to the dev project so §E stops being blocked by an empty project |
-| 2026-09-01 | 8.3.6 | 12.3.6 | `b510440` | Closing the gaps left by the 2026-08-31 sweep (#41). Created a Perspective view so §E had something to open; Symbol Factory; one more heavyweight popup. **Right-click is confirmed un-automatable** — see [§L](#l-popup-sweep) |
-| 2026-08-31 (evening) | 8.3.6 | 12.3.6 | `b510440` | Verification pass by eye in a real Designer for #47, #48, #50, #51, #52 and the late-attach fix. All confirmed. Two rounds: the first found #50 only half-fixed (chart background still white) and the Vision filters dark in light mode |
-| 2026-08-31 | 8.3.6 | 12.3.6 | `76c4600` (`main`, release candidate) | Driven with computer use, 12:01–12:13 UTC. §A, §B (Properties, Export, Diagnostics), §C, §D console + autocomplete, §E property editor, §F palette/inspector, §J Image Management, §K Query Browser, toggle-off. **Two new `light` results — see [Diagnostics](#b-menus-dialogs-project-settings) and [Query Browser](#k-database-and-queries).** §L not re-verified (see [Note on this run](#note-on-the-2026-08-31-run)) |
-| 2026-08-29 | 8.3.6 | 12.3.6 | `f4104b54`, built at `33cf8c7` — **10 commits behind `main`**, so without #36/#37/#38 | Three Designer sittings (13:22, 13:40, 14:15 UTC): §L popups, Alarm Pipeline Editor, Translation Manager, dataset editor, named-query selector |
+| Date | OS | Ignition | Vision | Module | Scope covered |
+|---|---|---|---|---|---|
+| 2026-09-15 (evening) | macOS | 8.3.6 | 12.3.6 | `f951416` (PR #84 with the review fixes) | Third §N run by Sam, following the step-by-step guide: control, navigation drop-out, preference kept across quit and relaunch on Vision (twice), both refusals, template, clean save. Found Vision's palette and property-editor filters and the Tag Browser rows dark after the drop-out; fixed in the harness and confirmed by eye on the redeployed build |
+| 2026-09-15 | macOS | 8.3.6 | 12.3.6 | worktree, uncommitted (same build as 2026-09-02) | Second §N run by Sam after the gateway had been down for two weeks: the refusal with the Vision workspace selected and the navigation drop-out fired again per the log; `ops/vision-check.sh` clean. Found and fixed the checker's locale bug (macOS `tr` under UTF-8 emptied the sweep, so every file passed vacuously). Relaunch, template and fallback rows still unrecorded |
+| 2026-09-02 | macOS | 8.3.6 | 12.3.6 | worktree, uncommitted | First run of §N, the Vision gate, by Sam in a live Designer after the headless reproduction. The navigation path, both refusals and a clean save confirmed by the log and `ops/vision-check.sh`; the relaunch, template and fallback rows not yet recorded |
+| 2026-09-01 (afternoon) | macOS | 8.3.6 | 12.3.6 | `b01d80eb` | #57 and the editor-resilience fix confirmed by eye. Third popup source verified (Perspective canvas). A **saved** view added to the dev project so §E stops being blocked by an empty project |
+| 2026-09-01 | macOS | 8.3.6 | 12.3.6 | `b510440` | Closing the gaps left by the 2026-08-31 sweep (#41). Created a Perspective view so §E had something to open; Symbol Factory; one more heavyweight popup. **Right-click is confirmed un-automatable** — see [§L](#l-popup-sweep) |
+| 2026-08-31 (evening) | macOS | 8.3.6 | 12.3.6 | `b510440` | Verification pass by eye in a real Designer for #47, #48, #50, #51, #52 and the late-attach fix. All confirmed. Two rounds: the first found #50 only half-fixed (chart background still white) and the Vision filters dark in light mode |
+| 2026-08-31 | macOS | 8.3.6 | 12.3.6 | `76c4600` (`main`, release candidate) | Driven with computer use, 12:01–12:13 UTC. §A, §B (Properties, Export, Diagnostics), §C, §D console + autocomplete, §E property editor, §F palette/inspector, §J Image Management, §K Query Browser, toggle-off. **Two new `light` results — see [Diagnostics](#b-menus-dialogs-project-settings) and [Query Browser](#k-database-and-queries).** §L not re-verified (see [Note on this run](#note-on-the-2026-08-31-run)) |
+| 2026-08-29 | macOS | 8.3.6 | 12.3.6 | `f4104b54`, built at `33cf8c7` — **10 commits behind `main`**, so without #36/#37/#38 | Three Designer sittings (13:22, 13:40, 14:15 UTC): §L popups, Alarm Pipeline Editor, Translation Manager, dataset editor, named-query selector |
 
 ## Running the sweep
 
@@ -34,7 +42,11 @@ Newest first.
    (see [DEVELOPMENT.md](DEVELOPMENT.md#the-debug-log)). It goes in the Designer
    Launcher, per gateway: select the gateway → **Edit** → *Additional JVM
    Arguments*. It survives relaunches, so this is a one-time setup.
-2. **Tools → Dark Mode** on.
+2. **Tools → Dark Mode** on. The log now opens with an `env:` block — OS,
+   JRE, which `java.desktop` packages the launcher opened, scaling, fonts.
+   Record the OS in the [Runs](#runs) table; on anything but macOS, keep the
+   block with the run, because it is what the
+   [platform rows](#a-main-shell) below are read against.
 3. Walk the sections below. Open each surface, look at it, record a result and
    the date.
    **Judge colour at 100%, never on a scaled screenshot.** On a Retina display a
@@ -79,6 +91,8 @@ point of the first run.
 |---|---|---|---|---|
 | Menus and menu popups | Top of the main frame | `pass` | `2026-08-31` | File / Project / Tools / Help popups |
 | macOS system menu bar | Top of the screen | `skip` | `2026-08-31` | Drawn by the OS and following the system appearance — not reachable from a Swing look and feel. Neither is the search field inside the Help menu |
+| In-window menu bar (Windows, Linux) | Top of the main frame | — | — | The opposite case: off macOS the menu bar is a Swing `JMenuBar`, so the swap DOES theme it — and it has never been looked at, because on macOS it does not exist. Menu titles, hover, mnemonics and the accelerator text in the popups |
+| Native title bar and window frame (Windows, Linux) | Around every window | `skip` | — | Stays light by decision (see [ARCHITECTURE](ARCHITECTURE.md#the-switch-step-by-step), step 9): the `apple.awt.windowAppearance` property is macOS-only, and FlatLaf window decorations on Ignition's frames would be a larger change than the gap justifies. Record it, do not file it |
 | Toolbars | Below the menu bar | `pass` | `2026-08-31` | incl. the Vision workspace's extra toolbars |
 | Dock title bars, grippers, split dividers | Any docked panel | `pass` | `2026-08-31` | |
 | Section headers / collapsible title panes | Left and right docks | `pass` | `2026-08-31` | `SESSION PROPS` |
@@ -92,6 +106,7 @@ point of the first run.
 | Surface | Where | Result | Last checked | Notes |
 |---|---|---|---|---|
 | Project → Properties: Project General | Project → Properties | `pass` | `2026-08-31` | incl. the nav list, combos, checkboxes and OK/Apply/Cancel |
+| File chooser dialogs (Windows, Linux) | File → Import / Export, Image Management upload | — | — | On macOS the Designer may hand you a native `FileDialog`, which no look and feel reaches; off macOS it is a Swing `JFileChooser`, which FlatLaf themes — with icons that may be the platform's own. A different surface, not the same one |
 | Project → Properties: Project Permissions | " | — | — | |
 | Project → Properties: Project Designer | " | — | — | |
 | Project → Properties: Vision General | " | — | — | Vision module required |
@@ -141,6 +156,7 @@ check an editor of each kind rather than assuming "the editors" are covered.
 | Script editor gutter, autocomplete popup | Type inside any script editor | `pass` | `2026-08-31` | `system.` + Ctrl+Space in the Script Console. The list and the attribute pane are dark; the enclosing `AutoCompletePopupWindow` window is still `#EEEEEE` explicit, which does not show at this size |
 | Script Console | Tools → Script Console | `pass` | `2026-08-31` | both panes |
 | Gateway Events editor | Project Browser → Scripting → Gateway Events | — | — | |
+| Message handler dialog **(1.3.0)** | Gateway Events → Message → add or edit a handler **(unverified)** | — | — | 1.3.0 added `MessageHandlerEditor$MessageHandlerConfigPanel` and `SecurityPanel` for this dialog |
 | Client/Session Events editor | Project Browser → Scripting → … Events | — | — | |
 
 ## E. Perspective
@@ -150,7 +166,9 @@ check an editor of each kind rather than assuming "the editors" are covered.
 | View editor canvas | Open any view | — | — | `n/a` on 2026-08-31 only because the dev project had no views. A saved view (`qa-dark-mode`) exists since 2026-09-01, so this is now an ordinary unchecked row, not a gap in the Designer |
 | Component palette | Right dock | — | — | Guard hierarchy walks against `FilterablePalette` (see [Out of scope](#out-of-scope)) |
 | Property editor tree | Right dock, view open | `pass` | `2026-09-01` | Checked properly this time, with a view open: PROPS/CUSTOM/PARAMS, value colouring, Add Property links |
-| Property key editor field | Click a property name | — | — | |
+| Binding and add-member icons in that tree **(1.3.0)** | Hover and click the binding icon and the `+` on an object property | — | — | The Exchange's 1.3.0 fix: it had been forcing white on `ComponentScopeEditor$BindingCompatibleNodeEditor$BindingControl` on every hover, which broke the icon's own states, and it now leaves that class alone (it also forces every `IconButton` visible). We restyle tokens rather than components, so this may already be fine, but nobody has looked at the icon *states*, only the tree |
+| Property key editor field | Click a property name | — | — | The name's text colour is now lifted by class (see the row below); check that editing a key still shows light text and that the light restore puts black back |
+| Property NAMES (Session Props, PROPS) | Right dock, Perspective selected or a view open | `fixed` | `2026-09-15` | Black on dark, ~1.9:1, raised on the forum against the 0.1.0 announcement screenshot and still black in the 0.2.0 README screenshot — the 2026-09-01 `pass` above missed it. Headless proof in `PropertyKeyFieldTest`; confirmed by eye on 8.3.6, light under dark and black again after the switch back |
 | Binding editor dialog | Click a property's binding icon | — | — | Still unchecked: needs a component on the canvas, and adding one needs a palette drag the automation cannot do |
 | Component scope / node picker in a binding | Inside the binding editor **(unverified)** | — | — | |
 | Style editor | Project Browser → Styles | — | — | |
@@ -160,14 +178,19 @@ check an editor of each kind rather than assuming "the editors" are covered.
 
 | Surface | Where | Result | Last checked | Notes |
 |---|---|---|---|---|
-| Window editor chrome | Open any Vision window | — | — | The canvas itself is deliberately not themed (README). 2026-08-31: the workspace home page ("Create a New Window") is `pass`, but no window was opened |
+| Window editor chrome | Open any Vision window | `n/a` | `2026-09-02` | Cannot be dark any more: opening a Vision window ends dark mode (§N). The rows below are `n/a` for the same reason — the gate refuses dark mode while the Vision workspace is showing, window or not — and are kept for the day dark mode returns to Vision; their earlier `pass` entries predate the gate |
 | Component palette | Left/right dock with a window open | `pass` | `2026-08-31` | Vision workspace open (no window) |
 | Property Inspector | Right dock | `pass` | `2026-08-31` | empty but dark |
 | Border chooser (9 sub-panels) | Property Inspector → border property | — | — | Check every tab of the chooser |
 | Layout dialog | Right-click a component → Layout **(unverified)** | — | — | |
 | Size and Position dialog | Right-click a component → Size and Position **(unverified)** | — | — | |
 | Dataset editor dialog | A dataset property → edit | `pass` | `2026-08-29` | |
-| Custom property editor | Component → custom properties | — | — | |
+| Custom property editor | Component → custom properties | — | — | 1.3.0 names `DynamicPropertyProviderCustomizer` and `CustomPropertyEditPanel` here |
+| Template custom properties **(1.3.0)** | Open a template → Custom Properties **(unverified)** | — | — | Separate internal and external panels (`PublicPrivateCustomPropertyCustomizer`, `$1`, `$2`) |
+| Binding editor dialog **(1.3.0)** | Property Inspector → a property's binding icon, every binding type **(unverified)** | — | — | 1.3.0 added the Cell Update binding (`CellUpdateBindingConfigurator`) and the colour state table (`ColorStateConfig`) to its list. The other configurators were already on the 8.1 list |
+| Security panel **(1.3.0)** | Right-click a component → Security **(unverified)** | — | — | Justin's "security panel text not readable" fix: `ComponentSecurityPanel$1` and the `TristateCheckboxList`, whose parent is what carries the background. Check the tri-state boxes are legible |
+| Easy Chart customizer, last tab **(1.3.0)** | Easy Chart → Customizers → Easy Chart Customizer → last tab **(unverified)** | — | — | `EasyChartCustomizer$DynamicGroupPanel` |
+| Tab Strip customizer **(1.3.0)** | Tab Strip → Customizers → Tab Strip Customizer **(unverified)** | — | — | `TabStripCustomizer`, `TabAttributesPanel` (+`$GeneralPanel`, `$SelectedOrUnselectedPanel`), `PropertiesPanel`, `PreviewPanel`. 1.3.0 also rewrites the strip's own `tabData` (`SELECTED_BACKGROUND_COLOR`) on `PMITabStrip`. That is a component's *data*, the same rule as the canvas, so the preview strip is a `skip` for us if it stays light |
 
 ## G. Alarm notification pipelines
 
@@ -372,6 +395,36 @@ either theme — nothing else in this checklist would catch them.
 | First launch, before the theme applies | Startup, with dark mode saved | `skip` | `2026-08-31` | The theme is applied only once the UI is ready, so the Designer is briefly stock-themed at launch. That is by design — applying earlier kills the launch |
 | Debug log is being written | `~/.ignition/designer-dark-mode.log` | `pass` | `2026-08-31` | Worth confirming at the start of a sweep: no log means no chain dumps when you need one |
 
+## N. Vision gate
+
+Not a theming check: the module must **stay out of Vision**, because a Vision
+window saved under FlatLaf cannot be opened by a Vision client
+([ARCHITECTURE.md](ARCHITECTURE.md#visiongate)). Needs a project with at least
+one Vision window and one Vision template. Every row is pass/fail by eye plus
+one line in `~/.ignition/designer-dark-mode.log` (`Vision gate: …`).
+
+| Step | Expect | Result | Last checked | Notes |
+|---|---|---|---|---|
+| Light Designer, Perspective workspace showing, no Vision window open. **Tools → Dark Mode** | Dark mode applies as before | `pass` | `2026-09-15` | Control |
+| Dark Designer. Single-click a Vision window in the project browser | The Designer turns light BEFORE the window opens; status bar `Dark mode was turned off because the Vision workspace was opened…`; a dialog explains, once per session; Tools → Dark Mode unticked. Quit from here and relaunch away from Vision: comes up dark (the preference is kept by a drop-out) | `pass` | `2026-09-15` | The gate's main path. Log: `Vision gate: leaving dark mode because the Vision workspace was opened.` Fired twice in the first run, 8.3.6 / Vision 12.3.6 |
+| Straight after the drop-out, look at the Vision workspace's own chrome: the Component Palette filter, the Vision Property Editor filter, and the Tag Browser rows | All light. The two filters are white fields; tag rows have no dark boxes behind their names | `pass` | `2026-09-15` | Found dark on the first live run (2026-09-15): the leftover pass skipped anything under a `factorypmi` package, and a `TagRenderer` created while dark kept FlatLaf's tree colours. Both reproduced and fixed in the harness (`LightRestoreComponentStateTest`) |
+| Now double-click that window, edit a label's text, save | `ops/vision-check.sh` reports no FlatLaf classes and no `setFont`/`setForeground` calls you did not make; a Vision client, if you have one, opens it | `pass` | `2026-09-02` | This is the whole point. The script reads every saved window and template straight out of the dev gateway's project. First run: window and template both clean, one hand-set colour on the window |
+| Light Designer with a Vision window open (any workspace showing). **Tools → Dark Mode** | Refused: dialog + status bar `Dark mode was not applied: a Vision window or template is open…`; menu stays unticked | `pass` | `2026-09-02` | Log: `Vision gate: Dark mode was not applied…` |
+| Close the window, stay in the Vision workspace. **Tools → Dark Mode** | Refused: `…the Vision workspace is selected` | `pass` | `2026-09-02` | |
+| Leave for Perspective. **Tools → Dark Mode** | Applies | `pass` | `2026-09-15` | |
+| Dark Designer. Open a Vision **template** (single-click first) | Same as the window row: light before it opens | `pass` | `2026-09-15` | Templates serialize too |
+| Dark preference saved, quit with a Vision window open, relaunch | The Designer comes up LIGHT with the status bar `Dark mode was not applied…`; Tools → Dark Mode unticked; close the window, leave Vision, tick it: applies. Quit and relaunch from Perspective: comes up dark | `pass` | `2026-09-15` | The preference survives a blocked launch; the menu follows the screen |
+| Continue from the row above without touching the menu: quit (or File → Open another project) while still on Vision | No dialog on the way out; the log has no `Vision gate: Dark mode was not applied…` line at shutdown; the next launch away from Vision comes up dark | `pass` | `2026-09-15` | The Designer rebuilds module menus at teardown; the seeded checkbox must not read as a click |
+| Dark Designer. Open a Vision window by a path that skips the project browser: **Find/Replace** result, or `system.nav`-free scripting via the Script Console `context.getWorkspaceManager`… | Dark mode ends as the window attaches; status bar adds `Close and reopen the window before editing it.` | — | — | The fallback. Whichever path you find that opens a window without selecting the workspace first, record it here |
+| Designer without the Vision module | Dark mode behaves as before; log has no `Vision gate:` errors | — | — | The gate resolves Vision by name and must cost nothing when it is absent |
+
+**By hand, once per Ignition version:** the interface the gate keys on is
+`com.inductiveautomation.vision.api.client.components.model.TopLevelContainer`,
+implemented by `FPMIWindow` and `VisionTemplate`. It cannot be pinned by
+`ReflectiveSurfaceTest` (no Vision jar on the harness classpath), so confirm it
+is still there with `javap` against the `vision-client` jar in
+`~/.ignition/cache/resources/modules/com.inductiveautomation.vision/`.
+
 ## Findings from the sweeps
 
 Surfaces that failed, with the mechanism worked out. A finding stays here until
@@ -498,6 +551,14 @@ dark-leftover pass on a debounce when something is attached.
 toggle while looking at one workspace: toggle to light, then visit each
 workspace in turn — Vision, Perspective, SFC, pipelines — and look at the filter
 fields and dock chrome in each.
+
+Seen again on 2026-09-15 after the Vision gate's drop-out, for a different
+reason: the leftover pass itself excluded anything under a `factorypmi`
+package (meant for Vision's user content, but the palette and property
+editor live there too), and the Tag Browser's rows stayed dark because IA's
+`PanelBasedTreeCellRenderer` copies the `Tree.*` colours at construction and
+a renderer built under dark was never re-synced. Both are pinned in
+`LightRestoreComponentStateTest` now.
 
 ### Note on the 2026-08-31 run
 
@@ -632,8 +693,11 @@ these is a real gap, not a pass.
 | §E binding editor, component scope picker, style editor | **The view is no longer the blocker** — a saved view (`qa-dark-mode`) exists in the dev project, so the editor opens. What is still missing is a component dropped on that view: it needs a palette drag the automation cannot do, and the Perspective palette was not docked in the layout used | A component dropped on the view, by hand |
 | §H Reporting, Preview and Schedule tabs | The dev project now HAS a report (`qa-report`, saved 2026-09-01), and Report Overview, Data and Design were swept on it in both modes — that sweep is what found #59. Preview and Schedule were not opened | Open the last two tabs on `qa-report` |
 | §F border chooser, Layout, Size and Position | Need a Vision window with a component selected | A Vision window, by hand |
+| §F the **(1.3.0)** rows: binding editor, security panel, template custom properties, Easy Chart and Tab Strip customizers | Added 2026-09-15 from the Exchange script's 1.3.0 diff, never opened under this module. Each needs a Vision window with a component of that type on it | A Vision window with a template, an Easy Chart and a Tab Strip, by hand |
+| §D message handler dialog | Also from the 1.3.0 diff | Open Gateway Events → Message and add a handler |
 | ~~Relaunch-comes-up-stock~~ | **Run 2026-09-01 and passed.** Toggled off, relaunched, confirmed the Designer comes up genuinely stock, toggled back. Recorded rather than deleted because the run doubles as the baseline half of the comparison in [Compare against a relaunched Designer](#compare-against-a-relaunched-designer-before-calling-something-a-bug) | — |
 | §E view editor rulers and surround | Not a gap in testing — an undecided question. They are chrome and they stay light | A decision |
+| **Everything, on Windows and Linux** | Every run above is macOS. The headless harness runs on all three platforms in CI, which proves the switch sequence and the reflective reach — not what anything looks like. The three rows marked *(Windows, Linux)* in §A and §B are surfaces that exist only there | A Designer sitting on each, walking this checklist, with the `env:` block from the log kept alongside the run. A 150% display on Windows and a HiDPI desktop on Linux would settle the scaling question in [ARCHITECTURE](ARCHITECTURE.md#gotchas-and-hard-won-facts) at the same time |
 
 ## Out of scope
 
@@ -652,5 +716,5 @@ rediscovering:
   spotty, and can be difficult to use."* Record these as `skip` unless we have a
   reason to disagree.
 
-Also out of scope by our own choice: **the Vision design canvas**, which renders
-your own window content — theming it would misrepresent what your users will see.
+Also out of scope, and now enforced rather than chosen: **Vision windows and
+templates** are never edited under dark mode at all (§N).

@@ -76,7 +76,19 @@ public class DesignerDarkModeHook extends AbstractDesignerModuleHook {
                 themes.setDark(e.getStateChange() == ItemEvent.SELECTED);
             }
         };
-        darkMode.setSelected(themes.isDarkModeEnabled());
+        // Seeded under the guard: StateChangeAction fires itemStateChanged
+        // from setSelected, and this method is not only called at startup.
+        // The Designer rebuilds module menus during its own teardown
+        // (LoadedModule.shutdown calls getModuleMenu before hook.shutdown) and
+        // when another project is opened, and a "dark" preference kept
+        // through a Vision-blocked launch would otherwise read as a click:
+        // the Vision refusal dialog on the way out, and the preference lost.
+        syncing = true;
+        try {
+            darkMode.setSelected(themes.isDarkModeEnabled());
+        } finally {
+            syncing = false;
+        }
         darkModeAction = darkMode;
 
         MenuBarMerge merge = new MenuBarMerge("com.mustrysolutions.designerdarkmode");

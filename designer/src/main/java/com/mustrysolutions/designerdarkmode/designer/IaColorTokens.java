@@ -2,6 +2,7 @@ package com.mustrysolutions.designerdarkmode.designer;
 
 import java.awt.Color;
 import java.lang.reflect.Field;
+import java.lang.reflect.InaccessibleObjectException;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.Map;
@@ -129,13 +130,55 @@ final class IaColorTokens {
     private Field frgbField;
     private Field fvalueField;
 
-    /** Mutate the token instances to the dark palette. Safe to re-run. */
+    /**
+     * The JVM argument that makes this class possible, and where it goes.
+     *
+     * <p>The Designer Launcher passes it on macOS — read off a running
+     * process — and this module has only been watched there. A launcher that
+     * composes its arguments differently on another platform leaves every
+     * token-coloured surface light while the rest of the Designer goes dark,
+     * and nothing in that picture says why. The hint travels with the
+     * failure so the status bar can, instead of pointing at a log.
+     */
+    static final String OPENING_HINT =
+        "the Designer's JVM has not opened java.desktop/java.awt to modules; add "
+            + "--add-opens java.desktop/java.awt=ALL-UNNAMED under Additional JVM "
+            + "Arguments in the Designer Launcher and relaunch";
+
+    /**
+     * Thrown out of {@link #install} — not swallowed like its other failures —
+     * when the module system refuses the {@code Color} internals. That is the
+     * one cause the user can fix, so it is the one that has to reach them.
+     */
+    static final class JvmNotOpened extends IllegalStateException {
+        JvmNotOpened(InaccessibleObjectException cause) {
+            super(OPENING_HINT, cause);
+        }
+    }
+
+    /**
+     * Mutate the token instances to the dark palette. Safe to re-run.
+     *
+     * @throws JvmNotOpened if {@code java.awt} is not opened to this module,
+     *     so the caller can say what to do about it
+     */
     void install() {
         if (!originals.isEmpty()) {
             return;
         }
         try {
             reflectColorInternals();
+        } catch (InaccessibleObjectException closed) {
+            DebugLog.log("IaColorTokens: " + OPENING_HINT, closed);
+            throw new JvmNotOpened(closed);
+        } catch (Exception other) {
+            // A Color that no longer has these fields is a JDK change, not a
+            // launcher one; it stays with the general failure path below.
+            log.warn("Could not restyle the Ignition designer color tokens.", other);
+            DebugLog.log("IaColorTokens install FAILED.", other);
+            return;
+        }
+        try {
             Class<?> colors = Class.forName(COLORS_CLASS);
             int mutated = 0;
             for (Field field : colors.getFields()) {

@@ -12,6 +12,62 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ### Added
 
+- **A gate between dark mode and Vision.** Paul Griffith's warning on the
+  announcement thread was right, and reproducible: the platform's window
+  serializer compares every component property against a clean copy cached in
+  a static map for the life of the Designer, so once FlatLaf has been installed
+  a Vision save writes FlatLaf's font, colours and border classes into the
+  window — `<o cls="com.formdev.flatlaf.ui.FlatButtonBorder"/>` — and a Vision
+  client, which has no FlatLaf, fails to open it
+  (`ClassNotFoundException`). Reproduced headlessly against the real Vision
+  jars; the mechanism is IA's, and no restyling on our side reaches it. A
+  serializer-side cure for the crash does exist (refreshing the platform's
+  clean-copy cache at each switch, verified headlessly), but it leaves Vision
+  baking the module's dark colour constants into freshly opened components,
+  so dark mode inside Vision stays a follow-up
+  ([ARCHITECTURE.md](docs/ARCHITECTURE.md#visiongate)).
+
+  So the module now stays out of Vision's way. `VisionGate` refuses **Tools →
+  Dark Mode** while a Vision window or template is open or the Vision
+  workspace is selected (status bar plus a dialog, preference and menu reset
+  to light); a dark Designer drops to the stock theme synchronously from the
+  workspace manager's navigation listener when the user selects Vision in the
+  project browser — the first click of a double click, before the window is
+  deserialized under FlatLaf; and a Vision window that is attached under dark
+  mode by any other path still ends dark mode, with a "close and reopen"
+  notice, since that window has already been through the round trip. A dark
+  preference is kept, not applied, when the Designer comes up on Vision, and
+  kept when a dark Designer drops out for Vision — only a refused click resets
+  it. The gate is asked again at the moment the theme is installed, one turn
+  after the click, since a Vision selection can land in between. The Tools
+  menu is seeded without firing a switch, because the Designer rebuilds
+  module menus during its own teardown and a kept preference used to read as
+  a click on the way out. Vision and the Designer's `WorkspaceManager` are
+  reached by class name, so a Designer without Vision loses the gate rather
+  than the module.
+
+- `PropertyKeyFieldTest` in the look-and-feel harness: builds a real
+  `JsonEditor` over a session-props-shaped document, in both orders the
+  Designer uses (rows before the switch, rows after it), and asserts the
+  property names are readable, that the stock black comes back on the light
+  restore, and — rendered to pixels — that the name column paints no black
+  glyphs. Two of its cases model the runtime states that defeated the old
+  lift and failed against the previous code.
+
+- **Vision's palette and property-editor filters, and the Tag Browser's rows,
+  come back light after the Vision gate drops dark mode.** Found in the first
+  live run of the gate. Two mechanisms, both reproduced in the harness:
+  the child-first leftover pass that fixes #45 skipped anything under a
+  `factorypmi` package, which was meant to protect Vision's user content but
+  also covered Vision's own dock frames — "inside Vision" now means under a
+  Vision window or template or the workspace that hosts them; and IA's
+  `PanelBasedTreeCellRenderer` (the Tag Browser's renderer) copies the
+  `Tree.*` colours out of UIManager in its constructor with no `updateUI` to
+  re-read them, so a renderer the Tag Browser created while the Designer was
+  dark painted every row dark for the rest of the session — the light
+  restore now re-syncs the renderer of every tree it walks, not only the ones
+  the icon pass had wrapped.
+
 - Unit tests for the theme preference — the one piece of state the module keeps
   between launches, and until now the only behaviour with no test of its own.
   They cover the `setDark`/`isDarkModeEnabled` round trip, the rule that the
@@ -26,6 +82,52 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   in-memory node either way, so a test that only read it back could not have
   caught the Linux bug below. Covers both write sites and an unwritable
   backing store.
+
+- **The debug log opens with an environment block.** OS, JRE, the
+  module-system and look-and-feel JVM arguments, which `java.desktop`
+  packages the launcher opened, scaling, Synthetica's scale factor and font,
+  and the `UIManager` font on either side of every switch. A bug report from
+  Windows or Linux now carries the evidence instead of the guesswork.
+- **The headless harness runs on Windows and macOS in CI**, not only Linux,
+  with the debug log uploaded per platform.
+- **A status-bar hint when the JVM has not opened `java.awt`.** The design
+  tokens are restyled by rewriting `Color` instances in place, which needs
+  `--add-opens java.desktop/java.awt=ALL-UNNAMED` from the Designer Launcher —
+  observed on macOS, unverified elsewhere. Without it every token-coloured
+  surface stayed light with nothing to say why. Now the status line names the
+  argument and where it goes.
+
+### Changed
+
+- **CI's harness steps run under a watchdog that thread-dumps a hang.** Since
+  the property-name lift landed, roughly half of CI runs stall inside
+  `PropertyKeyFieldTest` — a different method each time, on both the current
+  and the 8.3.0 harness SDK, never locally in seventy attempts — and sat there
+  until the job's 15-minute cap cancelled them, which left no evidence at all.
+  `ops/laf-harness-watchdog.sh` now gives up after five minutes, `jstack -l`s
+  the Gradle daemon and the test executor (the executor's dump goes straight
+  into the step log), fails the step, and the dumps ship as a
+  `laf-harness-diagnostics` artifact with JUnit's XML and the module's debug
+  log. JUnit's own 60-second per-test timeout with `threaddump.enabled` is
+  layered underneath so the hung test names itself. Nothing here fixes the
+  hang; it produces the thread dump the fix needs.
+
+- The docs no longer describe Justin Edwards's
+  [Exchange dark-mode script](https://inductiveautomation.com/exchange/2719/overview)
+  as 8.1-only. Its 1.3.0 release (3 September 2026) targets 8.3, so the
+  README's prior-art section now presents it as an alternative on 8.3 rather
+  than the 8.1 counterpart, and the contributing guide and QA checklist say
+  which release the borrowed class catalogue came from.
+- The [QA checklist](docs/QA-CHECKLIST.md) now carries the surfaces that
+  script's 1.3.0 release added on top of the 8.1-era catalogue: seven new rows
+  (Vision binding editor, security panel, template custom properties, Easy
+  Chart and Tab Strip customizers, and the gateway message handler dialog), a
+  note on the Perspective binding-icon fix, and the matching entries in the
+  "still unchecked" table. All are unverified until someone opens them.
+
+- The native **title bar and window frame stay light on Windows and Linux**,
+  by decision. The QA checklist gained an OS column and the three surfaces
+  that only exist off macOS.
 
 ### Fixed
 
@@ -59,6 +161,46 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   must still be inverted (the QuickFilterField disc, #60) are unaffected.
   Covered by `TokenTintedButtonIconTest` in the headless harness, both
   orderings.
+
+- **The look-and-feel harness no longer deadlocks in `PropertyKeyFieldTest`.**
+  About half of CI runs since the property-name lift stalled there until the
+  job cap cancelled them. PR #94's watchdog caught it: the test built a real
+  `JsonEditor` and laid it out on the test thread, which holds the AWT tree
+  lock inside `Container.preferredSize` while `BasicTextUI.getMaximumSize`
+  waits for a text field's document lock; meanwhile `expandAll()` had made
+  `NodeEditor` post its rebuild to the event dispatch thread, where a new key
+  field's `setText` holds that document lock and its revalidate waits for the
+  tree lock. The Designer only ever does any of this on the dispatch thread,
+  so the test now does too, in phases, letting the queue drain between
+  building the editor and inspecting it. Harness-only; no module code changed.
+
+- The README's screenshot pair is retaken from `main` after the property-name
+  fix below (docs only). The previous dark image showed the very defect the
+  forum reported — every Session Props name black on the dark panel — so the
+  "after" half of the before/after pair was itself a bug report. Same frame,
+  same recipe (`docs/images/README.md`), 8.3.6; the dark name column now
+  measures about 7:1 from the pixels where the old one measured 1.9:1.
+
+- **Property names in the Perspective property editor are readable.** Raised
+  on the forum against the announcement's own screenshot: every key in the
+  Session Props editor — `host`, `locale`, `authenticated` — was pure black on
+  the dark panel, a contrast ratio of about 1.9:1, while the values beside
+  them were fine. It had passed a by-eye QA row. Each name is a
+  `KeyEditorField`, a borderless `JTextField` whose base class keeps two
+  private text colours and applies the *uneditable* one from
+  `setEditable(false)` straight through `JTextField.setForeground`, bypassing
+  its own override; the key class sets that colour to `Color.BLACK` and locks
+  every schema'd key. The module's generic foreground lift lost both ways: it
+  only fires over a dark background, and a text field with no background of
+  its own reports the filter wrapper's permanent amber instead (the state #23
+  documented in this editor); and when it did fire it rewrote only the
+  editable colour, so the next `setEditable(false)` put the black back. The
+  walk now recognises the field by class name, replaces the uneditable colour
+  through its public setter, lifts whatever is showing regardless of the
+  background, and restores both on the light switch. Values are untouched.
+  Proven headlessly for both defeat paths and confirmed by eye in a Designer
+  on 8.3.6 (2026-09-15): names light under dark, black again after the
+  switch back.
 
 - **The dark mode choice could be lost on Linux** if the Designer was
   force-quit, killed or crashed shortly after toggling. `ThemeManager` wrote
@@ -113,6 +255,12 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   being true in 0.2.0, and its deep link into `ThemeManager` pointed at a line
   the file no longer has — now named by method instead, so it cannot drift
   again.
+
+- **Dark mode keeps the Designer's font.** FlatLaf substituted the operating
+  system's UI font (`Dialog 12` → `Helvetica Neue 13` on macOS; Segoe UI at
+  the desktop's size on Windows), so every toggle changed text metrics, not
+  just colours. The stock font is now pinned across the switch, and the pin
+  carries Synthetica's scale factor with it on a scaled display.
 
 ## [0.2.0] - 2026-09-01
 

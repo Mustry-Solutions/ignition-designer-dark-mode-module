@@ -137,12 +137,7 @@ final class CodeEditorTheme {
     }
 
     private static boolean isCodeEditor(Component component) {
-        for (Class<?> type = component.getClass(); type != null; type = type.getSuperclass()) {
-            if (CODE_EDITOR.equals(type.getName())) {
-                return true;
-            }
-        }
-        return false;
+        return ClassNames.extendsNamed(component.getClass(), CODE_EDITOR);
     }
 
     private void theme(Object editor) {
