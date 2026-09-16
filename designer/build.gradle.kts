@@ -99,34 +99,34 @@ dependencies {
     "lafHarnessRuntimeOnly"("org.slf4j:slf4j-nop:2.0.12")
 }
 
-val lafHarnessTask = tasks.register<Test>("lafHarness") {
-    group = "verification"
-    description = "Drives the theme switch against the real Designer look and feels, headlessly."
+/**
+ * The JVM the harness runs in, shared with the Vision probe below.
+ *
+ * Synthetica reaches into java.desktop internals and fails to INITIALIZE
+ * without these — you get an IllegalAccessError out of its static init, not a
+ * theming difference. The Designer Launcher passes the same set; treat this
+ * list as part of the harness, not as tuning.
+ */
+val harnessJvmArgs = listOf(
+    "--add-exports", "java.desktop/sun.swing=ALL-UNNAMED",
+    "--add-exports", "java.desktop/sun.swing.table=ALL-UNNAMED",
+    "--add-exports", "java.desktop/sun.swing.plaf.synth=ALL-UNNAMED",
+    "--add-exports", "java.desktop/sun.awt=ALL-UNNAMED",
+    "--add-opens", "java.desktop/javax.swing=ALL-UNNAMED",
+    "--add-opens", "java.desktop/javax.swing.plaf.synth=ALL-UNNAMED",
+    // CellRendererSanitizer replaces BasicTableUI's protected rendererPane;
+    // without this the interception is unavailable and the tests that cover
+    // it cannot run at all. The real Designer opens exactly this package —
+    // checked against the running process's command line — so leaving it
+    // out made the harness LESS capable than the thing it models.
+    "--add-opens", "java.desktop/javax.swing.plaf.basic=ALL-UNNAMED",
+    "--add-opens", "java.desktop/java.awt=ALL-UNNAMED",
+)
 
-    testClassesDirs = lafHarness.output.classesDirs
-    classpath = lafHarness.runtimeClasspath
-
+/** Everything a headless run against the real look and feels needs. */
+fun Test.runsHeadlessAgainstTheRealLookAndFeels(logFile: String) {
     useJUnitPlatform()
-
-    // Synthetica reaches into java.desktop internals and fails to INITIALIZE
-    // without these — you get an IllegalAccessError out of its static init,
-    // not a theming difference. The Designer Launcher passes the same set;
-    // treat this list as part of the harness, not as tuning.
-    jvmArgs(
-        "--add-exports", "java.desktop/sun.swing=ALL-UNNAMED",
-        "--add-exports", "java.desktop/sun.swing.table=ALL-UNNAMED",
-        "--add-exports", "java.desktop/sun.swing.plaf.synth=ALL-UNNAMED",
-        "--add-exports", "java.desktop/sun.awt=ALL-UNNAMED",
-        "--add-opens", "java.desktop/javax.swing=ALL-UNNAMED",
-        "--add-opens", "java.desktop/javax.swing.plaf.synth=ALL-UNNAMED",
-        // CellRendererSanitizer replaces BasicTableUI's protected rendererPane;
-        // without this the interception is unavailable and the tests that cover
-        // it cannot run at all. The real Designer opens exactly this package —
-        // checked against the running process's command line — so leaving it
-        // out made the harness LESS capable than the thing it models.
-        "--add-opens", "java.desktop/javax.swing.plaf.basic=ALL-UNNAMED",
-        "--add-opens", "java.desktop/java.awt=ALL-UNNAMED",
-    )
+    jvmArgs(harnessJvmArgs)
 
     // No display, and none needed: everything asserted here lives in UIManager
     // and in the module's own state. Window.getWindows() is simply empty, so
@@ -137,7 +137,7 @@ val lafHarnessTask = tasks.register<Test>("lafHarness") {
     systemProperty("flatlaf.uiScale.enabled", "false")
 
     systemProperty("designerdarkmode.logFile",
-        layout.buildDirectory.file("laf-harness-debug.log").get().asFile.absolutePath)
+        layout.buildDirectory.file(logFile).get().asFile.absolutePath)
 
     // A hung test should name itself. Since #85 the harness stalls in about
     // half of CI runs, in a different PropertyKeyFieldTest method each time,
@@ -147,6 +147,16 @@ val lafHarnessTask = tasks.register<Test>("lafHarness") {
     // outer watchdog, ops/laf-harness-watchdog.sh, handles that end).
     systemProperty("junit.jupiter.execution.timeout.default", "60 s")
     systemProperty("junit.jupiter.execution.timeout.threaddump.enabled", "true")
+}
+
+val lafHarnessTask = tasks.register<Test>("lafHarness") {
+    group = "verification"
+    description = "Drives the theme switch against the real Designer look and feels, headlessly."
+
+    testClassesDirs = lafHarness.output.classesDirs
+    classpath = lafHarness.runtimeClasspath
+
+    runsHeadlessAgainstTheRealLookAndFeels("laf-harness-debug.log")
 
     testLogging {
         // standardOut/standardError: the harness prints almost nothing, and
@@ -158,5 +168,46 @@ val lafHarnessTask = tasks.register<Test>("lafHarness") {
         // ThemeSwitchCycleTest.java:51" — the harness's own line, not the
         // frame inside Synthetica that threw, which is the one that matters.
         exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+    }
+}
+
+/*
+ * The Vision probe (#92).
+ *
+ * Vision's jars are not a published artifact, so nothing that needs a real
+ * `PMIButton` or Vision's own serialization delegates can live in the harness
+ * above. A Designer that has run Vision keeps them in its module cache,
+ * though, and `ops/vision-jars.sh` prints the newest set as a classpath.
+ * With `-Pvision.jars=<that>` this source set exists and compiles against
+ * them, on top of everything the harness has; without it, it does not exist
+ * and CI never sees it.
+ *
+ *     ./gradlew :designer:visionProbe -Pvision.jars="$(ops/vision-jars.sh)"
+ */
+val visionJars = (project.findProperty("vision.jars") as String?)
+    ?.split(File.pathSeparator, ",")
+    ?.map { file(it.trim()) }
+    ?.filter { it.isFile }
+if (!visionJars.isNullOrEmpty()) {
+    val visionProbe: SourceSet by sourceSets.creating {
+        compileClasspath += lafHarness.runtimeClasspath
+        runtimeClasspath += output + lafHarness.runtimeClasspath
+    }
+    dependencies {
+        "visionProbeImplementation"(files(visionJars))
+    }
+    tasks.register<Test>("visionProbe") {
+        group = "verification"
+        description = "Saves and loads real Vision windows across a theme switch, against the cached Vision jars."
+
+        testClassesDirs = visionProbe.output.classesDirs
+        classpath = visionProbe.runtimeClasspath
+
+        runsHeadlessAgainstTheRealLookAndFeels("vision-probe-debug.log")
+
+        testLogging {
+            events("passed", "skipped", "failed", "standardOut", "standardError")
+            exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+        }
     }
 }

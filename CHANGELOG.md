@@ -37,16 +37,27 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   the multi-state components, a check box's default background — and dark
   mode rewrites those objects in place, so a save made while dark wrote the
   dark values into the window: light-grey text on a light Vision client.
-  Loaded windows were never affected; the earlier write-up said they were,
-  and was wrong — `initialize()` has one caller, the palette. On every save
+  Loaded windows get the same objects on every button from Vision's
+  deserialization handler. On every save
   the module now replaces the serializer's `java.awt.Color` delegate with
   one that recognises a restyled token by identity and hands the platform's
   own encoder its stock value. A colour the user picked is a different
   object and is written as picked; dataset cells are covered by the same
   path; with nothing restyled the XML is byte-for-byte the platform's. Proven
   in the harness against the platform serializer with `initialize()`
-  reproduced verbatim. `VisionGate` still stays: the light restore leaves
-  fonts stale (part 3).
+  reproduced verbatim, and against real Vision in the probe below.
+  `VisionGate` still stays: the light restore leaves fonts stale (part 3).
+
+- **A Vision probe: the harness's saves, run through the real Vision
+  classes.** `./gradlew :designer:visionProbe -Pvision.jars="$(ops/vision-jars.sh)"`
+  compiles a source set against the Vision jars in the Designer's module
+  cache (never published, so CI never sees it) and saves and loads real
+  windows across a theme switch with Vision's own delegates. It also pins
+  the `TopLevelContainer` name the gate keys on, which the QA checklist had
+  to verify by hand. Two of its scenarios are `@Disabled` with the finding
+  written on them: after a light restore, Vision components that were alive
+  under dark can come back holding Synthetica's raw theme font, and a save
+  then fails rather than writing `setFont` — the open part 3 of #92.
 
 ## [0.3.0] - 2026-09-16
 

@@ -176,6 +176,24 @@ colour objects Vision copies at palette drop, reproducing `initialize()`
 verbatim. Reach for this shape for anything about what a save *writes*;
 neither the defaults diff nor component state can see it.
 
+**The Vision probe runs the same saves through real Vision.** Vision's jars
+are not a published artifact, but a Designer that has opened a Vision project
+keeps them in its module cache, and `designer/src/visionProbe/` is a source
+set that exists only when told where they are:
+
+```bash
+./gradlew :designer:visionProbe -Pvision.jars="$(ops/vision-jars.sh)"
+```
+
+`VisionWindowSaveTest` builds a window the way the palette does (real
+`PMIButton`, `PMILabel`, `PMITextField`, each `initialize()`d), saves it
+with Vision's own delegates and BeanInfos plus the module's hook, loads every
+save back the way a client does, and pins the `TopLevelContainer` name the
+gate keys on. CI never sees it; run it before touching anything under
+`VisionGate`, `SerializerCleanCopies` or `TokenColorDelegate`. Two scenarios
+are `@Disabled` with the open half of [#92][92] written on them — the fonts
+after a light restore — and are the place to start on it.
+
 ### The reflective surface, and which Ignition the harness runs against
 
 The module works by reaching into Ignition, JIDE and JFreeChart internals **by

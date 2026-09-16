@@ -420,12 +420,13 @@ one line in `~/.ignition/designer-dark-mode.log` (`Vision gate: …`).
 | Any theme switch, either direction | The log has `SerializerCleanCopies: dropped N clean copies` right after the switch; N is 0 until a Vision save has happened since the last switch | — | — | #92 part 1. The cache the gate exists for is emptied at each switch; nothing to see on screen until part 3 lands |
 | Light Designer. Drop a Button and a Multi-State Indicator from the palette onto a window, save | `ops/vision-check.sh` clean; the saved XML is identical to one from a Designer without the module (no colour calls on the button; the indicator's state dataset carries the stock colours) | — | — | #92 part 2. The module's Color delegate is on every save, light or dark, and must be invisible while light. Nothing in this row is dark; the dark half needs the gate gone |
 
-**By hand, once per Ignition version:** the interface the gate keys on is
+**Once per Ignition version:** the interface the gate keys on is
 `com.inductiveautomation.vision.api.client.components.model.TopLevelContainer`,
-implemented by `FPMIWindow` and `VisionTemplate`. It cannot be pinned by
-`ReflectiveSurfaceTest` (no Vision jar on the harness classpath), so confirm it
-is still there with `javap` against the `vision-client` jar in
-`~/.ignition/cache/resources/modules/com.inductiveautomation.vision/`.
+implemented by `FPMIWindow` and `VisionTemplate`. `ReflectiveSurfaceTest`
+cannot pin it (no Vision jar on the harness classpath); the Vision probe can:
+`./gradlew :designer:visionProbe -Pvision.jars="$(ops/vision-jars.sh)"` runs
+`VisionWindowSaveTest`, whose first test resolves the name against the cached
+Vision jars and checks both classes implement it.
 
 ## Findings from the sweeps
 

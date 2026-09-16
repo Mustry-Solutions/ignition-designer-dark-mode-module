@@ -332,11 +332,14 @@ saves after the switch back — while hand-set values (`setButtonBG`,
 `setText`) still round-trip. The crash, in other words, is curable from
 here.
 
-What the refresh does not cure: a button DROPPED FROM THE PALETTE under
-dark saves `setForeground #DDE0E3`. `PMIButton.initialize()` — whose only
-caller is the palette, `JavaBeanPaletteItem.createJavaBean`; a loaded window
-never runs it — copies the static `IgnitionLookAndFeel$Colors.ButtonForeground`
-OBJECT into the button's foreground; `IaColorTokens` has rewritten that
+What the refresh does not cure: a button that Vision has handed a colour
+TOKEN saves `setForeground #DDE0E3` under dark. Two paths hand it one:
+`PMIButton.initialize()`, whose only caller is the palette
+(`JavaBeanPaletteItem.createJavaBean`), and — for every loaded button —
+Vision's own `ComponentDeserializationHandler.endSubElement`, which sets
+`ButtonBackground`/`ButtonForeground` on each `AbstractVisionButton` as its
+common block ends, before the window's explicit calls apply. Both copy the
+static `IgnitionLookAndFeel$Colors.ButtonForeground` OBJECT into the button; `IaColorTokens` has rewritten that
 object to Base900 (#DDE0E3) in place, while the clean copy's foreground is
 FlatLaf's `Button.foreground` UIResource (#DDDDDD), so the two differ and the
 DARK text colour is written into the window — light-grey text in a light
@@ -357,14 +360,31 @@ That is cured at the point of writing
 ([TokenColorDelegate](#tokencolordelegate)): the token object is recognised
 by identity and written with its stock value.
 
-One more thing the probe surfaced: after the light restore a text field
-still held Tahoma 11 while the defaults said Dialog 12 until a second
-`updateComponentTreeUI` — the restore's phase order leaves fonts stale, which
-would write `setFont` into any window open across the switch. The three are
-tracked as #92. The cache refresh and the token substitution have shipped;
-the gate stays until the font restore does, so today both are safety nets
-for the one-turn gap and the attach-time fallback rather than something a
-user can see. The probe recipe is in the project notes.
+One more thing the probe surfaced, now reproduced in the repo
+(`VisionWindowSaveTest`, the two `@Disabled` scenarios): after the light
+restore, Vision components that were alive under dark come back from the
+tree update holding a Synthetica `ScalableFont` — Tahoma 11, the theme's raw
+font, for the text field — while a fresh component gets Dialog 12; and a
+save then FAILS rather than writing `setFont`, because the font differs from
+the clean copy and a `ScalableFont` has no no-arg constructor to build one
+from. It is per component: repeating `SyntheticaLookAndFeel.setFont`,
+`IgnitionLookAndFeel.init()` or a full reinstall does not bring those
+components back, a second tree update does not either, and a window built
+afterwards is fine. It takes a preceding dark save through Vision's
+delegates in the same JVM to show; the cycle alone is clean. Whether a live
+Designer, which updates its attached windows itself, sees the same is not
+known. The three are tracked as #92. The cache refresh and the token
+substitution have shipped; the gate stays until the font restore does, so
+today both are safety nets for the one-turn gap and the attach-time fallback
+rather than something a user can see.
+
+The probe itself lives in `designer/src/visionProbe/`, a source set that
+exists only with `-Pvision.jars` (`ops/vision-jars.sh` prints the newest set
+from the Designer's module cache): real `PMIButton`/`PMILabel`/`PMITextField`
+created the way the palette creates them, Vision's own serialization
+delegates and BeanInfos, a client-side load of every save, and the gate's
+`TopLevelContainer` pinned against `FPMIWindow` and `VisionTemplate` so that
+name is no longer checked by hand.
 
 ### SerializerCleanCopies
 The first of the three #92 pieces: the platform serializer's clean-copy cache
@@ -410,7 +430,10 @@ Designer would have written nothing — an explicit colour equal to the
 default, harmless on every client; that residue is Vision copying an object
 rather than reading a default and cannot be removed here. `TokenColorOnSaveTest`
 reproduces `initialize()` verbatim on `SerializerProbeButton` and on a
-`BasicDataset` cell, with the control save first.
+`BasicDataset` cell, with the control save first; `VisionWindowSaveTest`
+(the Vision probe) does it on the real classes, including a window loaded
+under dark, whose buttons get the tokens from Vision's deserialization
+handler.
 
 ### ComponentInspector
 Debug only. **Cmd/Ctrl+Shift+I** (or `+F12`) dumps the component chain under the
