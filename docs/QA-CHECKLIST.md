@@ -453,7 +453,7 @@ Anywhere IA uses `InlineTipLabel` is affected; Diagnostics is just where this
 run happened to look. Note that the plain "Tip:" line at the
 bottom of **Image Management** is a different, ordinary label and is `pass`.
 
-### Event Stream section cards (`FlowCellContent`) — fixed, awaiting a visual check
+### Event Stream section cards (`FlowCellContent`) — fixed, confirmed by eye
 
 Reported 2026-09-02 by a user on macOS
 ([#79](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/79)).
@@ -477,10 +477,11 @@ identical #DDE5EB tile selection in place. `FlowCellSelectionTest` in the
 headless harness renders a section under dark mode and reads the pixels, so
 the illegibility reproduces and the fix is proven without a Designer. What it
 cannot prove is how the card looks in context — a section strip with a live
-selection, the hover, and the disabled placeholder slots — which is the
-remaining visual check.
+selection, the hover, and the disabled placeholder slots. Confirmed by eye
+in a Designer against the dev gateway before PR #90 merged:
+selected card, hover, and the three toggles below.
 
-### Event Stream Enabled / Disabled toggles — fixed, awaiting a visual check
+### Event Stream Enabled / Disabled toggles — fixed, confirmed by eye
 
 Found 2026-09-15 while checking the section-card fix above: the icons on the
 **Enabled** / **Disabled** toggles at the top right of an Event Stream editor,
@@ -499,8 +500,9 @@ built before or after the switch.
 Fixed by leaving alone any IA SVG glyph whose tint is a token instance the
 token pass restyles (identity, not brightness — the QuickFilterField disc from
 #60 is a light glyph that must still be inverted). `TokenTintedButtonIconTest`
-covers both orderings headlessly. The remaining check is visual: the three
-toggles in a live editor, and that no other token-tinted glyph regressed.
+covers both orderings headlessly. The three toggles were confirmed by eye in
+a live editor before PR #90 merged; whether any other
+token-tinted glyph regressed is still only covered by the harness.
 
 While clicking around the same editor an `AWT-EventQueue-0` NPE surfaced in the
 Output Console: `StatusSectionDiagnosticsCreator.addSourceDiagnostics` on a null
