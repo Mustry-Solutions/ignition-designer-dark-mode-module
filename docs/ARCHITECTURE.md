@@ -80,6 +80,10 @@ pass is logged (with a stack trace, to the debug log) without stranding the rest
     re-running the dark-leftover pass when a subtree is attached — a dock
     detached during the restore keeps its dark state, and re-attaching it
     recreates the parent-first copy that leaves JIDE wrappers dark.
+12. **Serializer clean copies** — `SerializerCleanCopies.refresh()`, last in
+    both directions, once every default is where the next save will find it:
+    the platform serializer's clean-copy cache was built under the look and
+    feel that just left (see [SerializerCleanCopies](#serializercleancopies)).
 
 On light mode, the restores iterate **tracked component sets**, never the live
 hierarchy — a component detached at restore time (a closed dialog, a hidden
@@ -347,8 +351,35 @@ those keys or those constants left alone in Vision, plus one more thing the
 probe surfaced: after the light restore a text field still held Tahoma 11
 while the defaults said Dialog 12 until a second `updateComponentTreeUI` —
 the restore's phase order leaves fonts stale, which would write `setFont`
-into any window open across the switch. That is a follow-up feature, not a
-swap for the gate; the probe recipe is in the project notes.
+into any window open across the switch. The three are tracked as #92. The
+cache refresh is the first to ship
+([SerializerCleanCopies](#serializercleancopies)); the gate stays until the
+other two do, so today the refresh is a safety net for the one-turn gap and
+the attach-time fallback rather than something a user can see. The probe
+recipe is in the project notes.
+
+### SerializerCleanCopies
+The first of the three #92 pieces: the platform serializer's clean-copy cache
+is replaced with an empty one as the last phase of every switch, in both
+directions. `XMLSerializer.cleanMap` is a private static `HashMap`, looked up
+with `get` and seeded with `Class.newInstance()` on a miss, so an empty map
+simply rebuilds each entry under the look and feel current at the next save —
+the one the saved components were dressed by — and the diff is clean again.
+Replaced rather than cleared: a save in flight on another thread keeps its own
+reference, and its late puts land in the discarded map. Not done in
+`configureSerializer`, which runs per save and is where Vision seeds its own
+`PathBasedVisionShape` copy.
+
+`ReflectiveSurfaceTest` pins the field. `SerializerCleanCopyTest` drives the
+platform serializer itself over a `JButton` with a Vision-style `BeanInfo`
+(`SerializerProbeButton`) and shows both halves: a deliberately stale copy
+writes `setBackground`, `setBorder <o cls="com.formdev.flatlaf.ui
+.FlatButtonBorder"/>`, `setFont` and `setForeground` into a dark save; after
+the refresh the same save is an empty element, and a hand-set tooltip still
+round-trips. The class is reached by name; if the field moves, the phase fails
+visibly (status bar and debug log) rather than leaving a stale cache behind a
+passing switch. Each switch logs `SerializerCleanCopies: dropped N clean
+copies`.
 
 ### ComponentInspector
 Debug only. **Cmd/Ctrl+Shift+I** (or `+F12`) dumps the component chain under the

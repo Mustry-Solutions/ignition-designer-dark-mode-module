@@ -47,10 +47,11 @@ window saved from a FlatLaf Designer picks up FlatLaf's fonts, colours and
 border classes as if you had set them by hand, and a Vision client cannot open
 it at all (`ClassNotFoundException: com.formdev.flatlaf.ui.FlatButtonBorder`).
 The cause is the platform's window serializer, which compares every property
-against a "clean copy" cached for the life of the Designer. Refreshing that
-cache from the module cures the crash but not the rest: Vision also copies the
-Designer's colour constants into components as a window opens, and dark mode
-rewrites those. So, for now, the module stays out of Vision's way:
+against a "clean copy" cached for the life of the Designer. The module now
+refreshes that cache at every switch, which cures the crash — but not the
+rest: Vision also copies the Designer's colour constants into components as a
+window opens, and dark mode rewrites those. So, for now, the module still
+stays out of Vision's way:
 
 - **Tools → Dark Mode is refused** while any Vision window or template is open,
   or while the Vision workspace is selected. The status bar and a dialog say why.

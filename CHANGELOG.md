@@ -10,6 +10,26 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ## [Unreleased]
 
+### Added
+
+- **The window serializer's clean-copy cache is refreshed at every theme
+  switch** (#92, part 1 of 3). The platform serializer compares each saved
+  component against a clean instance of its class, cached in a static map
+  under whatever look and feel was installed at the first save; a save under
+  the other look and feel then writes that look and feel's border, font and
+  colours into the window, and the FlatLaf border by class name is what a
+  Vision client cannot load. The cache is now replaced with an empty one as
+  the last phase of every switch, so each entry is rebuilt under the look and
+  feel current at the next save. Reproduced and proven in the harness with
+  the platform serializer itself: a stale copy writes `setBorder
+  <o cls="com.formdev.flatlaf.ui.FlatButtonBorder"/>`, `setFont`,
+  `setForeground` and `setBackground`; after the refresh the same save is an
+  empty element. `VisionGate` stays: Vision still bakes the module's dark
+  colour constants into components as a window opens, and the light restore
+  leaves fonts stale until a second tree update (parts 2 and 3), so nothing
+  changes on screen yet. The debug log gains one line per switch,
+  `SerializerCleanCopies: dropped N clean copies`.
+
 ## [0.3.0] - 2026-09-16
 
 A Vision-safety and portability release. Dark mode now keeps out of Vision's

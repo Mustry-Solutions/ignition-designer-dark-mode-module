@@ -755,6 +755,19 @@ public class ThemeManager {
             safely("statusBar", status::uninstall);
             safely("cachedPainters", () -> repointCachedThemePainters(false));
         }
+        // Last, once every default is where the next save will find it: the
+        // serializer's clean copies were built under the look and feel that
+        // just left, and a save diffed against them writes that look and
+        // feel's borders, fonts and colours into the window (#92, part 1).
+        safely("serializerCleanCopies", () -> {
+            try {
+                SerializerCleanCopies.refresh();
+            } catch (ReflectiveOperationException e) {
+                throw new IllegalStateException(
+                    "the serializer's clean-copy cache is out of reach; saves made "
+                        + "after this switch may carry the previous look and feel", e);
+            }
+        });
         DebugLog.log("after switch: " + EnvironmentProbe.fontLine());
         log.info(dark ? "Dark mode applied." : "Stock Designer theme restored.");
         reportOutcome(dark);

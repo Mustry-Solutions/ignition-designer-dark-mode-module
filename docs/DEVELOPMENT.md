@@ -164,6 +164,16 @@ dark filter field, because the wrong colour was sitting on a component (and, in
 the header's case, on a renderer that is not in the hierarchy at all). Reach for
 this shape whenever a restore is right in `UIManager` and wrong on screen.
 
+**The platform serializer is an instrument too.** `SerializerCleanCopyTest`
+([#92][92]) saves a component through the real `XMLSerializer` before and
+after a switch and reads the XML: a clean copy built under the wrong look and
+feel shows up as `setBorder`, `setFont` and colour calls the test never made.
+No Vision jar is needed — but the serializer wants a `BeanInfo` naming a
+component's properties, or it walks all of a `JButton`'s and dies on
+`actionMap`, so `SerializerProbeButton` carries a Vision-style one listing the
+five that matter. Reach for this shape for anything about what a save
+*writes*; neither the defaults diff nor component state can see it.
+
 ### The reflective surface, and which Ignition the harness runs against
 
 The module works by reaching into Ignition, JIDE and JFreeChart internals **by
@@ -258,6 +268,7 @@ judgment calls into a rule with four exceptions. [#22][22] was two of these
 [42]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/42
 [45]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/45
 [81]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/81
+[92]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/92
 [14]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/14
 [19]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/19
 [21]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/21
