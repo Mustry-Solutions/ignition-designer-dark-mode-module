@@ -123,6 +123,13 @@ public class ThemeManager {
      * when the switch only partly worked.
      */
     private final java.util.List<String> failedPhases = new java.util.ArrayList<>();
+
+    /**
+     * What the user can do about a failed phase, when there is something.
+     * Set by {@link #safely} for the failures that carry one (a JVM that has
+     * not opened {@code java.awt}); null otherwise. Cleared per switch.
+     */
+    private String failureHint;
     private int attemptedPhases;
 
     /**
@@ -533,7 +540,14 @@ public class ThemeManager {
             return;
         }
         DebugLog.log("ThemeManager: switching to " + (dark ? "dark" : "light") + " mode.");
+        // The host facts a bug report from another platform needs — see
+        // EnvironmentProbe. Once per session; the per-switch font lines
+        // (here and at the end) are what the dark and light fonts get
+        // compared on.
+        EnvironmentProbe.logOnce();
+        DebugLog.log("before switch: " + EnvironmentProbe.fontLine());
         failedPhases.clear();
+        failureHint = null;
         attemptedPhases = 0;
         phaseTrace.clear();
         // Held only for the abort path below: the exact overrides phase 0 drops,
@@ -574,6 +588,10 @@ public class ThemeManager {
             if (dark) {
                 trace("painterSnapshot");
                 snapshotThemePainters();
+                // Read now, while the stock look and feel is still the one
+                // answering: this is the font the Designer has been drawing
+                // with, and the one dark mode keeps (see below).
+                java.awt.Font stockFont = UIManager.getFont("Label.font");
                 trace("lookAndFeel");
                 try {
                     UIManager.setLookAndFeel(new FlatDarkLaf());
@@ -585,6 +603,8 @@ public class ThemeManager {
                     DebugLog.log("setLookAndFeel(FlatDarkLaf) failed once; retrying.", first);
                     UIManager.setLookAndFeel(new FlatDarkLaf());
                 }
+                trace("stockFont");
+                keepStockFont(stockFont);
             } else {
                 trace("lookAndFeel");
                 try {
@@ -735,6 +755,7 @@ public class ThemeManager {
             safely("statusBar", status::uninstall);
             safely("cachedPainters", () -> repointCachedThemePainters(false));
         }
+        DebugLog.log("after switch: " + EnvironmentProbe.fontLine());
         log.info(dark ? "Dark mode applied." : "Stock Designer theme restored.");
         reportOutcome(dark);
     }
@@ -753,7 +774,7 @@ public class ThemeManager {
             status.clear();
             return;
         }
-        String message = degradedMessage(dark, failedPhases, attemptedPhases);
+        String message = degradedMessage(dark, failedPhases, attemptedPhases, failureHint);
         log.warn(message);
         DebugLog.log(message);
         status.message(message);
@@ -761,9 +782,21 @@ public class ThemeManager {
 
     /** One line: what worked, what did not, and where to read about it. */
     static String degradedMessage(boolean dark, java.util.List<String> failed, int attempted) {
+        return degradedMessage(dark, failed, attempted, null);
+    }
+
+    /**
+     * The same line, with what to do about it when a failure said. The hint
+     * goes before the log pointer: a user who can fix it from the status bar
+     * should not have to open the log to find that out.
+     */
+    static String degradedMessage(boolean dark, java.util.List<String> failed, int attempted,
+            String hint) {
         return (dark ? "Dark mode applied" : "Stock theme restored")
             + " with " + failed.size() + " of " + attempted + " steps failing ("
-            + String.join(", ", failed) + "). Details in " + DebugLog.path();
+            + String.join(", ", failed) + "). "
+            + (hint == null ? "" : Character.toUpperCase(hint.charAt(0)) + hint.substring(1) + ". ")
+            + "Details in " + DebugLog.path();
     }
 
     /** Note a phase that does not run under {@link #safely} (it has its own guard). */
@@ -788,9 +821,17 @@ public class ThemeManager {
             task.run();
         } catch (Throwable t) {
             failedPhases.add(phase);
+            if (t instanceof IaColorTokens.JvmNotOpened) {
+                failureHint = t.getMessage();
+            }
             log.warn("Theme phase '" + phase + "' failed.", t);
             DebugLog.log("Theme phase " + phase + " FAILED.", t);
         }
+    }
+
+    /** The hint carried by the last switch's failures, if any. */
+    String failureHint() {
+        return failureHint;
     }
 
     /**
@@ -845,6 +886,38 @@ public class ThemeManager {
         DebugLog.detail("Stock look and feel: " + (stockLaf == null ? "none" : stockLaf.getClass().getName())
             + "; Button.font is " + (buttonFont == null ? "null" : buttonFont.getClass().getName()
             + " " + buttonFont));
+    }
+
+    /**
+     * Keep the Designer's own font under dark mode, so the switch changes
+     * colour and nothing else.
+     *
+     * <p>Left to itself FlatLaf picks the operating system's UI font — the
+     * harness log on macOS shows Synthetica's {@code Dialog 12pt} becoming
+     * {@code Helvetica Neue 13pt} — and the stock restore puts
+     * {@code Dialog 12} back by name ({@link #restoreStockLaf}). Both family
+     * and size therefore change on every toggle, and how far depends on the
+     * platform: a point on macOS, where it goes unnoticed; on Windows the
+     * pick is Segoe UI at the desktop's message-font size, and text that
+     * grows shifts row heights and clips labels in the Designer's fixed-size
+     * panels. Pinning the stock font is also what carries Synthetica's own
+     * scale factor into FlatLaf on a display where it is not 1.0, since the
+     * font read before the swap is already the scaled one.
+     *
+     * <p>{@code defaultFont} is FlatLaf's base: every {@code *.font} default
+     * is an active value derived from it, so this one developer-defaults
+     * entry re-fonts the whole table. It has to land before
+     * {@link #snapshotMenuDefaults} resolves those active values into the
+     * snapshot, and it needs no explicit clear on the light switch —
+     * {@code defaultFont} is in the snapshot, so {@link #applyMenuDefaults}
+     * removes it with the rest.
+     */
+    private void keepStockFont(java.awt.Font stockFont) {
+        if (stockFont == null) {
+            DebugLog.log("No stock Label.font to keep; dark mode uses FlatLaf's own font.");
+            return;
+        }
+        UIManager.put("defaultFont", new javax.swing.plaf.FontUIResource(stockFont));
     }
 
     /**
@@ -927,6 +1000,25 @@ public class ThemeManager {
         // A key named "darkShadow" holding #DDDDDD. Whatever it draws, a light
         // shadow under a dark theme is wrong on its face.
         "JideTabbedPane.darkShadow",
+        // Light on WINDOWS only, found by the harness's #22 check the first
+        // time it ran there: JIDE fills these from the Windows desktop colours
+        // (#F0F0F0 is the system "control", #ABDAFF its selection highlight)
+        // rather than from the look and feel, so none of the passes above
+        // reach them. On macOS and Linux they are absent or already dark. A
+        // Windows Designer without these shows a light status bar, light
+        // side-pane buttons, a light selected dock tab, and light menu hover.
+        "Content.background",
+        "JideLabel.background",
+        "StatusBar.background",
+        "HeaderBox.background",
+        "JideTabbedPane.selectedTabBackground",
+        "SidePane.buttonBackground",
+        "SidePane.selectedButtonBackground",
+        "CollapsiblePane.emphasizedBackground",
+        "PopupMenuSeparator.background",
+        "Menu.mouseHoverBackground",
+        "CheckBoxMenuItem.mouseHoverBackground",
+        "RadioButtonMenuItem.mouseHoverBackground",
     };
 
     /**
@@ -1000,6 +1092,25 @@ public class ThemeManager {
         UIManager.put("SidePane.foreground", foreground);
         UIManager.put("CommandBarSeparator.background", border);
         UIManager.put("JideTabbedPane.darkShadow", background.darker());
+
+        // The Windows desktop-colour keys (see JIDE_DARK_KEYS). Surfaces take
+        // the panel colour, the selected tab and side-pane button the same
+        // raised tone as a selected toolbar button, and hover the menu
+        // selection colour so a hovered item reads like a selected one.
+        java.awt.Color hover = orDefault(
+            UIManager.getColor("MenuItem.selectionBackground"), activeTitleBackground);
+        UIManager.put("Content.background", background);
+        UIManager.put("JideLabel.background", background);
+        UIManager.put("StatusBar.background", background);
+        UIManager.put("HeaderBox.background", background);
+        UIManager.put("PopupMenuSeparator.background", background);
+        UIManager.put("JideTabbedPane.selectedTabBackground", selected);
+        UIManager.put("SidePane.buttonBackground", background);
+        UIManager.put("SidePane.selectedButtonBackground", selected);
+        UIManager.put("CollapsiblePane.emphasizedBackground", activeTitleBackground);
+        UIManager.put("Menu.mouseHoverBackground", hover);
+        UIManager.put("CheckBoxMenuItem.mouseHoverBackground", hover);
+        UIManager.put("RadioButtonMenuItem.mouseHoverBackground", hover);
     }
 
     /** Log which UI/painter actually drives the dock title bars right now. */

@@ -38,6 +38,30 @@ class DegradedMessageTest {
     }
 
     @Test
+    @DisplayName("a failure that knows its fix says so, ahead of the log pointer")
+    void carriesTheHintAheadOfTheLog() {
+        String message = ThemeManager.degradedMessage(
+            true, Collections.singletonList("tokens"), 20, IaColorTokens.OPENING_HINT);
+
+        // The one failure a user can fix from the status bar must not send
+        // them to the log to find that out.
+        assertTrue(message.contains("--add-opens java.desktop/java.awt=ALL-UNNAMED"), message);
+        assertTrue(message.contains("Designer Launcher"), message);
+        assertTrue(message.indexOf("--add-opens") < message.indexOf("Details in"), message);
+        assertTrue(message.contains("). The Designer's JVM"),
+            "the hint should read as its own sentence: " + message);
+    }
+
+    @Test
+    @DisplayName("without a hint the summary is unchanged")
+    void noHintNoSentence() {
+        String message = ThemeManager.degradedMessage(
+            true, Collections.singletonList("tokens"), 20, null);
+
+        assertTrue(message.contains("(tokens). Details in"), message);
+    }
+
+    @Test
     @DisplayName("the summary points at the log that holds the stack traces")
     void pointsAtTheLog() {
         String message = ThemeManager.degradedMessage(

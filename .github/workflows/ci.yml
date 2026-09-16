@@ -14,9 +14,9 @@ jobs:
   build:
     name: Build & test
     runs-on: ubuntu-latest
-    # Normal runs finish in two to three minutes; the cap stops a wedged job
-    # from burning the 6-hour GitHub default. The harness steps have their own,
-    # shorter watchdog (see below), so hitting this cap means something else.
+    # Normal runs finish in well under a minute; the cap stops a wedged job
+    # from burning the 6-hour GitHub default. The harness runs in its own
+    # matrix job below, with its own watchdog.
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
@@ -50,48 +50,6 @@ jobs:
         env:
           ORG_GRADLE_PROJECT_org.gradle.java.installations.auto-download: "false"
 
-      # Not part of `build`: the harness resolves the whole Designer dependency
-      # tree at runtime and needs its own JDK module openings, so `check` should
-      # not drag it in by accident. It still has to run somewhere, or it rots —
-      # and it is the only check here that exercises the switch sequence against
-      # the real Synthetica/JIDE/FlatLaf interaction rather than against stubs.
-      # Headless by construction; no display is set up for it on purpose.
-      # Twice, on purpose (#53). The module reaches Ignition and JIDE internals
-      # by NAME — classes, fields, methods that no compiler checks — so it has
-      # to be exercised against both ends of what it claims to support:
-      # 8.3.0 is the floor in requiredIgnitionVersion, and the default is the
-      # current release, which is what people actually run. A rename in a
-      # recent 8.3.x is invisible if you only ever test the floor.
-      #
-      # Through a watchdog, not plain gradlew: since #85 the harness hangs in
-      # roughly half of runs (inside PropertyKeyFieldTest; not reproducible
-      # locally), and a job that sits until timeout-minutes cancels it leaves
-      # no evidence. The wrapper thread-dumps every Gradle JVM after five
-      # minutes and fails the step, so a hang shows up as a red step with a
-      # stack in the log and in the artifact below.
-      - name: Headless look-and-feel harness (current Ignition)
-        run: ops/laf-harness-watchdog.sh
-        env:
-          ORG_GRADLE_PROJECT_org.gradle.java.installations.auto-download: "false"
-
-      - name: Headless look-and-feel harness (support floor)
-        run: ops/laf-harness-watchdog.sh -Pharness.sdk=8.3.0
-        env:
-          ORG_GRADLE_PROJECT_org.gradle.java.installations.auto-download: "false"
-
-      # Thread dumps from the watchdog, JUnit's per-test results (which carry
-      # its own timeout dump in <system-out>), and the module's debug log.
-      - name: Upload harness diagnostics
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: laf-harness-diagnostics
-          if-no-files-found: ignore
-          path: |
-            build/laf-harness-threads-*.txt
-            designer/build/test-results/lafHarness/
-            designer/build/laf-harness-debug.log
-
       # Cheap guard on the two things most likely to regress silently in
       # module.xml: the EULA reference and the free-module flag. Both are set
       # in build.gradle.kts and neither has a test that would catch a
@@ -108,3 +66,91 @@ jobs:
             || { echo "::error::module.xml no longer declares freeModule=true"; exit 1; }
           unzip -l "$modl" | grep -q 'license.html' \
             || { echo "::error::license.html was not staged into the .modl"; exit 1; }
+
+  harness:
+    name: LaF harness (${{ matrix.os }})
+    # Not part of `build`: the harness resolves the whole Designer dependency
+    # tree at runtime and needs its own JDK module openings, so `check` should
+    # not drag it in by accident. It still has to run somewhere, or it rots —
+    # and it is the only check here that exercises the switch sequence against
+    # the real Synthetica/JIDE/FlatLaf interaction rather than against stubs.
+    # Headless by construction; no display is set up for it on purpose.
+    #
+    # On all three operating systems, because the module has only ever been
+    # watched on macOS and the things that differ per platform — which JDK
+    # packages the JVM opens, which font FlatLaf resolves, how Java2D
+    # rasterises — are things the harness sees and a Linux-only run does not.
+    # fail-fast is off so one platform's failure still shows the other two.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    # Resolving the Designer's dependency tree is the slow part, and the
+    # Windows runner is the slow platform.
+    timeout-minutes: 25
+    defaults:
+      run:
+        # Git Bash on Windows, so `./gradlew` and the flags read the same on
+        # every row of the matrix.
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Cache Gradle
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*') }}
+          restore-keys: gradle-${{ runner.os }}-
+
+      # Twice, on purpose (#53). The module reaches Ignition and JIDE internals
+      # by NAME — classes, fields, methods that no compiler checks — so it has
+      # to be exercised against both ends of what it claims to support:
+      # 8.3.0 is the floor in requiredIgnitionVersion, and the default is the
+      # current release, which is what people actually run. A rename in a
+      # recent 8.3.x is invisible if you only ever test the floor.
+      #
+      # Through a watchdog, not plain gradlew (#94): a hang used to sit until
+      # the job cap cancelled it, leaving nothing to read. The wrapper
+      # thread-dumps every Gradle JVM after the deadline and fails the step.
+      # The deadline is raised from its 300 s default because the Windows and
+      # macOS runners resolve the whole Designer dependency tree cold, which
+      # alone takes a few minutes; a healthy warm run is ~35 s. Where pgrep is
+      # missing (Git Bash on Windows) the watchdog still fails the step, just
+      # without a jstack — JUnit's own per-test timeout dump, which runs
+      # inside the test JVM, covers that case on every platform.
+      - name: Headless look-and-feel harness (current Ignition)
+        run: ops/laf-harness-watchdog.sh
+        env:
+          HARNESS_DEADLINE_SECONDS: "900"
+          ORG_GRADLE_PROJECT_org.gradle.java.installations.auto-download: "false"
+
+      - name: Headless look-and-feel harness (support floor)
+        run: ops/laf-harness-watchdog.sh -Pharness.sdk=8.3.0
+        env:
+          HARNESS_DEADLINE_SECONDS: "900"
+          ORG_GRADLE_PROJECT_org.gradle.java.installations.auto-download: "false"
+
+      # Thread dumps from the watchdog, JUnit's per-test results (full stack
+      # traces, and its own timeout dump in <system-out>), and the module's
+      # debug log — whose environment block is what a failing platform is
+      # read against.
+      - name: Upload harness diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: laf-harness-${{ matrix.os }}
+          if-no-files-found: ignore
+          path: |
+            build/laf-harness-threads-*.txt
+            designer/build/test-results/lafHarness/
+            designer/build/laf-harness-debug.log

@@ -152,5 +152,11 @@ val lafHarnessTask = tasks.register<Test>("lafHarness") {
         // standardOut/standardError: the harness prints almost nothing, and
         // JUnit's timeout thread dump goes through the test JVM's streams.
         events("passed", "skipped", "failed", "standardOut", "standardError")
+        // Full traces, because the harness runs on platforms nobody has a
+        // shell on. Gradle's short format keeps the top frame only, and the
+        // first Windows run failed 58 tests with "HeadlessException at
+        // ThemeSwitchCycleTest.java:51" — the harness's own line, not the
+        // frame inside Synthetica that threw, which is the one that matters.
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
     }
 }

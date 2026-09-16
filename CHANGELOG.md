@@ -83,6 +83,20 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   caught the Linux bug below. Covers both write sites and an unwritable
   backing store.
 
+- **The debug log opens with an environment block.** OS, JRE, the
+  module-system and look-and-feel JVM arguments, which `java.desktop`
+  packages the launcher opened, scaling, Synthetica's scale factor and font,
+  and the `UIManager` font on either side of every switch. A bug report from
+  Windows or Linux now carries the evidence instead of the guesswork.
+- **The headless harness runs on Windows and macOS in CI**, not only Linux,
+  with the debug log uploaded per platform.
+- **A status-bar hint when the JVM has not opened `java.awt`.** The design
+  tokens are restyled by rewriting `Color` instances in place, which needs
+  `--add-opens java.desktop/java.awt=ALL-UNNAMED` from the Designer Launcher —
+  observed on macOS, unverified elsewhere. Without it every token-coloured
+  surface stayed light with nothing to say why. Now the status line names the
+  argument and where it goes.
+
 ### Changed
 
 - **CI's harness steps run under a watchdog that thread-dumps a hang.** Since
@@ -104,6 +118,10 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   README's prior-art section now presents it as an alternative on 8.3 rather
   than the 8.1 counterpart, and the contributing guide and QA checklist say
   which release the borrowed class catalogue came from.
+
+- The native **title bar and window frame stay light on Windows and Linux**,
+  by decision. The QA checklist gained an OS column and the three surfaces
+  that only exist off macOS.
 
 ### Fixed
 
@@ -200,6 +218,12 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   being true in 0.2.0, and its deep link into `ThemeManager` pointed at a line
   the file no longer has — now named by method instead, so it cannot drift
   again.
+
+- **Dark mode keeps the Designer's font.** FlatLaf substituted the operating
+  system's UI font (`Dialog 12` → `Helvetica Neue 13` on macOS; Segoe UI at
+  the desktop's size on Windows), so every toggle changed text metrics, not
+  just colours. The stock font is now pinned across the switch, and the pin
+  carries Synthetica's scale factor with it on a scaled display.
 
 ## [0.2.0] - 2026-09-01
 
