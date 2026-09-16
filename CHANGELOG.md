@@ -118,6 +118,12 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   README's prior-art section now presents it as an alternative on 8.3 rather
   than the 8.1 counterpart, and the contributing guide and QA checklist say
   which release the borrowed class catalogue came from.
+- The [QA checklist](docs/QA-CHECKLIST.md) now carries the surfaces that
+  script's 1.3.0 release added on top of the 8.1-era catalogue: seven new rows
+  (Vision binding editor, security panel, template custom properties, Easy
+  Chart and Tab Strip customizers, and the gateway message handler dialog), a
+  note on the Perspective binding-icon fix, and the matching entries in the
+  "still unchecked" table. All are unverified until someone opens them.
 
 - The native **title bar and window frame stay light on Windows and Linux**,
   by decision. The QA checklist gained an OS column and the three surfaces

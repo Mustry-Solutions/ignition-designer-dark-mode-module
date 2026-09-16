@@ -9,9 +9,12 @@ Exchange script, which enumerates 291 class names across 13 dispatch lists,
 each annotated with where it lives in the UI. The catalogue was taken from the
 script's 8.1-era release, and many of those class names have shifted on 8.3 —
 **the UI locations have not**, so the locations are what this checklist
-tracks. (The script's 1.3.0 release, September 2026, targets 8.3 itself; its
-class lists have not been re-diffed against this checklist.) Gratefully
-acknowledged; see [Prior art](../README.md#prior-art).
+tracks. The script's 1.3.0 release (3 September 2026) targets 8.3 itself; it
+was diffed against 1.0.6 on 2026-09-15 and adds 24 class names, all on Vision
+customizers, the Vision binding and security dialogs, and the gateway message
+handler dialog. Those are now rows here, marked **(1.3.0)** and unverified.
+It also stops forcing a foreground on the Perspective binding icons (see §E).
+Gratefully acknowledged; see [Prior art](../README.md#prior-art).
 
 This module themes top-down (look-and-feel swap plus token mutation) rather than
 by painting enumerated classes, so most of these should already be dark. The
@@ -153,6 +156,7 @@ check an editor of each kind rather than assuming "the editors" are covered.
 | Script editor gutter, autocomplete popup | Type inside any script editor | `pass` | `2026-08-31` | `system.` + Ctrl+Space in the Script Console. The list and the attribute pane are dark; the enclosing `AutoCompletePopupWindow` window is still `#EEEEEE` explicit, which does not show at this size |
 | Script Console | Tools → Script Console | `pass` | `2026-08-31` | both panes |
 | Gateway Events editor | Project Browser → Scripting → Gateway Events | — | — | |
+| Message handler dialog **(1.3.0)** | Gateway Events → Message → add or edit a handler **(unverified)** | — | — | 1.3.0 added `MessageHandlerEditor$MessageHandlerConfigPanel` and `SecurityPanel` for this dialog |
 | Client/Session Events editor | Project Browser → Scripting → … Events | — | — | |
 
 ## E. Perspective
@@ -162,6 +166,7 @@ check an editor of each kind rather than assuming "the editors" are covered.
 | View editor canvas | Open any view | — | — | `n/a` on 2026-08-31 only because the dev project had no views. A saved view (`qa-dark-mode`) exists since 2026-09-01, so this is now an ordinary unchecked row, not a gap in the Designer |
 | Component palette | Right dock | — | — | Guard hierarchy walks against `FilterablePalette` (see [Out of scope](#out-of-scope)) |
 | Property editor tree | Right dock, view open | `pass` | `2026-09-01` | Checked properly this time, with a view open: PROPS/CUSTOM/PARAMS, value colouring, Add Property links |
+| Binding and add-member icons in that tree **(1.3.0)** | Hover and click the binding icon and the `+` on an object property | — | — | The Exchange's 1.3.0 fix: it had been forcing white on `ComponentScopeEditor$BindingCompatibleNodeEditor$BindingControl` on every hover, which broke the icon's own states, and it now leaves that class alone (it also forces every `IconButton` visible). We restyle tokens rather than components, so this may already be fine, but nobody has looked at the icon *states*, only the tree |
 | Property key editor field | Click a property name | — | — | The name's text colour is now lifted by class (see the row below); check that editing a key still shows light text and that the light restore puts black back |
 | Property NAMES (Session Props, PROPS) | Right dock, Perspective selected or a view open | `fixed` | `2026-09-15` | Black on dark, ~1.9:1, raised on the forum against the 0.1.0 announcement screenshot and still black in the 0.2.0 README screenshot — the 2026-09-01 `pass` above missed it. Headless proof in `PropertyKeyFieldTest`; confirmed by eye on 8.3.6, light under dark and black again after the switch back |
 | Binding editor dialog | Click a property's binding icon | — | — | Still unchecked: needs a component on the canvas, and adding one needs a palette drag the automation cannot do |
@@ -180,7 +185,12 @@ check an editor of each kind rather than assuming "the editors" are covered.
 | Layout dialog | Right-click a component → Layout **(unverified)** | — | — | |
 | Size and Position dialog | Right-click a component → Size and Position **(unverified)** | — | — | |
 | Dataset editor dialog | A dataset property → edit | `pass` | `2026-08-29` | |
-| Custom property editor | Component → custom properties | — | — | |
+| Custom property editor | Component → custom properties | — | — | 1.3.0 names `DynamicPropertyProviderCustomizer` and `CustomPropertyEditPanel` here |
+| Template custom properties **(1.3.0)** | Open a template → Custom Properties **(unverified)** | — | — | Separate internal and external panels (`PublicPrivateCustomPropertyCustomizer`, `$1`, `$2`) |
+| Binding editor dialog **(1.3.0)** | Property Inspector → a property's binding icon, every binding type **(unverified)** | — | — | 1.3.0 added the Cell Update binding (`CellUpdateBindingConfigurator`) and the colour state table (`ColorStateConfig`) to its list. The other configurators were already on the 8.1 list |
+| Security panel **(1.3.0)** | Right-click a component → Security **(unverified)** | — | — | Justin's "security panel text not readable" fix: `ComponentSecurityPanel$1` and the `TristateCheckboxList`, whose parent is what carries the background. Check the tri-state boxes are legible |
+| Easy Chart customizer, last tab **(1.3.0)** | Easy Chart → Customizers → Easy Chart Customizer → last tab **(unverified)** | — | — | `EasyChartCustomizer$DynamicGroupPanel` |
+| Tab Strip customizer **(1.3.0)** | Tab Strip → Customizers → Tab Strip Customizer **(unverified)** | — | — | `TabStripCustomizer`, `TabAttributesPanel` (+`$GeneralPanel`, `$SelectedOrUnselectedPanel`), `PropertiesPanel`, `PreviewPanel`. 1.3.0 also rewrites the strip's own `tabData` (`SELECTED_BACKGROUND_COLOR`) on `PMITabStrip`. That is a component's *data*, the same rule as the canvas, so the preview strip is a `skip` for us if it stays light |
 
 ## G. Alarm notification pipelines
 
@@ -626,6 +636,8 @@ these is a real gap, not a pass.
 | §E binding editor, component scope picker, style editor | **The view is no longer the blocker** — a saved view (`qa-dark-mode`) exists in the dev project, so the editor opens. What is still missing is a component dropped on that view: it needs a palette drag the automation cannot do, and the Perspective palette was not docked in the layout used | A component dropped on the view, by hand |
 | §H Reporting, Preview and Schedule tabs | The dev project now HAS a report (`qa-report`, saved 2026-09-01), and Report Overview, Data and Design were swept on it in both modes — that sweep is what found #59. Preview and Schedule were not opened | Open the last two tabs on `qa-report` |
 | §F border chooser, Layout, Size and Position | Need a Vision window with a component selected | A Vision window, by hand |
+| §F the **(1.3.0)** rows: binding editor, security panel, template custom properties, Easy Chart and Tab Strip customizers | Added 2026-09-15 from the Exchange script's 1.3.0 diff, never opened under this module. Each needs a Vision window with a component of that type on it | A Vision window with a template, an Easy Chart and a Tab Strip, by hand |
+| §D message handler dialog | Also from the 1.3.0 diff | Open Gateway Events → Message and add a handler |
 | ~~Relaunch-comes-up-stock~~ | **Run 2026-09-01 and passed.** Toggled off, relaunched, confirmed the Designer comes up genuinely stock, toggled back. Recorded rather than deleted because the run doubles as the baseline half of the comparison in [Compare against a relaunched Designer](#compare-against-a-relaunched-designer-before-calling-something-a-bug) | — |
 | §E view editor rulers and surround | Not a gap in testing — an undecided question. They are chrome and they stay light | A decision |
 | **Everything, on Windows and Linux** | Every run above is macOS. The headless harness runs on all three platforms in CI, which proves the switch sequence and the reflective reach — not what anything looks like. The three rows marked *(Windows, Linux)* in §A and §B are surfaces that exist only there | A Designer sitting on each, walking this checklist, with the `env:` block from the log kept alongside the run. A 150% display on Windows and a HiDPI desktop on Linux would settle the scaling question in [ARCHITECTURE](ARCHITECTURE.md#gotchas-and-hard-won-facts) at the same time |
