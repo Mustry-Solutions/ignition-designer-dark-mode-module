@@ -215,6 +215,11 @@ class ReflectiveSurfaceTest {
             method(missing, BlockWorkspaceTheme.BASIC_BLOCK_UI, "set" + property, Color.class);
         }
 
+        // --- TreeIconRecolorer: the tint an IA SVG glyph was built with -----
+        // (#79 follow-up: glyphs tinted with a restyled token are left alone)
+        fields(missing, "com.inductiveautomation.ignition.client.icons.SvgIconUtil$AbstractSvgIcon",
+            TreeIconRecolorer.SWAP_COLOR_FIELD);
+
         // --- CellRendererSanitizer + IaColorTokens reach into the JDK -------
         // These break on a JDK upgrade rather than an Ignition one, and the
         // module already fails soft on them — but silently, so they belong here.

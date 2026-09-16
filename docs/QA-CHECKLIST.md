@@ -453,6 +453,63 @@ Anywhere IA uses `InlineTipLabel` is affected; Diagnostics is just where this
 run happened to look. Note that the plain "Tip:" line at the
 bottom of **Image Management** is a different, ordinary label and is `pass`.
 
+### Event Stream section cards (`FlowCellContent`) — fixed, awaiting a visual check
+
+Reported 2026-09-02 by a user on macOS
+([#79](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/79)).
+In an **Event Stream** editor, the strip of sections across the top (Source,
+Encoder, Filter, Transform, Handler) highlights the selected section with a
+pale rounded card, and the section name on it ("Tag Event") is **illegible**.
+Hovering a section does the same with a paler card.
+
+The reporter's own inspector dump comes back clean, exactly as the tip banner
+above: `FlowCellContent bg=#3C3F41|uires fg=#DDDDDD|uires`. The card is not
+the background. `FlowCellContent.paintSelected` does `fillRoundRect` and
+`drawRoundRect` straight onto the Graphics from four `private static final`
+literals — `SELECTED_BACKGROUND` **#DDE5EB**, `SELECTED_BORDER` #BBBBBB,
+`HOVER_BACKGROUND` #EBEFF2, `HOVER_BORDER` #CCCCCC (verified against the
+8.3.0, 8.3.6 and 8.3.8 jars). The name is a plain `JLabel` on
+`Label.foreground`, #DDDDDD under dark mode: a luminance gap of 6.
+
+Fixed by darkening the card, not the text: the four literals joined
+`IaColorTokens.CLASS_DARK`, which already mutates the welcome workspace's
+identical #DDE5EB tile selection in place. `FlowCellSelectionTest` in the
+headless harness renders a section under dark mode and reads the pixels, so
+the illegibility reproduces and the fix is proven without a Designer. What it
+cannot prove is how the card looks in context — a section strip with a live
+selection, the hover, and the disabled placeholder slots — which is the
+remaining visual check.
+
+### Event Stream Enabled / Disabled toggles — fixed, awaiting a visual check
+
+Found 2026-09-15 while checking the section-card fix above: the icons on the
+**Enabled** / **Disabled** toggles at the top right of an Event Stream editor,
+and the show-test-panel button beside them, are barely visible.
+
+`EventStreamResourceEditorPanel` builds all three as `JToggleButton`s with
+`SvgIconUtil.getIcon(name, 16, 16, IgnitionLookAndFeel$Colors.IconDefault)`
+(same in the 1.3.6 jar the gateway ships and the 1.3.8 in the SDK). The icon
+keeps that `Color` as its paint, and the token pass restyles the `IconDefault`
+instance in place — so the glyph renders light on its own, measured **174** in
+the harness. `TreeIconRecolorer.recolorButtonIcons` then hands it to the smart
+invert like any other button icon, and a light neutral glyph comes out of the
+invert at **111**: the dim grey on screen. Same result whether the editor was
+built before or after the switch.
+
+Fixed by leaving alone any IA SVG glyph whose tint is a token instance the
+token pass restyles (identity, not brightness — the QuickFilterField disc from
+#60 is a light glyph that must still be inverted). `TokenTintedButtonIconTest`
+covers both orderings headlessly. The remaining check is visual: the three
+toggles in a live editor, and that no other token-tinted glyph regressed.
+
+While clicking around the same editor an `AWT-EventQueue-0` NPE surfaced in the
+Output Console: `StatusSectionDiagnosticsCreator.addSourceDiagnostics` on a null
+`diagnostics`. That is IA's `StatusSectionPanelViewModel.onActivate` reading the
+gateway's diagnostics for a stream the gateway is not running — a new, unsaved
+stream ("changes pending, save to see updates") or a disabled one — and not a
+theming problem; the stack is entirely IA code and the module is not on it.
+The seeded `Dark Mode Check` stream is enabled so its Status section has data.
+
 ### SQL editors (JIDE `CodeEditor`) — fixed in 0.2.0
 
 Found 2026-08-31 in **Tools → Database Query Browser**. The editor's background
