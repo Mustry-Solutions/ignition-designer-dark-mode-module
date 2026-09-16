@@ -138,6 +138,23 @@ harness a proper windowed mode, and it has two traps:
   and without it the render dies with an `InaccessibleObjectException` that
   looks nothing like a theming problem.
 
+**The harness can pretend to be Windows.** [#81][81] only happened on Windows,
+and for a reason no macOS or Linux run could see: JIDE does not recognise
+FlatLaf, so `LookAndFeelFactory.installJideExtension(VSNET_STYLE)` picks its
+table of tab defaults by `SystemInfo.isWindows()`, and the Windows table reads
+the OS's 3D colours through `Toolkit.getDesktopProperty` (`win.3d.lightColor`,
+`win.3d.shadowColor`, ...) rather than anything the look and feel defines.
+Both inputs are reachable headlessly: the OS check is a plain static boolean
+and the desktop lookups consult the default toolkit's `desktopProperties` map
+first, so `WorkspaceTabStripTest` flips the one and seeds the other with the
+standard Windows light-theme values, then puts both back. That is a faithful
+reproduction, not an approximation — before the fix it rendered the reporter's
+selected tab at exactly the #E3E3E3 in their screenshot. Whenever an issue
+says "Windows only", try this before asking the reporter for another
+screenshot. (Building a `JideTabbedPane` headlessly needs
+`isDragOverDisabled()` to return true, or its delegate registers a
+`DropTarget` and throws.)
+
 **Component state is its own instrument, separate from the defaults diff.**
 `LightRestoreComponentStateTest` ([#45][45]) snapshots what components and cell renderers
 actually hold — background, foreground, border, UI delegate — before and after a
@@ -240,6 +257,7 @@ judgment calls into a rule with four exceptions. [#22][22] was two of these
 
 [42]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/42
 [45]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/45
+[81]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/81
 [14]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/14
 [19]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/19
 [21]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/21

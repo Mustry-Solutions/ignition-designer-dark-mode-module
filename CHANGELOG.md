@@ -29,6 +29,24 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ### Fixed
 
+- **On Windows, the selected workspace tab stayed light with light text on
+  it** ([#81](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/81)) —
+  the row of open-resource tabs along the bottom of the Perspective, script,
+  named query, report and Web Dev editors. JIDE does not recognise FlatLaf, so
+  when the module reinstalls its extension it picks the table of tab defaults
+  by operating system: everywhere else that table derives the tab colours
+  from the look and feel and comes out dark, but on Windows it reads the OS's
+  own 3D colours (`win.3d.lightColor` #E3E3E3, `win.3d.shadowColor` #A0A0A0,
+  black button text) and never looks at FlatLaf at all. The selected tab is
+  filled from `JideTabbedPane.light`, hence #E3E3E3 under a dark strip, while
+  the label on it was lifted to light along with every other dark foreground.
+  Every colour the tab delegate reads is now pinned from the dark palette, so
+  the strip looks the same on every OS. macOS and Linux fills are unchanged;
+  the tab text there was #7A7D7F on #2F3031 (about 3:1) and is now the label
+  foreground. Reproduced and verified headlessly: the harness can now simulate
+  the Windows path on any OS (`WorkspaceTabStripTest`), and rendered the
+  reporter's exact colours before the fix. Not yet confirmed by eye on a
+  Windows Designer.
 - **The dark mode choice could be lost on Linux** if the Designer was
   force-quit, killed or crashed shortly after toggling. `ThemeManager` wrote
   the preference but never flushed it, and on Linux the backing store

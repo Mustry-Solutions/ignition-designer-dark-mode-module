@@ -778,6 +778,19 @@ public class ThemeManager {
         // A key named "darkShadow" holding #DDDDDD. Whatever it draws, a light
         // shadow under a dark theme is wrong on its face.
         "JideTabbedPane.darkShadow",
+        // The workspace tab strip — the row of open-resource tabs under the
+        // Perspective, script, named query, report and Web Dev editors (#81).
+        // See applyJideDarkOverrides for why these are platform-dependent
+        // unless pinned.
+        "JideTabbedPane.light",
+        "JideTabbedPane.highlight",
+        "JideTabbedPane.shadow",
+        "JideTabbedPane.selectedTabBackground",
+        "JideTabbedPane.tabAreaBackgroundLt",
+        "JideTabbedPane.tabAreaBackgroundDk",
+        "JideTabbedPane.foreground",
+        "JideTabbedPane.selectedTabTextForeground",
+        "JideTabbedPane.unselectedTabTextForeground",
     };
 
     /**
@@ -851,6 +864,37 @@ public class ThemeManager {
         UIManager.put("SidePane.foreground", foreground);
         UIManager.put("CommandBarSeparator.background", border);
         UIManager.put("JideTabbedPane.darkShadow", background.darker());
+
+        // The workspace tab strip (#81). installJideExtension(VSNET_STYLE) does
+        // not recognise FlatLaf, and on that path LookAndFeelFactory picks the
+        // default table BY OPERATING SYSTEM: VsnetMetalUtils everywhere else,
+        // which derives the tab colours from the look and feel's control*
+        // colours and so comes out dark, but VsnetWindowsUtils on Windows,
+        // which reads the OS's own 3D colours through WindowsDesktopProperty
+        // (win.3d.lightColor #E3E3E3, win.3d.shadowColor #A0A0A0,
+        // win.button.textColor black) and never looks at FlatLaf at all.
+        // BasicJideTabbedPaneUI wires "light" into its _highlight field, and
+        // VsnetJideTabbedPaneUI.installBackgroundColor uses that as both stops
+        // of the selected tab's fill for SHAPE_VSNET — so on Windows the
+        // selected tab stayed #E3E3E3 under a dark strip while the text on it
+        // was lifted to light with everything else. Pin every colour the
+        // delegate reads so the strip looks the same on every OS. The fill
+        // values mirror what the non-Windows table derives from FlatLaf, so
+        // macOS and Linux are unchanged; the text was #7A7D7F (controlDkShadow,
+        // about 3:1 on the fill) on every OS and is now the label foreground.
+        java.awt.Color selectedTab = orDefault(
+            UIManager.getColor("controlHighlight"), new java.awt.Color(0x2F3031));
+        java.awt.Color tabEdge = orDefault(
+            UIManager.getColor("controlLtHighlight"), new java.awt.Color(0x232324));
+        UIManager.put("JideTabbedPane.light", selectedTab);
+        UIManager.put("JideTabbedPane.highlight", tabEdge);
+        UIManager.put("JideTabbedPane.shadow", border);
+        UIManager.put("JideTabbedPane.selectedTabBackground", background);
+        UIManager.put("JideTabbedPane.tabAreaBackgroundLt", background);
+        UIManager.put("JideTabbedPane.tabAreaBackgroundDk", background);
+        UIManager.put("JideTabbedPane.foreground", foreground);
+        UIManager.put("JideTabbedPane.selectedTabTextForeground", foreground);
+        UIManager.put("JideTabbedPane.unselectedTabTextForeground", foreground);
     }
 
     /** Log which UI/painter actually drives the dock title bars right now. */
