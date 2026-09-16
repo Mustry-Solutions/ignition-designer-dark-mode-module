@@ -102,9 +102,10 @@ dumped to
 - Never mutate `Base000`: it is the `java.awt.Color.WHITE` instance itself, and
   corrupting it breaks white JVM-wide.
 - Prior art matters here. The Ignition Exchange has a
-  [dark mode script for 8.1](https://inductiveautomation.com/exchange/2719/overview)
-  (MIT, Justin Edwards) that maps many of the Designer's light surfaces. If you
-  port code from it, say so in the commit and keep the MIT attribution.
+  [dark mode script](https://inductiveautomation.com/exchange/2719/overview)
+  (MIT, Justin Edwards; 8.1 since 2024, 8.3 since its 1.3.0 release) that maps
+  many of the Designer's light surfaces. If you port code from it, say so in
+  the commit and keep the MIT attribution.
 - A theming change wants a look at the surfaces around it, not just the one
   reported. [docs/QA-CHECKLIST.md](docs/QA-CHECKLIST.md) is the sweep — walk the
   affected section, and the whole thing before a release.

@@ -70,6 +70,31 @@ public class ThemeManager {
     private final DesignerStatus status = new DesignerStatus();
 
     /**
+     * Keeps dark mode away from Vision resources — see {@link VisionGate} for
+     * why a FlatLaf Designer corrupts every Vision window it saves.
+     */
+    private final VisionGate visionGate;
+
+    /** The Vision explanation dialog is shown once per session; the status bar repeats it. */
+    private boolean visionNoticeShown;
+
+    /**
+     * A Vision window was attached under dark mode and the drop-out is already
+     * queued. Every template instance inside a window is its own Vision
+     * top-level, and each one is attached separately, so without this the
+     * watcher would log and queue once per template.
+     */
+    private boolean visionDropPending;
+
+    /**
+     * Set by {@link #shutdown}. The Designer rebuilds module menus during its
+     * own teardown, after which nothing may start a switch: a queued
+     * {@code apply(true)} would otherwise run against a module that has
+     * already restored the stock theme and closed its log.
+     */
+    private boolean shutDown;
+
+    /**
      * Told when a switch starts and when it ends, so the Tools menu can follow
      * the theme actually in effect rather than the one that was asked for.
      */
@@ -98,6 +123,13 @@ public class ThemeManager {
      * when the switch only partly worked.
      */
     private final java.util.List<String> failedPhases = new java.util.ArrayList<>();
+
+    /**
+     * What the user can do about a failed phase, when there is something.
+     * Set by {@link #safely} for the failures that carry one (a JVM that has
+     * not opened {@code java.awt}); null otherwise. Cleared per switch.
+     */
+    private String failureHint;
     private int attemptedPhases;
 
     /**
@@ -148,6 +180,13 @@ public class ThemeManager {
      */
     ThemeManager(Preferences prefs) {
         this.prefs = prefs;
+        this.visionGate = new VisionGate(() -> context == null ? null : context.getFrame());
+    }
+
+    /** Test seam: a gate whose verdict the test controls. */
+    ThemeManager(Preferences prefs, VisionGate visionGate) {
+        this.prefs = prefs;
+        this.visionGate = visionGate;
     }
 
     /** Register the menu's listener before {@link #startup}. */
@@ -174,7 +213,9 @@ public class ThemeManager {
 
     /** Called on module shutdown; puts the Designer back the way we found it. */
     public void shutdown() {
+        shutDown = true;
         onEdt(() -> {
+            visionGate.unwatchNavigation();
             inspector.uninstall();
             apply(false);
         });
@@ -185,6 +226,10 @@ public class ThemeManager {
     }
 
     public void setDark(boolean dark) {
+        if (shutDown) {
+            DebugLog.detail("setDark(" + dark + ") after shutdown; ignored.");
+            return;
+        }
         savePreference(dark);
         onEdt(() -> {
             if (!uiReady) {
@@ -208,17 +253,47 @@ public class ThemeManager {
      * reasonably concludes the click did not register.
      */
     private void beginSwitch(boolean dark) {
+        if (dark && visionWins()) {
+            return;
+        }
         stateListener.switchStarted();
         status.message(dark
             ? "Applying dark mode\u2026"
             : "Restoring the stock Designer theme\u2026");
         SwingUtilities.invokeLater(() -> {
+            // Asked again, because a turn has passed: a click on a Vision
+            // window queued behind the menu click selects the Vision workspace
+            // in that turn, and the answer above is stale by the time the
+            // theme is actually installed.
+            if (dark && visionWins()) {
+                return;
+            }
             try {
                 apply(dark);
             } finally {
                 finishSwitch();
             }
         });
+    }
+
+    /**
+     * Whether Vision is in play, and if so what to do about a request for
+     * dark mode: refuse it while the Designer is light, or drop dark mode if
+     * it is somehow already on (a menu rebuild re-asserting the preference).
+     *
+     * @return true when the switch must not go ahead
+     */
+    private boolean visionWins() {
+        String reason = visionGate.blockingReason();
+        if (reason == null) {
+            return false;
+        }
+        if (isDarkActive()) {
+            leaveDarkForVision(reason, false);
+        } else {
+            refuseDark(reason);
+        }
+        return true;
     }
 
     /**
@@ -236,6 +311,71 @@ public class ThemeManager {
         boolean darkActive = isDarkActive();
         savePreference(darkActive);
         stateListener.switchFinished(darkActive);
+    }
+
+    /**
+     * The user asked for dark mode with Vision in play. Say why not, where they
+     * are looking, and square the preference and the menu with the light theme
+     * that is staying — {@link #setDark} has already written "dark".
+     */
+    private void refuseDark(String reason) {
+        String message = VisionGate.refusalMessage(reason);
+        log.info(message);
+        DebugLog.log("Vision gate: " + message);
+        status.message(message);
+        finishSwitch();
+        visionGate.explain(message);
+    }
+
+    /**
+     * Vision is about to be edited under dark mode; leave it now.
+     *
+     * <p>Synchronous on purpose. The navigation listener calls this while the
+     * Vision workspace is being selected, and the window a double click is
+     * about to open is deserialized in the very next event. A deferred restore
+     * could land after that, which is the round trip this exists to prevent.
+     *
+     * <p>The saved preference is left alone. Nothing failed: the user still
+     * prefers dark, the Designer is light only while Vision is in play, and
+     * the next launch away from Vision should come up dark again — the same
+     * rule {@link #applyStartupPreference} applies to a launch onto Vision.
+     * Only the menu follows the screen.
+     *
+     * <p>Nothing may escape: the navigation listener runs inside the
+     * {@code WorkspaceManager}'s own selection, and an exception there leaves
+     * the previous workspace's dock frames showing and its "selected" event
+     * unfired.
+     *
+     * @param windowAlreadyOpen the trigger was a window reaching the tree,
+     *                          not the workspace being selected — too late to
+     *                          keep FlatLaf out of it, so the user is told to
+     *                          close and reopen it
+     */
+    void leaveDarkForVision(String reason, boolean windowAlreadyOpen) {
+        if (!isDarkActive()) {
+            return;
+        }
+        try {
+            DebugLog.log("Vision gate: leaving dark mode because " + reason + ".");
+            stateListener.switchStarted();
+            status.message("Turning dark mode off: " + reason + "\u2026");
+            try {
+                apply(false);
+            } finally {
+                stateListener.switchFinished(isDarkActive());
+            }
+            String message = VisionGate.dropOutMessage(reason, windowAlreadyOpen);
+            log.info(message);
+            status.message(message);
+            if (!visionNoticeShown) {
+                visionNoticeShown = true;
+                // After the restore has painted, not in the middle of it.
+                SwingUtilities.invokeLater(() -> visionGate.explain(message));
+            }
+        } catch (Throwable t) {
+            log.warn("Leaving dark mode for Vision failed.", t);
+            DebugLog.log("Vision gate: leaving dark mode failed.", t);
+        }
     }
 
     /**
@@ -338,7 +478,22 @@ public class ThemeManager {
      */
     void applyStartupPreference() {
         uiReady = true;
+        if (context != null) {
+            visionGate.watchNavigation(
+                () -> leaveDarkForVision("the Vision workspace was opened", false));
+        }
         if (isDarkModeEnabled()) {
+            String reason = visionGate.blockingReason();
+            if (reason != null) {
+                // The preference is kept: nothing failed, the Designer simply
+                // came up on Vision. The menu follows the theme on screen.
+                String message = VisionGate.refusalMessage(reason);
+                log.info(message);
+                DebugLog.log("Vision gate at startup: " + message);
+                status.message(message);
+                stateListener.switchFinished(false);
+                return;
+            }
             apply(true);
             finishSwitch();
         }
@@ -355,11 +510,8 @@ public class ThemeManager {
     private static int countDockableFrames(java.awt.Container container) {
         int count = 0;
         for (java.awt.Component child : container.getComponents()) {
-            for (Class<?> type = child.getClass(); type != null; type = type.getSuperclass()) {
-                if ("com.jidesoft.docking.DockableFrame".equals(type.getName())) {
-                    count++;
-                    break;
-                }
+            if (ClassNames.extendsNamed(child.getClass(), "com.jidesoft.docking.DockableFrame")) {
+                count++;
             }
             if (child instanceof java.awt.Container) {
                 count += countDockableFrames((java.awt.Container) child);
@@ -388,7 +540,14 @@ public class ThemeManager {
             return;
         }
         DebugLog.log("ThemeManager: switching to " + (dark ? "dark" : "light") + " mode.");
+        // The host facts a bug report from another platform needs — see
+        // EnvironmentProbe. Once per session; the per-switch font lines
+        // (here and at the end) are what the dark and light fonts get
+        // compared on.
+        EnvironmentProbe.logOnce();
+        DebugLog.log("before switch: " + EnvironmentProbe.fontLine());
         failedPhases.clear();
+        failureHint = null;
         attemptedPhases = 0;
         phaseTrace.clear();
         // Held only for the abort path below: the exact overrides phase 0 drops,
@@ -429,6 +588,10 @@ public class ThemeManager {
             if (dark) {
                 trace("painterSnapshot");
                 snapshotThemePainters();
+                // Read now, while the stock look and feel is still the one
+                // answering: this is the font the Designer has been drawing
+                // with, and the one dark mode keeps (see below).
+                java.awt.Font stockFont = UIManager.getFont("Label.font");
                 trace("lookAndFeel");
                 try {
                     UIManager.setLookAndFeel(new FlatDarkLaf());
@@ -440,6 +603,8 @@ public class ThemeManager {
                     DebugLog.log("setLookAndFeel(FlatDarkLaf) failed once; retrying.", first);
                     UIManager.setLookAndFeel(new FlatDarkLaf());
                 }
+                trace("stockFont");
+                keepStockFont(stockFont);
             } else {
                 trace("lookAndFeel");
                 try {
@@ -590,6 +755,7 @@ public class ThemeManager {
             safely("statusBar", status::uninstall);
             safely("cachedPainters", () -> repointCachedThemePainters(false));
         }
+        DebugLog.log("after switch: " + EnvironmentProbe.fontLine());
         log.info(dark ? "Dark mode applied." : "Stock Designer theme restored.");
         reportOutcome(dark);
     }
@@ -608,7 +774,7 @@ public class ThemeManager {
             status.clear();
             return;
         }
-        String message = degradedMessage(dark, failedPhases, attemptedPhases);
+        String message = degradedMessage(dark, failedPhases, attemptedPhases, failureHint);
         log.warn(message);
         DebugLog.log(message);
         status.message(message);
@@ -616,9 +782,21 @@ public class ThemeManager {
 
     /** One line: what worked, what did not, and where to read about it. */
     static String degradedMessage(boolean dark, java.util.List<String> failed, int attempted) {
+        return degradedMessage(dark, failed, attempted, null);
+    }
+
+    /**
+     * The same line, with what to do about it when a failure said. The hint
+     * goes before the log pointer: a user who can fix it from the status bar
+     * should not have to open the log to find that out.
+     */
+    static String degradedMessage(boolean dark, java.util.List<String> failed, int attempted,
+            String hint) {
         return (dark ? "Dark mode applied" : "Stock theme restored")
             + " with " + failed.size() + " of " + attempted + " steps failing ("
-            + String.join(", ", failed) + "). Details in " + DebugLog.path();
+            + String.join(", ", failed) + "). "
+            + (hint == null ? "" : Character.toUpperCase(hint.charAt(0)) + hint.substring(1) + ". ")
+            + "Details in " + DebugLog.path();
     }
 
     /** Note a phase that does not run under {@link #safely} (it has its own guard). */
@@ -643,9 +821,17 @@ public class ThemeManager {
             task.run();
         } catch (Throwable t) {
             failedPhases.add(phase);
+            if (t instanceof IaColorTokens.JvmNotOpened) {
+                failureHint = t.getMessage();
+            }
             log.warn("Theme phase '" + phase + "' failed.", t);
             DebugLog.log("Theme phase " + phase + " FAILED.", t);
         }
+    }
+
+    /** The hint carried by the last switch's failures, if any. */
+    String failureHint() {
+        return failureHint;
     }
 
     /**
@@ -696,6 +882,42 @@ public class ThemeManager {
      */
     void captureStockLaf() {
         stockLaf = UIManager.getLookAndFeel();
+        java.awt.Font buttonFont = UIManager.getFont("Button.font");
+        DebugLog.detail("Stock look and feel: " + (stockLaf == null ? "none" : stockLaf.getClass().getName())
+            + "; Button.font is " + (buttonFont == null ? "null" : buttonFont.getClass().getName()
+            + " " + buttonFont));
+    }
+
+    /**
+     * Keep the Designer's own font under dark mode, so the switch changes
+     * colour and nothing else.
+     *
+     * <p>Left to itself FlatLaf picks the operating system's UI font — the
+     * harness log on macOS shows Synthetica's {@code Dialog 12pt} becoming
+     * {@code Helvetica Neue 13pt} — and the stock restore puts
+     * {@code Dialog 12} back by name ({@link #restoreStockLaf}). Both family
+     * and size therefore change on every toggle, and how far depends on the
+     * platform: a point on macOS, where it goes unnoticed; on Windows the
+     * pick is Segoe UI at the desktop's message-font size, and text that
+     * grows shifts row heights and clips labels in the Designer's fixed-size
+     * panels. Pinning the stock font is also what carries Synthetica's own
+     * scale factor into FlatLaf on a display where it is not 1.0, since the
+     * font read before the swap is already the scaled one.
+     *
+     * <p>{@code defaultFont} is FlatLaf's base: every {@code *.font} default
+     * is an active value derived from it, so this one developer-defaults
+     * entry re-fonts the whole table. It has to land before
+     * {@link #snapshotMenuDefaults} resolves those active values into the
+     * snapshot, and it needs no explicit clear on the light switch —
+     * {@code defaultFont} is in the snapshot, so {@link #applyMenuDefaults}
+     * removes it with the rest.
+     */
+    private void keepStockFont(java.awt.Font stockFont) {
+        if (stockFont == null) {
+            DebugLog.log("No stock Label.font to keep; dark mode uses FlatLaf's own font.");
+            return;
+        }
+        UIManager.put("defaultFont", new javax.swing.plaf.FontUIResource(stockFont));
     }
 
     /**
@@ -778,6 +1000,25 @@ public class ThemeManager {
         // A key named "darkShadow" holding #DDDDDD. Whatever it draws, a light
         // shadow under a dark theme is wrong on its face.
         "JideTabbedPane.darkShadow",
+        // Light on WINDOWS only, found by the harness's #22 check the first
+        // time it ran there: JIDE fills these from the Windows desktop colours
+        // (#F0F0F0 is the system "control", #ABDAFF its selection highlight)
+        // rather than from the look and feel, so none of the passes above
+        // reach them. On macOS and Linux they are absent or already dark. A
+        // Windows Designer without these shows a light status bar, light
+        // side-pane buttons, a light selected dock tab, and light menu hover.
+        "Content.background",
+        "JideLabel.background",
+        "StatusBar.background",
+        "HeaderBox.background",
+        "JideTabbedPane.selectedTabBackground",
+        "SidePane.buttonBackground",
+        "SidePane.selectedButtonBackground",
+        "CollapsiblePane.emphasizedBackground",
+        "PopupMenuSeparator.background",
+        "Menu.mouseHoverBackground",
+        "CheckBoxMenuItem.mouseHoverBackground",
+        "RadioButtonMenuItem.mouseHoverBackground",
         // The workspace tab strip — the row of open-resource tabs under the
         // Perspective, script, named query, report and Web Dev editors (#81).
         // See applyJideDarkOverrides for why these are platform-dependent
@@ -785,7 +1026,6 @@ public class ThemeManager {
         "JideTabbedPane.light",
         "JideTabbedPane.highlight",
         "JideTabbedPane.shadow",
-        "JideTabbedPane.selectedTabBackground",
         "JideTabbedPane.tabAreaBackgroundLt",
         "JideTabbedPane.tabAreaBackgroundDk",
         "JideTabbedPane.foreground",
@@ -865,6 +1105,25 @@ public class ThemeManager {
         UIManager.put("CommandBarSeparator.background", border);
         UIManager.put("JideTabbedPane.darkShadow", background.darker());
 
+        // The Windows desktop-colour keys (see JIDE_DARK_KEYS). Surfaces take
+        // the panel colour, the selected tab and side-pane button the same
+        // raised tone as a selected toolbar button, and hover the menu
+        // selection colour so a hovered item reads like a selected one.
+        java.awt.Color hover = orDefault(
+            UIManager.getColor("MenuItem.selectionBackground"), activeTitleBackground);
+        UIManager.put("Content.background", background);
+        UIManager.put("JideLabel.background", background);
+        UIManager.put("StatusBar.background", background);
+        UIManager.put("HeaderBox.background", background);
+        UIManager.put("PopupMenuSeparator.background", background);
+        UIManager.put("JideTabbedPane.selectedTabBackground", selected);
+        UIManager.put("SidePane.buttonBackground", background);
+        UIManager.put("SidePane.selectedButtonBackground", selected);
+        UIManager.put("CollapsiblePane.emphasizedBackground", activeTitleBackground);
+        UIManager.put("Menu.mouseHoverBackground", hover);
+        UIManager.put("CheckBoxMenuItem.mouseHoverBackground", hover);
+        UIManager.put("RadioButtonMenuItem.mouseHoverBackground", hover);
+
         // The workspace tab strip (#81). installJideExtension(VSNET_STYLE) does
         // not recognise FlatLaf, and on that path LookAndFeelFactory picks the
         // default table BY OPERATING SYSTEM: VsnetMetalUtils everywhere else,
@@ -889,7 +1148,7 @@ public class ThemeManager {
         UIManager.put("JideTabbedPane.light", selectedTab);
         UIManager.put("JideTabbedPane.highlight", tabEdge);
         UIManager.put("JideTabbedPane.shadow", border);
-        UIManager.put("JideTabbedPane.selectedTabBackground", background);
+        // selectedTabBackground is pinned above, to the raised `selected` tone.
         UIManager.put("JideTabbedPane.tabAreaBackgroundLt", background);
         UIManager.put("JideTabbedPane.tabAreaBackgroundDk", background);
         UIManager.put("JideTabbedPane.foreground", foreground);
@@ -1294,6 +1553,11 @@ public class ThemeManager {
             // background. Draining this inside the loop above stranded
             // #DDE0E3 text on any component lifted by another branch, which
             // in light mode reads as permanently disabled.
+            // Key fields first: their uneditable colour goes back through the
+            // setter, then the foreground restore below puts the editable
+            // colour (and what is showing) back through setForeground.
+            liftedKeyFieldUneditable.forEach(this::restoreUneditableForeground);
+            liftedKeyFieldUneditable.clear();
             liftedForegrounds.forEach(java.awt.Component::setForeground);
             liftedForegrounds.clear();
             swappedBorders.forEach(javax.swing.JComponent::setBorder);
@@ -1318,6 +1582,27 @@ public class ThemeManager {
     private final java.util.Map<java.awt.Component, java.awt.Color> liftedForegrounds =
         new java.util.WeakHashMap<>();
     private static final java.awt.Color LIGHT_FOREGROUND = new java.awt.Color(0xDDE0E3);
+
+    /**
+     * The property NAME field of Ignition's JSON property editor — every row
+     * of the Perspective property editor, session props included. A
+     * borderless {@code JTextField} whose class fixes BOTH of its text colours
+     * to {@code Color.BLACK} and re-applies the uneditable one, bypassing
+     * {@code setForeground}, whenever its editability is set.
+     */
+    // Package-private so ReflectiveSurfaceTest can assert this name still
+    // resolves against the Ignition the harness runs.
+    static final String KEY_FIELD_CLASS =
+        "com.inductiveautomation.ignition.client.jsonedit.KeyEditorField";
+    /** Its base class, which owns the two colours. */
+    static final String BORDERLESS_FIELD_CLASS =
+        "com.inductiveautomation.ignition.client.jsonedit.BorderlessField";
+    static final String UNEDITABLE_FOREGROUND_SETTER = "setUneditableForeground";
+    static final String UNEDITABLE_FOREGROUND_FIELD = "uneditableForeground";
+
+    /** Key fields whose uneditable colour was replaced -> the stock colour. */
+    private final java.util.Map<javax.swing.JComponent, java.awt.Color> liftedKeyFieldUneditable =
+        new java.util.WeakHashMap<>();
 
     /**
      * Replace a border drawn in the {@code Color.WHITE} instance with the same
@@ -1467,7 +1752,11 @@ public class ThemeManager {
                 swapWhiteBorder(component);
                 java.awt.Color foreground = component.isForegroundSet()
                     ? component.getForeground() : null;
-                if (foreground instanceof javax.swing.plaf.UIResource
+                if (isPropertyKeyField(component)) {
+                    // A property NAME in the JSON property editor. Neither
+                    // branch below can keep it readable — see the method.
+                    liftPropertyKeyField(component);
+                } else if (foreground instanceof javax.swing.plaf.UIResource
                         && luminance(foreground) < DARK_FOREGROUND_LUMINANCE
                         && !staleUiresForegrounds.containsKey(component)) {
                     staleUiresForegrounds.put(component, foreground);
@@ -1538,6 +1827,15 @@ public class ThemeManager {
         for (java.awt.Component child : container.getComponents()) {
             if (child instanceof java.awt.Container) {
                 refreshed += refreshComponentsLeftDark((java.awt.Container) child);
+            }
+            if (child instanceof javax.swing.JTree) {
+                // A renderer is not in the hierarchy, so the walk cannot see
+                // its colours; and IA's PanelBasedTreeCellRenderer copies the
+                // Tree.* colours out of UIManager in its constructor and has
+                // no updateUI to re-read them. One created while the Designer
+                // was dark — the Tag Browser makes new ones — paints every
+                // row dark for the rest of a light session unless re-synced.
+                TreeIconRecolorer.syncRendererColors(((javax.swing.JTree) child).getCellRenderer());
             }
             if (!isDarkLeftover(child)) {
                 continue;
@@ -1635,11 +1933,31 @@ public class ThemeManager {
         return max - min < 24;
     }
 
-    /** Vision design canvases render user content; never restyle inside them. */
+    /**
+     * The Designer's design-canvas workspace ({@code WindowWorkspace} and the
+     * template workspace extend it): the tabbed pane whose tabs are Vision
+     * windows and templates.
+     */
+    // Package-private so ReflectiveSurfaceTest can assert this name still
+    // resolves against the Ignition the harness runs.
+    static final String DESIGNABLE_WORKSPACE =
+        "com.inductiveautomation.ignition.designer.designable.AbstractDesignableWorkspace";
+
+    /**
+     * Vision design canvases render user content; never restyle inside them.
+     *
+     * <p>"Inside" means under a Vision window or template — the things Vision
+     * serializes — or under the workspace that hosts them. It used to mean
+     * "any ancestor from a {@code factorypmi} package", which also covered
+     * Vision's component palette and property editor: Designer chrome, not
+     * user content, and the two filter fields a Designer showed dark after
+     * the Vision gate had dropped it back to light, because the leftover
+     * pass below skipped them.
+     */
     private static boolean insideVisionWorkspace(java.awt.Component component) {
         for (java.awt.Component p = component; p != null; p = p.getParent()) {
-            String name = p.getClass().getName();
-            if (name.contains("factorypmi") || name.contains("VisionDesign")) {
+            if (VisionGate.isVisionTopLevel(p)
+                    || ClassNames.extendsNamed(p.getClass(), DESIGNABLE_WORKSPACE)) {
                 return true;
             }
         }
@@ -1661,6 +1979,105 @@ public class ThemeManager {
                 && !liftedForegrounds.containsKey(component)) {
             liftedForegrounds.put(component, foreground);
             component.setForeground(LIGHT_FOREGROUND);
+        }
+    }
+
+    /** A {@code KeyEditorField} or a subclass (Perspective wraps it in one). */
+    private static boolean isPropertyKeyField(javax.swing.JComponent component) {
+        if (!(component instanceof javax.swing.JTextField)) {
+            return false;
+        }
+        for (Class<?> c = component.getClass(); c != null; c = c.getSuperclass()) {
+            if (KEY_FIELD_CLASS.equals(c.getName())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Make a property name readable under dark mode, and remember how to undo
+     * it.
+     *
+     * <p>Reported on the forum against the announcement's own screenshot:
+     * every property name in the Perspective property editor was black on
+     * the dark panel, a contrast ratio of about 1.9:1, while the values
+     * beside them were fine. The name is a {@code KeyEditorField}, whose
+     * base class {@code BorderlessField} keeps two private colours —
+     * editable and uneditable — and applies one of them from {@code
+     * setEditable(boolean)} straight through {@code JTextField.setForeground},
+     * bypassing its own override. {@code KeyEditorField}'s constructor sets
+     * the uneditable colour to {@code Color.BLACK} (the editable one already
+     * is) and then calls {@code setEditable(false)} for every key the schema
+     * locks, which is every built-in property.
+     *
+     * <p>The generic lift in the walk is defeated two ways, both pinned in
+     * {@code PropertyKeyFieldTest}:
+     *
+     * <ul>
+     *   <li>it only fires when the field's background is dark, and a text
+     *       field with no background of its own — what {@code BasicTextUI}
+     *       leaves when {@code TextField.background} resolves to nothing, the
+     *       state #23 documented in this editor — reports its parent's: the
+     *       filter wrapper's permanent amber, which is not dark;</li>
+     *   <li>even when it fires, it only rewrites the editable colour (the
+     *       override stores whatever {@code setForeground} is given), so the
+     *       next {@code setEditable(false)} puts the black back.</li>
+     * </ul>
+     *
+     * <p>So the uneditable colour is replaced through its public setter, and
+     * the field is lifted regardless of what its background reports — a
+     * property name is unambiguously chrome, never user content. The values
+     * beside it are left alone: they go through the same base class but are
+     * handed {@code Color.GRAY} and per-type colours that read fine on dark.
+     * Everything is reached by name and fails soft, like every other pass.
+     */
+    private void liftPropertyKeyField(javax.swing.JComponent field) {
+        if (liftedKeyFieldUneditable.containsKey(field)) {
+            return;
+        }
+        try {
+            java.lang.reflect.Field uneditable = null;
+            for (Class<?> c = field.getClass(); c != null && uneditable == null; c = c.getSuperclass()) {
+                if (BORDERLESS_FIELD_CLASS.equals(c.getName())) {
+                    uneditable = c.getDeclaredField(UNEDITABLE_FOREGROUND_FIELD);
+                }
+            }
+            if (uneditable == null) {
+                throw new NoSuchFieldException(
+                    BORDERLESS_FIELD_CLASS + "." + UNEDITABLE_FOREGROUND_FIELD);
+            }
+            uneditable.setAccessible(true);
+            java.awt.Color stock = (java.awt.Color) uneditable.get(field);
+            java.lang.reflect.Method setter =
+                field.getClass().getMethod(UNEDITABLE_FOREGROUND_SETTER, java.awt.Color.class);
+            if (stock != null && luminance(stock) < DARK_FOREGROUND_LUMINANCE) {
+                liftedKeyFieldUneditable.put(field, stock);
+                setter.invoke(field, LIGHT_FOREGROUND);
+            }
+            // The editable colour, and whichever of the two is showing now.
+            // BorderlessField.setForeground stores its argument as the
+            // editable colour, so one call covers both.
+            java.awt.Color showing = field.getForeground();
+            if (showing != null && !(showing instanceof javax.swing.plaf.UIResource)
+                    && luminance(showing) < DARK_FOREGROUND_LUMINANCE
+                    && !liftedForegrounds.containsKey(field)) {
+                liftedForegrounds.put(field, showing);
+                field.setForeground(LIGHT_FOREGROUND);
+            }
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            DebugLog.log("Property key field lift failed for "
+                + field.getClass().getName() + "; its name stays as Ignition drew it.", e);
+        }
+    }
+
+    private void restoreUneditableForeground(javax.swing.JComponent field, java.awt.Color stock) {
+        try {
+            field.getClass().getMethod(UNEDITABLE_FOREGROUND_SETTER, java.awt.Color.class)
+                .invoke(field, stock);
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            DebugLog.log("Property key field restore failed for "
+                + field.getClass().getName(), e);
         }
     }
 
@@ -1798,6 +2215,22 @@ public class ThemeManager {
                     // long before the rescan would reach them.
                     correctBeforeFirstPaint(child);
                     pendingAdded.add(new java.lang.ref.WeakReference<>(child));
+                    // A Vision window that got here under dark mode was opened
+                    // by a path that never selected the workspace, so the
+                    // navigation watch could not get ahead of it. Leave dark
+                    // mode on the next turn; the window cannot be saved before
+                    // then, and the user is told to close and reopen it.
+                    java.awt.Component vision = visionDropPending ? null
+                        : VisionGate.findVisionTopLevel(child, VisionGate.ATTACH_SEARCH_DEPTH);
+                    if (vision != null) {
+                        visionDropPending = true;
+                        DebugLog.log("Vision gate: " + vision.getClass().getName()
+                            + " was attached under dark mode.");
+                        SwingUtilities.invokeLater(() -> {
+                            visionDropPending = false;
+                            leaveDarkForVision("a Vision window or template was opened", true);
+                        });
+                    }
                 }
                 if (child instanceof javax.swing.JPopupMenu) {
                     // Cached menus created under the other theme keep stale UI

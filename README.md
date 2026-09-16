@@ -42,22 +42,54 @@ The same Designer, toggled off and on:
 
 ## Known limitations
 
+**Dark mode and Vision do not mix, and the module keeps them apart.** A Vision
+window saved from a FlatLaf Designer picks up FlatLaf's fonts, colours and
+border classes as if you had set them by hand, and a Vision client cannot open
+it at all (`ClassNotFoundException: com.formdev.flatlaf.ui.FlatButtonBorder`).
+The cause is the platform's window serializer, which compares every property
+against a "clean copy" cached for the life of the Designer. Refreshing that
+cache from the module cures the crash but not the rest: Vision also copies the
+Designer's colour constants into components as a window opens, and dark mode
+rewrites those. So, for now, the module stays out of Vision's way:
+
+- **Tools → Dark Mode is refused** while any Vision window or template is open,
+  or while the Vision workspace is selected. The status bar and a dialog say why.
+- **A dark Designer turns itself light** the moment you navigate to Vision in
+  the project browser, before the window you are opening is loaded. Turn dark
+  mode back on once you have left Vision and closed its windows. Your saved
+  preference is kept, so the next launch away from Vision comes up dark.
+- If a Vision window still reaches the screen under dark mode, the module turns
+  light and asks you to **close and reopen that window** before editing it.
+
+Perspective, scripting, tags, reports, pipelines and everything else are
+unaffected. The details, and the headless reproduction, are in
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#visiongate).
+
 Some surfaces are left light **on purpose**, because they render *your* content
 rather than the Designer's chrome, and theming them would misrepresent what your
 users will actually see:
 
-- the **Vision design canvas**, which shows your window content;
 - the **Perspective view canvas**, which renders the view as a session would —
   it follows the session's own theme, not the Designer's;
 - **Symbol Factory thumbnails**, which are the symbol artwork itself.
 
-One more, following the prior art's own judgement (see
-[Prior art](#prior-art)): the Vision **property tables** are deliberately not
-themed, because colouring them looks spotty and makes them harder to use.
-
 Genuinely open, rather than deliberate: the Perspective view editor's **rulers
 and surround** stay light. They are chrome rather than content, so they arguably
 should follow the theme; it has not been decided.
+
+On **Windows and Linux** the native **title bar and window frame** stay light.
+The Designer's macOS title bar follows the theme through a property Java only
+honours there; doing the same elsewhere would mean replacing the window
+decorations, which is a larger change than the gap justifies.
+
+The module has been developed and checked by eye on macOS. Its automated
+checks run on Windows and Linux too, but nobody has yet sat in front of a
+Designer there. If you do and something is off, the debug log at
+`~/.ignition/designer-dark-mode.log` opens with an `env:` block describing your
+JVM — please include it in the report. One thing it will tell you directly: if
+the status bar says the JVM has not opened `java.awt`, add
+`--add-opens java.desktop/java.awt=ALL-UNNAMED` under *Additional JVM
+Arguments* for the gateway in the Designer Launcher and relaunch.
 
 Everything else in the Designer is themed. If you find a surface that is not,
 that is a bug worth reporting — the
@@ -197,15 +229,18 @@ docs/                       Architecture and development guides
 Inductive Automation's Exchange already has a
 [Dark Mode for the Designer](https://inductiveautomation.com/exchange/2719/overview)
 by Justin Edwards — a well-polished Jython script, MIT licensed, that has been
-serving this need on **Ignition 8.1** since 2024. If you are on 8.1, use it.
+serving this need on Ignition 8.1 since 2024. Since version 1.3.0
+(3 September 2026) it runs on **8.3** as well. On 8.1 it is the only option;
+on 8.3 you have a choice.
 
-Designer Dark Mode differs in two ways. It targets **8.3**, and it is a module
-rather than a project-library script, so it installs once on the gateway
-instead of being imported into each project and needs no Vision client tag to
-persist. Under the hood it swaps the Designer's look and feel for
-[FlatLaf](https://www.formdev.com/flatlaf/) and restyles Ignition's own design
-tokens, rather than painting enumerated components one class at a time — which
-means surfaces nobody has explicitly catalogued come out dark by default.
+Designer Dark Mode differs in how it is delivered and how it themes. It is a
+module rather than a project-library script, so it installs once on the
+gateway instead of being imported into each project, is toggled from the Tools
+menu, and needs no Vision client tag to persist. Under the hood it swaps the
+Designer's look and feel for [FlatLaf](https://www.formdev.com/flatlaf/) and
+restyles Ignition's own design tokens, rather than painting enumerated
+components one class at a time — which means surfaces nobody has explicitly
+catalogued come out dark by default.
 
 That script's careful catalogue of where the Designer leaks light informed this
 project's testing, and is gratefully acknowledged.

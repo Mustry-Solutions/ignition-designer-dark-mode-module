@@ -2,8 +2,11 @@ package com.mustrysolutions.designerdarkmode.designer;
 
 import java.awt.Color;
 import java.lang.reflect.Field;
+import java.lang.reflect.InaccessibleObjectException;
+import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.Map;
+import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -102,7 +105,21 @@ final class IaColorTokens {
             "WARNING_COLOR", 0x4E4636),
         // Welcome-workspace "create resource" tile hover/selection (#DDE5EB).
         "com.inductiveautomation.ignition.designer.workspacewelcome.ResourceBuilderPanel", Map.of(
-            "SELECTED", 0x2D4964));
+            "SELECTED", 0x2D4964),
+        // The sections across the top of an Event Stream editor (Source,
+        // Encoder, Filter, ...). FlowCellContent.paintSelected fills the
+        // selected or hovered section's rounded card straight onto the
+        // Graphics from these literals — the same #DDE5EB as the welcome
+        // tiles — while the section name inside is a plain JLabel on
+        // Label.foreground, light under FlatLaf. Light text on a pale card
+        // was the unreadable selection in #79. Same selection blue as the
+        // welcome tiles; the hover tint is the one the JSON property editor
+        // rows use, so a hover reads as a hover across the Designer.
+        "com.inductiveautomation.ignition.designer.gui.flowpane.render.FlowCellContent", Map.of(
+            "SELECTED_BACKGROUND", 0x2D4964,
+            "SELECTED_BORDER", 0x4A6F94,
+            "HOVER_BACKGROUND", 0x3B4754,
+            "HOVER_BORDER", 0x5F6467));
 
     private final Logger log = LoggerFactory.getLogger(IaColorTokens.class);
 
@@ -113,13 +130,55 @@ final class IaColorTokens {
     private Field frgbField;
     private Field fvalueField;
 
-    /** Mutate the token instances to the dark palette. Safe to re-run. */
+    /**
+     * The JVM argument that makes this class possible, and where it goes.
+     *
+     * <p>The Designer Launcher passes it on macOS — read off a running
+     * process — and this module has only been watched there. A launcher that
+     * composes its arguments differently on another platform leaves every
+     * token-coloured surface light while the rest of the Designer goes dark,
+     * and nothing in that picture says why. The hint travels with the
+     * failure so the status bar can, instead of pointing at a log.
+     */
+    static final String OPENING_HINT =
+        "the Designer's JVM has not opened java.desktop/java.awt to modules; add "
+            + "--add-opens java.desktop/java.awt=ALL-UNNAMED under Additional JVM "
+            + "Arguments in the Designer Launcher and relaunch";
+
+    /**
+     * Thrown out of {@link #install} — not swallowed like its other failures —
+     * when the module system refuses the {@code Color} internals. That is the
+     * one cause the user can fix, so it is the one that has to reach them.
+     */
+    static final class JvmNotOpened extends IllegalStateException {
+        JvmNotOpened(InaccessibleObjectException cause) {
+            super(OPENING_HINT, cause);
+        }
+    }
+
+    /**
+     * Mutate the token instances to the dark palette. Safe to re-run.
+     *
+     * @throws JvmNotOpened if {@code java.awt} is not opened to this module,
+     *     so the caller can say what to do about it
+     */
     void install() {
         if (!originals.isEmpty()) {
             return;
         }
         try {
             reflectColorInternals();
+        } catch (InaccessibleObjectException closed) {
+            DebugLog.log("IaColorTokens: " + OPENING_HINT, closed);
+            throw new JvmNotOpened(closed);
+        } catch (Exception other) {
+            // A Color that no longer has these fields is a JDK change, not a
+            // launcher one; it stays with the general failure path below.
+            log.warn("Could not restyle the Ignition designer color tokens.", other);
+            DebugLog.log("IaColorTokens install FAILED.", other);
+            return;
+        }
+        try {
             Class<?> colors = Class.forName(COLORS_CLASS);
             int mutated = 0;
             for (Field field : colors.getFields()) {
@@ -219,6 +278,45 @@ final class IaColorTokens {
             || color == Color.CYAN || color == Color.MAGENTA
             || color == Color.PINK;
     }
+
+    /**
+     * Is this {@link Color} one of the token instances this pass restyles?
+     *
+     * <p>By identity, and by membership in {@link #DARK}: a glyph or painter
+     * holding one of these follows the token pass on its own, and any other
+     * pass that recolours by inspecting the rendered pixels ({@code
+     * TreeIconRecolorer}'s smart invert) has to leave it alone, or it undoes
+     * the token pass's work. Independent of whether the pass is currently
+     * installed — the answer is about who owns the colour, not its state.
+     * Empty (always false) when the token class is not on the classpath.
+     */
+    static boolean isRestyledToken(Color color) {
+        if (color == null) {
+            return false;
+        }
+        Set<Color> tokens = restyledTokens;
+        if (tokens == null) {
+            tokens = Collections.newSetFromMap(new IdentityHashMap<>());
+            try {
+                Class<?> colors = Class.forName(COLORS_CLASS);
+                for (Field field : colors.getFields()) {
+                    if (field.getType() == Color.class && DARK.containsKey(field.getName())) {
+                        Color token = (Color) field.get(null);
+                        if (token != null && !isJdkGlobal(token)) {
+                            tokens.add(token);
+                        }
+                    }
+                }
+            } catch (Throwable t) {
+                // No token class (unit tests, or a future Ignition): nothing
+                // is a token, and the callers fall back to their own logic.
+            }
+            restyledTokens = tokens;
+        }
+        return tokens.contains(color);
+    }
+
+    private static volatile Set<Color> restyledTokens;
 
     void reflectColorInternals() throws Exception {
         if (valueField != null) {
