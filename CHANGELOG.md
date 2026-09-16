@@ -124,6 +124,19 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   Chart and Tab Strip customizers, and the gateway message handler dialog), a
   note on the Perspective binding-icon fix, and the matching entries in the
   "still unchecked" table. All are unverified until someone opens them.
+- The README now says two things about that script that were missing (docs
+  only; no behaviour change). Under **Known limitations**: the module and the
+  script must not be used in the same project — the script lives inside the
+  project as a library script plus a Vision client tag, adds its own
+  View → Dark Mode checkbox shortly after every launch, and its explicit
+  paints in either of its modes are nothing this module's toggle-off can undo,
+  so remove its `designerPatch` client tag first; detecting the script at
+  startup is tracked in
+  [#89](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/89).
+  Under **Prior art**: since the script never swaps the look and feel it does
+  not have the Vision serializer problem, and on a mostly-Vision project it
+  remains the better choice today — something its author had said on the
+  announcement thread and this README had not.
 
 - The native **title bar and window frame stay light on Windows and Linux**,
   by decision. The QA checklist gained an OS column and the three surfaces
