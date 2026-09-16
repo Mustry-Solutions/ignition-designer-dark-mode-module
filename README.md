@@ -77,6 +77,20 @@ Genuinely open, rather than deliberate: the Perspective view editor's **rulers
 and surround** stay light. They are chrome rather than content, so they arguably
 should follow the theme; it has not been decided.
 
+On **Windows and Linux** the native **title bar and window frame** stay light.
+The Designer's macOS title bar follows the theme through a property Java only
+honours there; doing the same elsewhere would mean replacing the window
+decorations, which is a larger change than the gap justifies.
+
+The module has been developed and checked by eye on macOS. Its automated
+checks run on Windows and Linux too, but nobody has yet sat in front of a
+Designer there. If you do and something is off, the debug log at
+`~/.ignition/designer-dark-mode.log` opens with an `env:` block describing your
+JVM — please include it in the report. One thing it will tell you directly: if
+the status bar says the JVM has not opened `java.awt`, add
+`--add-opens java.desktop/java.awt=ALL-UNNAMED` under *Additional JVM
+Arguments* for the gateway in the Designer Launcher and relaunch.
+
 Everything else in the Designer is themed. If you find a surface that is not,
 that is a bug worth reporting — the
 [QA checklist](docs/QA-CHECKLIST.md) tracks what has been swept and what has

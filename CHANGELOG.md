@@ -83,7 +83,34 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   caught the Linux bug below. Covers both write sites and an unwritable
   backing store.
 
+- **The debug log opens with an environment block.** OS, JRE, the
+  module-system and look-and-feel JVM arguments, which `java.desktop`
+  packages the launcher opened, scaling, Synthetica's scale factor and font,
+  and the `UIManager` font on either side of every switch. A bug report from
+  Windows or Linux now carries the evidence instead of the guesswork.
+- **The headless harness runs on Windows and macOS in CI**, not only Linux,
+  with the debug log uploaded per platform.
+- **A status-bar hint when the JVM has not opened `java.awt`.** The design
+  tokens are restyled by rewriting `Color` instances in place, which needs
+  `--add-opens java.desktop/java.awt=ALL-UNNAMED` from the Designer Launcher —
+  observed on macOS, unverified elsewhere. Without it every token-coloured
+  surface stayed light with nothing to say why. Now the status line names the
+  argument and where it goes.
+
 ### Changed
+
+- **CI's harness steps run under a watchdog that thread-dumps a hang.** Since
+  the property-name lift landed, roughly half of CI runs stall inside
+  `PropertyKeyFieldTest` — a different method each time, on both the current
+  and the 8.3.0 harness SDK, never locally in seventy attempts — and sat there
+  until the job's 15-minute cap cancelled them, which left no evidence at all.
+  `ops/laf-harness-watchdog.sh` now gives up after five minutes, `jstack -l`s
+  the Gradle daemon and the test executor (the executor's dump goes straight
+  into the step log), fails the step, and the dumps ship as a
+  `laf-harness-diagnostics` artifact with JUnit's XML and the module's debug
+  log. JUnit's own 60-second per-test timeout with `threaddump.enabled` is
+  layered underneath so the hung test names itself. Nothing here fixes the
+  hang; it produces the thread dump the fix needs.
 
 - The docs no longer describe Justin Edwards's
   [Exchange dark-mode script](https://inductiveautomation.com/exchange/2719/overview)
@@ -98,7 +125,23 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   note on the Perspective binding-icon fix, and the matching entries in the
   "still unchecked" table. All are unverified until someone opens them.
 
+- The native **title bar and window frame stay light on Windows and Linux**,
+  by decision. The QA checklist gained an OS column and the three surfaces
+  that only exist off macOS.
+
 ### Fixed
+
+- **The look-and-feel harness no longer deadlocks in `PropertyKeyFieldTest`.**
+  About half of CI runs since the property-name lift stalled there until the
+  job cap cancelled them. PR #94's watchdog caught it: the test built a real
+  `JsonEditor` and laid it out on the test thread, which holds the AWT tree
+  lock inside `Container.preferredSize` while `BasicTextUI.getMaximumSize`
+  waits for a text field's document lock; meanwhile `expandAll()` had made
+  `NodeEditor` post its rebuild to the event dispatch thread, where a new key
+  field's `setText` holds that document lock and its revalidate waits for the
+  tree lock. The Designer only ever does any of this on the dispatch thread,
+  so the test now does too, in phases, letting the queue drain between
+  building the editor and inspecting it. Harness-only; no module code changed.
 
 - The README's screenshot pair is retaken from `main` after the property-name
   fix below (docs only). The previous dark image showed the very defect the
@@ -181,6 +224,12 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   being true in 0.2.0, and its deep link into `ThemeManager` pointed at a line
   the file no longer has — now named by method instead, so it cannot drift
   again.
+
+- **Dark mode keeps the Designer's font.** FlatLaf substituted the operating
+  system's UI font (`Dialog 12` → `Helvetica Neue 13` on macOS; Segoe UI at
+  the desktop's size on Windows), so every toggle changed text metrics, not
+  just colours. The stock font is now pinned across the switch, and the pin
+  carries Synthetica's scale factor with it on a scaled display.
 
 ## [0.2.0] - 2026-09-01
 

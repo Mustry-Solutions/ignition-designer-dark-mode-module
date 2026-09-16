@@ -139,7 +139,24 @@ val lafHarnessTask = tasks.register<Test>("lafHarness") {
     systemProperty("designerdarkmode.logFile",
         layout.buildDirectory.file("laf-harness-debug.log").get().asFile.absolutePath)
 
+    // A hung test should name itself. Since #85 the harness stalls in about
+    // half of CI runs, in a different PropertyKeyFieldTest method each time,
+    // and never locally. No single test takes more than a second, so anything
+    // past a minute is the hang; JUnit then prints a dump of every thread
+    // before interrupting the test (which a deadlock or a spin ignores — the
+    // outer watchdog, ops/laf-harness-watchdog.sh, handles that end).
+    systemProperty("junit.jupiter.execution.timeout.default", "60 s")
+    systemProperty("junit.jupiter.execution.timeout.threaddump.enabled", "true")
+
     testLogging {
-        events("passed", "skipped", "failed")
+        // standardOut/standardError: the harness prints almost nothing, and
+        // JUnit's timeout thread dump goes through the test JVM's streams.
+        events("passed", "skipped", "failed", "standardOut", "standardError")
+        // Full traces, because the harness runs on platforms nobody has a
+        // shell on. Gradle's short format keeps the top frame only, and the
+        // first Windows run failed 58 tests with "HeadlessException at
+        // ThemeSwitchCycleTest.java:51" — the harness's own line, not the
+        // frame inside Synthetica that threw, which is the one that matters.
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
     }
 }

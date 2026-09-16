@@ -425,6 +425,45 @@ class ThemeSwitchCycleTest {
     }
 
     /**
+     * The switch is colour-only: the font the Designer draws with is the same
+     * family and size under dark mode as under the stock theme, and again
+     * after the restore.
+     *
+     * <p>Without the pin FlatLaf substitutes the operating system's UI font,
+     * so this is the assertion that varies most by platform — which is why
+     * the harness runs on all three. On macOS the substitution was
+     * {@code Dialog 12} to {@code Helvetica Neue 13}; on Windows it would be
+     * Segoe UI at the desktop's message-font size. The stock font is taken
+     * from the live table rather than hard-coded, so the test holds on a
+     * display where Synthetica has scaled it.
+     */
+    @Test
+    @DisplayName("dark mode keeps the stock font, so the switch changes colour only")
+    void darkModeKeepsTheStockFont() {
+        java.awt.Font stock = UIManager.getFont("Label.font");
+        assertNotNull(stock, "the stock look and feel must define Label.font");
+
+        manager.apply(true);
+        java.awt.Font dark = UIManager.getFont("Label.font");
+        assertNotNull(dark, "FlatLaf must define Label.font");
+        assertEquals(stock.getFamily(), dark.getFamily(),
+            "dark mode changed the font family: " + EnvironmentProbe.describe(stock)
+                + " -> " + EnvironmentProbe.describe(dark));
+        assertEquals(stock.getSize(), dark.getSize(),
+            "dark mode changed the font size: " + EnvironmentProbe.describe(stock)
+                + " -> " + EnvironmentProbe.describe(dark));
+        assertNotNull(UIManager.getFont("defaultFont"),
+            "FlatLaf's defaultFont is the base every other font derives from; "
+                + "the pin has to land there or it only holds for Label.font");
+
+        manager.apply(false);
+        java.awt.Font restored = UIManager.getFont("Label.font");
+        assertEquals(stock.getFamily(), restored.getFamily(), "the restore lost the family");
+        assertEquals(stock.getSize(), restored.getSize(), "the restore lost the size");
+        assertEquals(List.of(), manager.failedPhases(), "the cycle must be clean");
+    }
+
+    /**
      * Note what this does and does not prove. A mutation sweep found that
      * removing the module's own painter restore ({@code
      * overrideThemePainters(false)}) leaves this test PASSING, while removing

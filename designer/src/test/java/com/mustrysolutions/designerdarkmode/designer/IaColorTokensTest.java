@@ -36,6 +36,24 @@ class IaColorTokensTest {
     }
 
     @Test
+    @DisplayName("a JVM that has not opened java.awt fails with the argument to add")
+    void aClosedJvmFailsWithTheFix() {
+        // The cause is what setAccessible throws when the package is not
+        // opened to us. This JVM has it open (build.gradle.kts), so the
+        // mapping is exercised directly; the harness covers the open path.
+        java.lang.reflect.InaccessibleObjectException closed =
+            new java.lang.reflect.InaccessibleObjectException(
+                "Unable to make field private int java.awt.Color.value accessible");
+
+        IaColorTokens.JvmNotOpened failure = new IaColorTokens.JvmNotOpened(closed);
+
+        assertEquals(IaColorTokens.OPENING_HINT, failure.getMessage());
+        assertTrue(failure.getMessage().contains("--add-opens java.desktop/java.awt=ALL-UNNAMED"),
+            failure.getMessage());
+        assertEquals(closed, failure.getCause(), "the JVM's own reason must stay attached");
+    }
+
+    @Test
     @DisplayName("mutating a colour in place changes what it reports")
     void mutatesInPlace() throws Exception {
         Color token = new Color(0xFA, 0xFA, 0xFB);
