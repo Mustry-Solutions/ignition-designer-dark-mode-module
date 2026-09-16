@@ -99,7 +99,7 @@ point of the first run.
 | Project Browser tree | Left dock | `pass` | `2026-08-31` | |
 | Status bar | Bottom of the frame | `pass` | `2026-08-31` | |
 | Output Console | Bottom dock | `fixed` | `2026-08-31` | [#52](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/52). Check BOTH halves: text already on screen when the switch happens, and lines that arrive afterwards — they are different mechanisms |
-| Tab strips (open resource tabs) | Above the workspace | — | — | |
+| Workspace tab strip (open resource tabs) | Bottom edge of the Perspective, script, named query, report and Web Dev workspaces | `fixed` | `2026-09-15` | [#81](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/81) — **Windows only**: the selected tab kept the OS's #E3E3E3 3D colour with light text on it. Reproduced and fixed headlessly (`WorkspaceTabStripTest` simulates the Windows path). Checked by eye on macOS 2026-09-15 (text contrast, which was ~3:1 there before the fix): pass. The Windows fill itself has NOT been seen by eye — no Windows machine available; ask the reporter to confirm on the release build |
 
 ## B. Menus, dialogs, project settings
 
