@@ -10,9 +10,20 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-16
+
+A Vision-safety and portability release. Dark mode now keeps out of Vision's
+way, since a Vision window saved under it could not be opened by a Vision
+client; three user-reported defects are fixed (Perspective property names,
+the Event Stream editor, the Windows workspace tab strip); the Designer's
+font survives the switch; and the harness runs on Windows and macOS in CI.
+The Windows fixes are proven headlessly and not yet seen by eye on Windows.
+
 ### Added
 
-- **A gate between dark mode and Vision.** Paul Griffith's warning on the
+- **Dark mode and Vision are kept apart: Tools → Dark Mode is refused while
+  a Vision window or template is open, and a dark Designer turns itself
+  light when you navigate to Vision.** Paul Griffith's warning on the
   announcement thread was right, and reproducible: the platform's window
   serializer compares every component property against a clean copy cached in
   a static map for the life of the Designer, so once FlatLaf has been installed
@@ -45,14 +56,6 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   a click on the way out. Vision and the Designer's `WorkspaceManager` are
   reached by class name, so a Designer without Vision loses the gate rather
   than the module.
-
-- `PropertyKeyFieldTest` in the look-and-feel harness: builds a real
-  `JsonEditor` over a session-props-shaped document, in both orders the
-  Designer uses (rows before the switch, rows after it), and asserts the
-  property names are readable, that the stock black comes back on the light
-  restore, and — rendered to pixels — that the name column paints no black
-  glyphs. Two of its cases model the runtime states that defeated the old
-  lift and failed against the previous code.
 
 - **Vision's palette and property-editor filters, and the Tag Browser's rows,
   come back light after the Vision gate drops dark mode.** Found in the first
@@ -99,8 +102,8 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ### Changed
 
-- **CI's harness steps run under a watchdog that thread-dumps a hang.** Since
-  the property-name lift landed, roughly half of CI runs stall inside
+- **CI's harness steps run under a watchdog that thread-dumps a hang.** Once
+  the property-name lift landed, roughly half of CI runs stalled inside
   `PropertyKeyFieldTest` — a different method each time, on both the current
   and the 8.3.0 harness SDK, never locally in seventy attempts — and sat there
   until the job's 15-minute cap cancelled them, which left no evidence at all.
@@ -109,8 +112,9 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   into the step log), fails the step, and the dumps ship as a
   `laf-harness-diagnostics` artifact with JUnit's XML and the module's debug
   log. JUnit's own 60-second per-test timeout with `threaddump.enabled` is
-  layered underneath so the hung test names itself. Nothing here fixes the
-  hang; it produces the thread dump the fix needs.
+  layered underneath so the hung test names itself. Nothing here fixed the
+  hang; it produced the thread dump the fix needed, which is the deadlock
+  entry under Fixed.
 
 - The docs no longer describe Justin Edwards's
   [Exchange dark-mode script](https://inductiveautomation.com/exchange/2719/overview)
@@ -124,11 +128,11 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   Chart and Tab Strip customizers, and the gateway message handler dialog), a
   note on the Perspective binding-icon fix, and the matching entries in the
   "still unchecked" table. All are unverified until someone opens them.
-- The README now says two things about that script that were missing (docs
-  only; no behaviour change). Under **Known limitations**: the module and the
-  script must not be used in the same project — the script lives inside the
-  project as a library script plus a Vision client tag, adds its own
-  View → Dark Mode checkbox shortly after every launch, and its explicit
+- **Do not use this module and that script in the same project.** The README
+  now says so under **Known limitations**, and says why (docs only; no
+  behaviour change): the script lives inside the project as a library
+  script plus a Vision client tag, adds its own View → Dark Mode checkbox
+  shortly after every launch, and its explicit
   paints in either of its modes are nothing this module's toggle-off can undo,
   so remove its `designerPatch` client tag first; detecting the script at
   startup is tracked in
@@ -143,6 +147,14 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   that only exist off macOS.
 
 ### Fixed
+
+- **Dark mode keeps the Designer's font.** FlatLaf substituted the operating
+  system's UI font (`Dialog 12` → `Helvetica Neue 13` on macOS; Segoe UI at
+  the desktop's size on Windows), so every toggle changed text metrics, not
+  just colours. The stock font is now pinned across the switch, and the pin
+  carries Synthetica's scale factor with it on a scaled display. Visible on
+  upgrade from 0.2.0: dark-mode text on macOS is a point smaller than it
+  was, and now matches the light Designer exactly.
 
 - **On Windows, the selected workspace tab stayed light with light text on
   it** ([#81](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/81)) —
@@ -232,7 +244,13 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   background, and restores both on the light switch. Values are untouched.
   Proven headlessly for both defeat paths and confirmed by eye in a Designer
   on 8.3.6 (2026-09-15): names light under dark, black again after the
-  switch back.
+  switch back. The proof is `PropertyKeyFieldTest` in the look-and-feel
+  harness: a real `JsonEditor` over a session-props-shaped document, in
+  both orders the Designer uses (rows before the switch, rows after it),
+  asserting the names are readable, that the stock black comes back on the
+  light restore, and — rendered to pixels — that the name column paints no
+  black glyphs. Two of its cases model the runtime states that defeated the
+  old lift and failed against the previous code.
 
 - **The dark mode choice could be lost on Linux** if the Designer was
   force-quit, killed or crashed shortly after toggling. `ThemeManager` wrote
@@ -287,12 +305,6 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   being true in 0.2.0, and its deep link into `ThemeManager` pointed at a line
   the file no longer has — now named by method instead, so it cannot drift
   again.
-
-- **Dark mode keeps the Designer's font.** FlatLaf substituted the operating
-  system's UI font (`Dialog 12` → `Helvetica Neue 13` on macOS; Segoe UI at
-  the desktop's size on Windows), so every toggle changed text metrics, not
-  just colours. The stock font is now pinned across the switch, and the pin
-  carries Synthetica's scale factor with it on a scaled display.
 
 ## [0.2.0] - 2026-09-01
 
