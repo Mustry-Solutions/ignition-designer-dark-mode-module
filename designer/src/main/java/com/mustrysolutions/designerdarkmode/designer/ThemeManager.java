@@ -75,8 +75,24 @@ public class ThemeManager {
      */
     private final VisionGate visionGate;
 
+    /**
+     * Keeps dark mode and the Exchange "Dark Mode for the Designer" script
+     * apart — see {@link ExchangeScriptGate} for what the two do to each other.
+     */
+    private final ExchangeScriptGate scriptGate;
+
     /** The Vision explanation dialog is shown once per session; the status bar repeats it. */
     private boolean visionNoticeShown;
+
+    /** Likewise for the Exchange script's dialog. */
+    private boolean scriptNoticeShown;
+
+    /**
+     * How long after the startup apply to look for the Exchange script's
+     * checkbox. Its client tag inserts the checkbox two seconds after the
+     * Designer opens; this leaves a margin for a slow launch.
+     */
+    static final int SCRIPT_CHECK_DELAY_MS = 6000;
 
     /**
      * A Vision window was attached under dark mode and the drop-out is already
@@ -179,14 +195,28 @@ public class ThemeManager {
      * test that wrote to it would toggle the dark mode of whoever ran the build.
      */
     ThemeManager(Preferences prefs) {
-        this.prefs = prefs;
-        this.visionGate = new VisionGate(() -> context == null ? null : context.getFrame());
+        this(prefs, null, null);
     }
 
     /** Test seam: a gate whose verdict the test controls. */
     ThemeManager(Preferences prefs, VisionGate visionGate) {
+        this(prefs, visionGate, null);
+    }
+
+    /**
+     * Test seam: both gates dictated. A {@code null} gate is replaced by the
+     * real one over this manager's Designer context.
+     */
+    ThemeManager(Preferences prefs, VisionGate visionGate, ExchangeScriptGate scriptGate) {
         this.prefs = prefs;
-        this.visionGate = visionGate;
+        this.visionGate = visionGate != null
+            ? visionGate
+            : new VisionGate(() -> context == null ? null : context.getFrame());
+        this.scriptGate = scriptGate != null
+            ? scriptGate
+            : new ExchangeScriptGate(
+                () -> context == null ? null : context.getFrame(),
+                () -> context == null ? null : context.getProject());
     }
 
     /** Register the menu's listener before {@link #startup}. */
@@ -216,6 +246,7 @@ public class ThemeManager {
         shutDown = true;
         onEdt(() -> {
             visionGate.unwatchNavigation();
+            scriptGate.unwatchCheckbox();
             inspector.uninstall();
             apply(false);
         });
@@ -253,7 +284,7 @@ public class ThemeManager {
      * reasonably concludes the click did not register.
      */
     private void beginSwitch(boolean dark) {
-        if (dark && visionWins()) {
+        if (dark && (visionWins() || scriptWins())) {
             return;
         }
         stateListener.switchStarted();
@@ -265,7 +296,7 @@ public class ThemeManager {
             // window queued behind the menu click selects the Vision workspace
             // in that turn, and the answer above is stale by the time the
             // theme is actually installed.
-            if (dark && visionWins()) {
+            if (dark && (visionWins() || scriptWins())) {
                 return;
             }
             try {
@@ -325,6 +356,113 @@ public class ThemeManager {
         status.message(message);
         finishSwitch();
         visionGate.explain(message);
+    }
+
+    /**
+     * Whether the Exchange script's dark mode is ticked, and if so what to do
+     * about a request for ours: refuse it while the Designer is light, or drop
+     * ours if it is somehow already on. Asked after {@link #visionWins()}, so
+     * a Designer on Vision gets the Vision explanation, which is the one that
+     * protects saved resources.
+     *
+     * @return true when the switch must not go ahead
+     */
+    private boolean scriptWins() {
+        String reason = scriptGate.blockingReason();
+        if (reason == null) {
+            return false;
+        }
+        if (isDarkActive()) {
+            leaveDarkForScript(reason);
+        } else {
+            refuseDarkForScript(reason);
+        }
+        return true;
+    }
+
+    /**
+     * The user asked for dark mode with the Exchange script's own dark mode
+     * ticked. Same contract as {@link #refuseDark}: say why, square the
+     * preference and the menu with the light theme that is staying.
+     */
+    private void refuseDarkForScript(String reason) {
+        String message = ExchangeScriptGate.refusalMessage(reason);
+        log.warn(message);
+        DebugLog.log("Exchange script gate: " + message);
+        status.message(message);
+        finishSwitch();
+        scriptGate.explain(message);
+    }
+
+    /**
+     * The Exchange script's dark mode was ticked under ours; leave now, so the
+     * script paints over a stock Designer rather than over FlatLaf.
+     *
+     * <p>Synchronous for the same reason as {@link #leaveDarkForVision}: this
+     * runs from the checkbox's own item event, and the script's action
+     * listener paints in the very next one. The preference is kept — nothing
+     * failed, and the next launch of a project without the script should come
+     * up dark. The script's paints are its own and are not touched.
+     */
+    void leaveDarkForScript(String reason) {
+        if (!isDarkActive()) {
+            return;
+        }
+        try {
+            DebugLog.log("Exchange script gate: leaving dark mode because " + reason + ".");
+            stateListener.switchStarted();
+            status.message("Turning dark mode off: " + reason + "…");
+            try {
+                apply(false);
+            } finally {
+                stateListener.switchFinished(isDarkActive());
+            }
+            String message = ExchangeScriptGate.dropOutMessage(reason);
+            log.warn(message);
+            status.message(message);
+            if (!scriptNoticeShown) {
+                scriptNoticeShown = true;
+                SwingUtilities.invokeLater(() -> scriptGate.explain(message));
+            }
+        } catch (Throwable t) {
+            log.warn("Leaving dark mode for the Exchange script failed.", t);
+            DebugLog.log("Exchange script gate: leaving dark mode failed.", t);
+        }
+    }
+
+    /**
+     * Look for the Exchange script once the Designer has had time to add its
+     * checkbox, and say so if it is there.
+     *
+     * <p>Three outcomes. The script's checkbox is ticked while we are dark
+     * (its tag was edited to start dark, and fired after our startup apply):
+     * leave dark mode, as a tick would. The script is present but unticked:
+     * warn once, on the status bar and in the log, that the two should not be
+     * used together, and start watching the checkbox so a later tick drops us
+     * out. Not present: nothing.
+     *
+     * <p>Package-private so a test can drive it without the timer.
+     */
+    void checkForExchangeScript() {
+        try {
+            if (!scriptGate.scriptPresent()) {
+                return;
+            }
+            String reason = scriptGate.blockingReason();
+            if (reason != null && isDarkActive()) {
+                leaveDarkForScript(reason);
+            } else {
+                String message = ExchangeScriptGate.coexistenceWarning();
+                log.warn(message);
+                DebugLog.log("Exchange script gate: " + message);
+                status.message(message);
+            }
+            scriptGate.watchCheckbox(
+                () -> leaveDarkForScript("the Exchange script's View → Dark Mode was ticked"));
+        } catch (Throwable t) {
+            log.warn("Checking for the Exchange dark-mode script failed.", t);
+            DebugLog.log("Exchange script gate: check failed.", t);
+        }
     }
 
     /**
@@ -481,6 +619,11 @@ public class ThemeManager {
         if (context != null) {
             visionGate.watchNavigation(
                 () -> leaveDarkForVision("the Vision workspace was opened", false));
+            // The Exchange script's checkbox is not on the menu yet: its tag
+            // adds it two seconds after the Designer opens. Look later.
+            Timer later = new Timer(SCRIPT_CHECK_DELAY_MS, e -> checkForExchangeScript());
+            later.setRepeats(false);
+            later.start();
         }
         if (isDarkModeEnabled()) {
             String reason = visionGate.blockingReason();
@@ -490,6 +633,17 @@ public class ThemeManager {
                 String message = VisionGate.refusalMessage(reason);
                 log.info(message);
                 DebugLog.log("Vision gate at startup: " + message);
+                status.message(message);
+                stateListener.switchFinished(false);
+                return;
+            }
+            reason = scriptGate.blockingReason();
+            if (reason != null) {
+                // Same rule: the script's checkbox is ticked (a project that
+                // was imported or saved with it on). Keep the preference.
+                String message = ExchangeScriptGate.refusalMessage(reason);
+                log.warn(message);
+                DebugLog.log("Exchange script gate at startup: " + message);
                 status.message(message);
                 stateListener.switchFinished(false);
                 return;

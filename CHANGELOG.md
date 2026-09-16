@@ -46,6 +46,35 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   reached by class name, so a Designer without Vision loses the gate rather
   than the module.
 
+- **A gate between dark mode and the Exchange "Dark Mode for the Designer"
+  script** (#89). Since its 1.3.0 release the script runs on 8.3, and it lives
+  inside projects (a `designerPatch` Vision client tag plus a
+  `designer.darkModePatch` script library), so a project that has it keeps
+  running it in a Designer with this module installed and neither knows about
+  the other. Read from its source: the tag inserts a
+  `JCheckBoxMenuItem("Dark Mode")` at index 0 of the View menu two seconds
+  after launch, that checkbox IS the script's state, its dark branch sets
+  explicit non-`UIResource` colours on several hundred component classes that
+  our light restore cannot see, and its light branch paints the same
+  components explicit white and black — white panels with black text inside
+  our dark theme. `ExchangeScriptGate` finds that checkbox (plain Swing: a
+  View menu on the frame's menu bar holding a Dark Mode checkbox; our own
+  item is under Tools) and the script module in the open project (the SDK's
+  `ResourceCollection`, so inherited projects count). **Tools → Dark Mode is
+  refused** while the script's checkbox is ticked, status bar plus dialog,
+  preference and menu reset to light, same contract as the Vision gate and
+  asked in the same two places; a dark Designer drops to the stock theme
+  synchronously from the checkbox's own item event when the user ticks it,
+  keeping the preference; and a one-shot check six seconds after the startup
+  apply (the tag's two seconds plus margin) warns once, on the status bar and
+  at WARN in the log, when the script is present but unticked, drops out if it
+  is already ticked under dark mode, and starts the checkbox watch. Every
+  message names the script and says to remove the `designerPatch` client tag.
+  The script's own paints are its state and are never undone. Vision's verdict
+  outranks the script's, since Vision's is the one that protects saved
+  resources. Not yet reproduced in a live Designer: the tests dictate the
+  script's checkbox; the QA checklist has the rows.
+
 - `PropertyKeyFieldTest` in the look-and-feel harness: builds a real
   `JsonEditor` over a session-props-shaped document, in both orders the
   Designer uses (rows before the switch, rows after it), and asserts the

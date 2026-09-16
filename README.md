@@ -65,6 +65,29 @@ Perspective, scripting, tags, reports, pipelines and everything else are
 unaffected. The details, and the headless reproduction, are in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#visiongate).
 
+**Do not use this module in a project that also has the Exchange
+[Dark Mode for the Designer](https://inductiveautomation.com/exchange/2719/overview)
+script imported.** That script lives inside the project (a `designerPatch`
+Vision client tag plus a `designer.darkModePatch` script library) and adds its
+own **View → Dark Mode** checkbox two seconds after the Designer opens. Its dark
+mode paints hundreds of components with explicit colours our light restore
+cannot see, and its "light" mode is not a restore either: it paints the same
+components white and black, which on top of our dark theme leaves white panels
+with black text in a dark Designer. The module detects it and keeps out of the
+way:
+
+- **Tools → Dark Mode is refused** while the script's View → Dark Mode is
+  ticked, with the status bar and a dialog saying so.
+- **A dark Designer turns itself light** the moment the script's checkbox is
+  ticked, so the script paints over a stock Designer, the only state it knows.
+- A project that merely carries the script, unticked, gets a one-line warning
+  in the status bar and the log after launch. Dark mode still works there.
+
+To keep the module, delete the `designerPatch` Vision client tag from the
+project (and from any parent project it inherits from). The
+`designer.darkModePatch` script library can stay; without the tag it never
+runs. The module never undoes the script's own paints.
+
 Some surfaces are left light **on purpose**, because they render *your* content
 rather than the Designer's chrome, and theming them would misrepresent what your
 users will actually see:

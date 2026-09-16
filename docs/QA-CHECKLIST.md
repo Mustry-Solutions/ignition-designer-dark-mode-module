@@ -425,6 +425,37 @@ implemented by `FPMIWindow` and `VisionTemplate`. It cannot be pinned by
 is still there with `javap` against the `vision-client` jar in
 `~/.ignition/cache/resources/modules/com.inductiveautomation.vision/`.
 
+## O. Exchange script gate
+
+Not a theming check either: the module must **stay out of the way of the
+Exchange script** when a project carries it
+([ARCHITECTURE.md](ARCHITECTURE.md#exchangescriptgate), #89). None of these
+rows has been run: the gate was written from the script's 1.3.0 source, and
+the tests dictate its checkbox. Setup, once: in the dev Designer, **File →
+Import Project** `Projects/darkModePatch.zip` from the Exchange 1.3.0 zip
+(`~/Downloads/dark_mode_for_the_designer.1.3.0.zip`) into `test`, then import
+`Tags/autoAdd Vision Client Tag.xml` as a Vision client tag, save, and relaunch
+the Designer. The script's checkbox appears at the top of the View menu about
+two seconds after the Designer opens. Every row is pass/fail by eye plus one
+line in `~/.ignition/designer-dark-mode.log` (`Exchange script gate: …`).
+**Before any of it, reproduce the conflict itself** (first two rows) so the
+messages describe what actually happens.
+
+| Step | Expect | Result | Last checked | Notes |
+|---|---|---|---|---|
+| **Reproduction, no gate involved.** Fresh launch, light. Tick View → Dark Mode (the script's), then untick it | The script paints the Designer dark, then paints it explicit white/black — NOT the stock theme. Screenshot both | — | — | This is the script's own behaviour; the module is not in play yet. Attach the screenshots to #89 |
+| **Reproduction.** Relaunch. Tools → Dark Mode (ours) on. Then tick View → Dark Mode, then untick it | With the gate: ours turns off the moment the script's box is ticked (next rows). Without the gate (an older build, or `ops/deploy.sh` of `main` before this change): a half-light, half-dark Designer that Tools → Dark Mode off does not fix | — | — | The failure mode #89 describes. Confirm it once against a build without the gate so the fix is known to fix something |
+| Launch with the project. Wait ten seconds, light Designer, nothing ticked | Status bar `This project contains the "Dark Mode for the Designer" Exchange script…`; log `Exchange script gate: This project contains…` at WARN in the Designer's own log too; no dialog | — | — | The one-time warning. Check the status-bar text is legible under the stock theme |
+| Same launch. Tools → Dark Mode | Applies. The script is present but unticked, so nothing is blocked | — | — | |
+| Dark Designer (ours). Tick View → Dark Mode | Ours turns off first — status bar `Dark mode was turned off because the Exchange script's View → Dark Mode was ticked…`, a dialog once per session, Tools → Dark Mode unticked — and THEN the script paints its dark mode over the stock theme. The result should look like the script alone does | — | — | The drop-out. Log: `Exchange script gate: leaving dark mode because…`. If the script's paint lands first and ours restores over it, record it: the item event should precede the action listener, but nobody has watched it happen |
+| Script's box ticked (the Designer is script-dark). Tools → Dark Mode | Refused: dialog + status bar `Dark mode was not applied: the Exchange script's View → Dark Mode is ticked…`; menu stays unticked; preference reset | — | — | Log: `Exchange script gate: Dark mode was not applied…` |
+| Untick View → Dark Mode (script-light, explicit white). Tools → Dark Mode | Applies, over the script's white paints. Expect the script's explicitly painted panels to STAY light under our dark theme | — | — | Not a bug in the gate: the script's paints are its state and the README says so. Record how bad it looks; that is the case for removing the tag |
+| Dark preference saved, quit with the script's box ticked, relaunch | Depends on whether the script re-ticks its box at launch: with `startupInDarkMode = False` (the default) it comes back unticked, so ours applies. Edit the tag's script to `True`, relaunch: the Designer comes up dark (ours, at the startup apply), then the script's tag fires at +2 s and ticks its box: ours drops out with the status-bar line; net result script-dark | — | — | The six-second delayed check is the belt for the case where the item listener is not yet attached when the tag ticks the box — the checkbox did not exist when we looked |
+| Quit while dark with the script present | No dialog on the way out; no `Exchange script gate:` refusal at shutdown | — | — | Same teardown rule as the Vision gate |
+| Delete the `designerPatch` client tag, save, relaunch | No warning, no checkbox, Tools → Dark Mode works; log has no `Exchange script gate:` lines | — | — | The fix the messages prescribe must actually be sufficient |
+| An **inherited** project: script imported into a parent, child opened | The warning appears in the child too (its `getResource` sees the parent's script module), and the checkbox rows above behave the same | — | — | The issue's inherited-project case. If the warning does NOT appear, `hasScriptModule()` needs `getResource` swapped for a parent-aware lookup |
+| Project without the script | No warning, no `Exchange script gate:` lines beyond `detail`-level | — | — | The gate must cost nothing when the script is absent |
+
 ## Findings from the sweeps
 
 Surfaces that failed, with the mechanism worked out. A finding stays here until
@@ -695,6 +726,7 @@ these is a real gap, not a pass.
 | §F border chooser, Layout, Size and Position | Need a Vision window with a component selected | A Vision window, by hand |
 | §F the **(1.3.0)** rows: binding editor, security panel, template custom properties, Easy Chart and Tab Strip customizers | Added 2026-09-15 from the Exchange script's 1.3.0 diff, never opened under this module. Each needs a Vision window with a component of that type on it | A Vision window with a template, an Easy Chart and a Tab Strip, by hand |
 | §D message handler dialog | Also from the 1.3.0 diff | Open Gateway Events → Message and add a handler |
+| **§O, all of it** | The Exchange script gate was written from the script's source; the coexistence failure it guards against has not been reproduced live, and the order of the checkbox's item event against the script's action listener has not been watched | Import the Exchange 1.3.0 project and client tag into `test`, then the §O rows, reproduction first |
 | ~~Relaunch-comes-up-stock~~ | **Run 2026-09-01 and passed.** Toggled off, relaunched, confirmed the Designer comes up genuinely stock, toggled back. Recorded rather than deleted because the run doubles as the baseline half of the comparison in [Compare against a relaunched Designer](#compare-against-a-relaunched-designer-before-calling-something-a-bug) | — |
 | §E view editor rulers and surround | Not a gap in testing — an undecided question. They are chrome and they stay light | A decision |
 | **Everything, on Windows and Linux** | Every run above is macOS. The headless harness runs on all three platforms in CI, which proves the switch sequence and the reflective reach — not what anything looks like. The three rows marked *(Windows, Linux)* in §A and §B are surfaces that exist only there | A Designer sitting on each, walking this checklist, with the `env:` block from the log kept alongside the run. A 150% display on Windows and a HiDPI desktop on Linux would settle the scaling question in [ARCHITECTURE](ARCHITECTURE.md#gotchas-and-hard-won-facts) at the same time |

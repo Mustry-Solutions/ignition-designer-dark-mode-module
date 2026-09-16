@@ -350,6 +350,63 @@ the restore's phase order leaves fonts stale, which would write `setFont`
 into any window open across the switch. That is a follow-up feature, not a
 swap for the gate; the probe recipe is in the project notes.
 
+### ExchangeScriptGate
+Also not a theming pass. The Exchange resource *Dark Mode for the Designer*
+(Justin Edwards, MIT) runs on 8.3 since its 1.3.0 release and lives inside
+projects: a `designerPatch` Vision client tag whose `valueChanged` script
+waits two seconds and calls `designer.darkModePatch.addSelectionBox()`, which
+inserts a `JCheckBoxMenuItem("Dark Mode")` at index 0 of the View menu. That
+checkbox is the script's state (`getDarkMode()` reads its `selected`), an
+inherited project carries the tag into every child, and the Designer's own
+startup order means it appears after our startup apply.
+
+What the script does is the problem, not that it exists. Its dark branch
+(`setPaintableComponents(..., isDarkMode=True)`) sets explicit,
+non-`UIResource` backgrounds and foregrounds on several hundred component
+classes and wraps IA's mouse, document, tree and column listeners; none of
+that is reachable by our light restore, which only tracks what this module
+changed. Its light branch is not a restore: it paints the same components
+explicit white and black. Ticked on top of our dark theme, that is white
+panels with black text inside a dark Designer, and unticking it does not put
+anything back. The failure looks like a module bug and the cure (remove the
+client tag) is not one a user would guess (#89).
+
+So the gate does three things, none of them to the script's paints:
+
+- **Refuse.** `blockingReason()` is non-null while the script's checkbox is
+  ticked, and `ThemeManager.scriptWins()` is asked in the same two places as
+  `visionWins()` — at the click and again one turn later when the theme is
+  installed — with the same contract: status bar, dialog, preference and menu
+  reset to light. Vision is asked first, so a Designer on Vision with the
+  script ticked gets the Vision explanation, the one that protects saved
+  resources. An *unticked* checkbox does not block: it has painted nothing.
+- **Drop out.** `watchCheckbox()` adds an `ItemListener` to the script's
+  checkbox; `SELECTED` runs `leaveDarkForScript`, synchronously, from the
+  item event that precedes the script's own `ActionListener`, so the script
+  paints over a stock Designer — the only state it knows how to handle. The
+  preference is kept, as for a Vision drop-out.
+- **Warn.** Six seconds after the startup apply (the tag's two seconds plus
+  margin), `checkForExchangeScript()` runs once: script ticked under dark
+  mode means a drop-out, script present but unticked means one status-bar
+  line and a WARN in the log, and either way the checkbox watch starts.
+  Presence is `findCheckbox() != null || hasScriptModule()`; the latter asks
+  the open project (`DesignerContext.getProject()`, a `ResourceCollection`)
+  for `ignition/script-python` at `designer/darkModePatch`, which is why an
+  inherited project without its own copy still warns. Absent, nothing is
+  logged above `detail`.
+
+Detection is plain Swing — `JFrame.getJMenuBar()`, a `JMenu` whose text is
+`View`, a `JCheckBoxMenuItem` whose text is `Dark Mode` — and matches on text
+because the script itself identifies its checkbox by text
+(`subElements[0].text == 'Dark Mode'`). Only View is scanned; this module's
+own Dark Mode item is under Tools. The whole View menu is walked rather than
+index 0 alone, so another module's View entries cannot hide it.
+
+Not reproduced live at the time of writing: the gate was written from the
+script's source, `ExchangeScriptGateTest` drives the real menu bar and
+`ExchangeScriptGateSwitchTest` dictates the verdict. The QA checklist's §O
+starts with the reproduction.
+
 ### ComponentInspector
 Debug only. **Cmd/Ctrl+Shift+I** (or `+F12`) dumps the component chain under the
 mouse to the debug log — class, background/foreground with `UIResource` vs
