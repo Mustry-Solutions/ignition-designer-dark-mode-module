@@ -10,6 +10,15 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-16
+
+A Vision-safety and portability release. Dark mode now keeps out of Vision's
+way, since a Vision window saved under it could not be opened by a Vision
+client; three user-reported defects are fixed (Perspective property names,
+the Event Stream editor, the Windows workspace tab strip); the Designer's
+font survives the switch; and the harness runs on Windows and macOS in CI.
+The Windows fixes are proven headlessly and not yet seen by eye on Windows.
+
 ### Added
 
 - **Dark mode and Vision are kept apart: Tools → Dark Mode is refused while
