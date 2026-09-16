@@ -44,7 +44,12 @@ pass is logged (with a stack trace, to the debug log) without stranding the rest
    then `keepStockFont(...)` puts the `Label.font` read just before the swap
    as FlatLaf's `defaultFont`, so the switch is colour-only (see
    [Gotchas](#gotchas-and-hard-won-facts)). Light: reinstall the stock theme
-   through Synthetica's own entry point. Wrapped in a one-shot retry.
+   through Synthetica's own entry point. Wrapped in a one-shot retry. Then,
+   light only and before anything else can ask Synthetica for a style,
+   **prime the text styles** — `primeSyntheticaStyles()` builds a throwaway
+   component of each text kind and updates it, because the first
+   formatted-text-field style Synthetica serves after a reinstall is stale
+   (#92, part 3; see [VisionGate](#visiongate)).
 2. **Synthetica singleton** — `keepSyntheticaAlive()`, first of the `safely(...)`
    passes on the dark switch, because nothing else may call into Synthetica
    until it is back.
@@ -360,23 +365,28 @@ That is cured at the point of writing
 ([TokenColorDelegate](#tokencolordelegate)): the token object is recognised
 by identity and written with its stock value.
 
-One more thing the probe surfaced, now reproduced in the repo
-(`VisionWindowSaveTest`, the two `@Disabled` scenarios): after the light
-restore, Vision components that were alive under dark come back from the
-tree update holding a Synthetica `ScalableFont` — Tahoma 11, the theme's raw
-font, for the text field — while a fresh component gets Dialog 12; and a
-save then FAILS rather than writing `setFont`, because the font differs from
-the clean copy and a `ScalableFont` has no no-arg constructor to build one
-from. It is per component: repeating `SyntheticaLookAndFeel.setFont`,
-`IgnitionLookAndFeel.init()` or a full reinstall does not bring those
-components back, a second tree update does not either, and a window built
-afterwards is fine. It takes a preceding dark save through Vision's
-delegates in the same JVM to show; the cycle alone is clean. Whether a live
-Designer, which updates its attached windows itself, sees the same is not
-known. The three are tracked as #92. The cache refresh and the token
-substitution have shipped; the gate stays until the font restore does, so
-today both are safety nets for the one-turn gap and the attach-time fallback
-rather than something a user can see.
+The third piece, the fonts, turned out to be Synthetica's, not the
+restore's phase order. Ignition tells Synthetica to keep its own font off
+every Vision component by name (`BaseFormattedTextField.setName` calls
+`IgnitionLookAndFeel.disableFontScaling(name)`, which puts
+`Synthetica.font.enabled.<name>=false`), so those components get the theme's
+raw font wrapped in a `ScalableFont` — Dialog 12, because
+`SyntheticaLookAndFeel.setFont` has replaced the theme's Tahoma 11. After
+Synthetica is installed a SECOND time in the same JVM, the first
+formatted-text-field style it serves still carries Tahoma 11; every request
+after that is right, and a component that got the stale one is corrected by
+its next tree update. So the first Vision text field the restore's tree walk
+reached came back on Tahoma 11, and a save of that window then FAILED
+outright — a `ScalableFont` that differs from the clean copy has no no-arg
+constructor for one. The switch to FlatLaf also drops the name registrations
+(Synthetica's uninstall takes its keys), so it only shows once a Vision
+component has been created or named under dark, which is why the earlier
+harness cycles looked clean. `primeSyntheticaStyles()` takes that first
+request with throwaway text components, straight after the reinstall;
+`RestoredTextFieldFontTest` reproduces it without Vision (the name
+registration is client-api) and `VisionWindowSaveTest` on the real
+component. The three pieces of #92 are in; the gate stays until a live
+sitting has run the Vision rows of the QA checklist under dark mode.
 
 The probe itself lives in `designer/src/visionProbe/`, a source set that
 exists only with `-Pvision.jars` (`ops/vision-jars.sh` prints the newest set

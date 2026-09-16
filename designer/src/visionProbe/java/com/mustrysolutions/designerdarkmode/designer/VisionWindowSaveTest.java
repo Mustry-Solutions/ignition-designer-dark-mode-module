@@ -31,7 +31,6 @@ import com.inductiveautomation.vision.api.designer.palette.JavaBeanPaletteItem;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -197,27 +196,23 @@ class VisionWindowSaveTest {
 
     // --- part 3: fonts across the light restore ------------------------
     //
-    // Both scenarios below reproduce the open half of #92. After the light
-    // restore, Vision components that were alive under dark come back from
-    // the tree update with a Synthetica ScalableFont — Tahoma 11 for the text
-    // field, the theme's raw font — while a fresh component gets Dialog 12,
-    // and a save then fails outright: the font differs from the clean copy,
-    // and a ScalableFont cannot be serialized ("Unable to create clean copy
-    // of de.javasoft.plaf.synthetica.ScalableFont"). It is per component:
-    // repeating Synthetica.setFont, IgnitionLookAndFeel.init() or a full
-    // reinstall does not bring those components back, a second tree update
-    // does not either, and a window built afterwards is fine. It needs a
-    // preceding dark save through Vision's delegates in the same JVM to
-    // show; on its own the cycle is clean. Not yet known whether a live
-    // Designer, which updates attached windows itself, sees the same.
-    // Remove @Disabled to work on it.
+    // Both scenarios below failed before ThemeManager.primeSyntheticaStyles
+    // (#92, part 3): after the light restore, the text field came back from
+    // the tree update holding Synthetica's raw theme font, Tahoma 11 in a
+    // ScalableFont, and the save then failed outright — a ScalableFont that
+    // differs from the clean copy cannot be serialized. Synthetica serves a
+    // stale first formatted-text-field style after a reinstall; the primer
+    // takes that request. RestoredTextFieldFontTest shows it without Vision.
 
     @Test
-    @Disabled("#92 part 3: fonts after the light restore, see the comment above")
     @DisplayName("a window open across dark and back saves cleanly after one tree update")
     void windowOpenAcrossTheSwitchSavesCleanlyAfterRestore() throws Exception {
         onEdt(() -> {
             BasicContainer window = window();
+            // The first save of a container creates its fpmi.lc layout
+            // record and the second writes it, in any theme: the reference
+            // is a second save.
+            save(window);
             String before = save(window);
             manager.apply(true);
             SwingUtilities.updateComponentTreeUI(window);
@@ -233,7 +228,6 @@ class VisionWindowSaveTest {
     }
 
     @Test
-    @Disabled("#92 part 3: fonts after the light restore, see the comment above")
     @DisplayName("a window built under dark saves cleanly after the light restore")
     void darkBornWindowSavedAfterRestore() throws Exception {
         onEdt(() -> {

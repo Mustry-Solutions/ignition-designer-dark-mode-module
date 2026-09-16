@@ -55,9 +55,25 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   windows across a theme switch with Vision's own delegates. It also pins
   the `TopLevelContainer` name the gate keys on, which the QA checklist had
   to verify by hand. Two of its scenarios are `@Disabled` with the finding
-  written on them: after a light restore, Vision components that were alive
-  under dark can come back holding Synthetica's raw theme font, and a save
-  then fails rather than writing `setFont` — the open part 3 of #92.
+  written on them at first, then re-enabled once part 3 below was fixed.
+
+- **The first Vision text field after a switch back no longer comes back on
+  Synthetica's raw theme font** (#92, part 3 of 3). Ignition keeps
+  Synthetica's own font off every Vision component by name, so those get the
+  theme font wrapped in a `ScalableFont` — Dialog 12 in a Designer. After
+  Synthetica is installed a second time in the same JVM, the first
+  formatted-text-field style it serves still carries the theme's Tahoma 11;
+  every later one is right. So the first Vision text field the restore's tree
+  walk reached ended up on Tahoma 11, and a save of that window then failed
+  outright, since a `ScalableFont` that differs from the clean copy cannot be
+  serialized. It only shows once a Vision component has been created or named
+  under dark, because the switch to FlatLaf drops the name registrations.
+  The light restore now primes Synthetica with a throwaway component of each
+  text kind straight after the reinstall, so the stale request is spent
+  before any real component asks. Reproduced without Vision in the harness
+  (`RestoredTextFieldFontTest`) and on the real component in the probe. With
+  this, all three pieces of #92 are in headlessly; `VisionGate` stays until
+  a live sitting has run the Vision rows of the QA checklist under dark mode.
 
 ## [0.3.0] - 2026-09-16
 

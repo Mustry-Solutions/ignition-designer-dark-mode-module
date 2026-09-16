@@ -53,6 +53,12 @@ final class DesignerLookAndFeel {
             .setLookAndFeel(STOCK_LAF_CLASS, true, true);
         de.javasoft.plaf.synthetica.SyntheticaLookAndFeel.setFont("Dialog", 12);
         com.jidesoft.plaf.LookAndFeelFactory.installJideExtension();
+        // A Designer has built every kind of text component long before the
+        // first switch, and Swing installs each kind's lazy action map into
+        // the defaults table when it does. The module's light restore primes
+        // the same kinds (#92, part 3), so the stock baseline must have them
+        // too, or a clean cycle reads as five defaults that "appeared".
+        ThemeManager.primeSyntheticaStyles();
     }
 
     /** True when the stock look and feel is the one currently installed. */

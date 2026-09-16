@@ -613,6 +613,12 @@ public class ThemeManager {
                     DebugLog.log("restoreStockLaf failed once; retrying.", first);
                     restoreStockLaf();
                 }
+                // Straight after the reinstall and before any other pass can
+                // ask Synthetica for a style: the first formatted-text-field
+                // style it serves now is stale (#92, part 3). Under safely()
+                // rather than here, because a primer that throws must not
+                // abort the restore.
+                safely("primeStyles", ThemeManager::primeSyntheticaStyles);
             }
         } catch (Throwable t) {
             log.error("Failed to switch the Designer theme.", t);
@@ -820,6 +826,54 @@ public class ThemeManager {
      */
     java.util.function.Function<java.awt.Color, Integer> stockTokenRgb() {
         return tokens::stockRgb;
+    }
+
+    /**
+     * Consume Synthetica's stale first style after a reinstall (#92, part 3).
+     *
+     * <p>After Synthetica is installed a second time in the same JVM, the
+     * first formatted-text-field style it serves still carries the theme's
+     * raw font (Tahoma 11) rather than the one {@code setFont} installed;
+     * every request after that is right, and a component that got the stale
+     * one is corrected by its next tree update. Left alone, the first such
+     * field the restore's own tree walk reaches ends up on the wrong font,
+     * and a Vision save of that window fails outright, since a Synthetica
+     * {@code ScalableFont} that differs from the clean copy cannot be
+     * serialized. Vision components are the ones affected: Ignition tells
+     * Synthetica to keep its own font off them by name
+     * ({@code IgnitionLookAndFeel.disableFontScaling}), which is the path the
+     * stale style sits on. So a throwaway component of each text kind takes
+     * the first request instead, straight after the reinstall and before
+     * anything else can ask. Reproduced without Vision in
+     * {@code RestoredTextFieldFontTest}, with it in the Vision probe.
+     *
+     * <p>Text kinds only. Every kind primed makes Swing install that kind's
+     * lazy action map into the fresh defaults table, which is what a Designer
+     * has anyway but the harness's stock install does not until it runs this
+     * too ({@code DesignerLookAndFeel.installStock}); a slider cannot even be
+     * built headlessly. Static and package-private for that harness call.
+     */
+    static void primeSyntheticaStyles() {
+        if (!STOCK_LAF_CLASS.equals(UIManager.getLookAndFeel().getClass().getName())) {
+            return;
+        }
+        javax.swing.JPanel primer = new javax.swing.JPanel();
+        primer.add(new javax.swing.JFormattedTextField());
+        primer.add(new javax.swing.JTextField());
+        primer.add(new javax.swing.JPasswordField());
+        primer.add(new javax.swing.JTextArea());
+        primer.add(new javax.swing.JTextPane());
+        primer.add(new javax.swing.JEditorPane());
+        primer.add(new javax.swing.JSpinner());
+        primer.add(new javax.swing.JComboBox<>());
+        primer.add(new javax.swing.JLabel());
+        primer.add(new javax.swing.JButton());
+        java.util.Set<String> failed = new java.util.LinkedHashSet<>();
+        int failures = updateComponentTreeUiResiliently(primer, failed);
+        if (failures > 0) {
+            DebugLog.log("primeSyntheticaStyles: updateUI failed on " + failures
+                + " primer component(s): " + failed);
+        }
     }
 
     /** Note a phase that does not run under {@link #safely} (it has its own guard). */

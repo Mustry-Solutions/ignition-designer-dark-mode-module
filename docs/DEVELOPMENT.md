@@ -190,9 +190,18 @@ set that exists only when told where they are:
 with Vision's own delegates and BeanInfos plus the module's hook, loads every
 save back the way a client does, and pins the `TopLevelContainer` name the
 gate keys on. CI never sees it; run it before touching anything under
-`VisionGate`, `SerializerCleanCopies` or `TokenColorDelegate`. Two scenarios
-are `@Disabled` with the open half of [#92][92] written on them — the fonts
-after a light restore — and are the place to start on it.
+`VisionGate`, `SerializerCleanCopies`, `TokenColorDelegate` or the restore's
+style primer. Its two restore scenarios were the reproduction of the last
+piece of [#92][92], the fonts after a light restore, and now pin the fix.
+
+**Synthetica's property lookups have side effects.** Reading
+`SyntheticaLookAndFeel.get("Synthetica.font.enabled", component)` or
+`getStyleName` inside a diagnostic changed what the next tree update did to
+that component, and two afternoons of bisection went in circles until the
+instrument was reduced to `component.getFont()` and the UI's own
+`SynthContext`. Measure fonts through the component, never through
+Synthetica's static API, and remember that Vision's `addComponent` puts new
+components at index 0.
 
 ### The reflective surface, and which Ignition the harness runs against
 
