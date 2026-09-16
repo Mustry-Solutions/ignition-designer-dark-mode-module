@@ -119,11 +119,11 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   Chart and Tab Strip customizers, and the gateway message handler dialog), a
   note on the Perspective binding-icon fix, and the matching entries in the
   "still unchecked" table. All are unverified until someone opens them.
-- The README now says two things about that script that were missing (docs
-  only; no behaviour change). Under **Known limitations**: the module and the
-  script must not be used in the same project — the script lives inside the
-  project as a library script plus a Vision client tag, adds its own
-  View → Dark Mode checkbox shortly after every launch, and its explicit
+- **Do not use this module and that script in the same project.** The README
+  now says so under **Known limitations**, and says why (docs only; no
+  behaviour change): the script lives inside the project as a library
+  script plus a Vision client tag, adds its own View → Dark Mode checkbox
+  shortly after every launch, and its explicit
   paints in either of its modes are nothing this module's toggle-off can undo,
   so remove its `designerPatch` client tag first; detecting the script at
   startup is tracked in
