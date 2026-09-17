@@ -10,6 +10,22 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Two more things a Vision save could carry from a dark Designer, found
+  by sweeping the whole palette.** A component with no foreground of its
+  own (rectangle, barcode, paintable canvas, cylindrical tank, fill level
+  indicator) inherits its container's look-and-feel foreground, which
+  Vision writes, and under dark that was FlatLaf's near-white; it is now
+  written as the stock colour. And a Tree View dropped under dark could
+  carry FlatLaf's tree colours as strings in its sample rows; they are put
+  back to stock as the component is attached. `VisionCorruptionSweepTest`
+  holds all 55 headlessly buildable palette components to the standard that
+  a save from a dark Designer, in every state a session can be in, is the
+  same bytes as from a stock one, net of four documented residues (a stock
+  token value written explicitly, a drop size a couple of pixels smaller, a
+  combo box row count of 15, and chart sample data).
+
 ### Changed
 
 - **Dark mode now works inside Vision; the gate is gone.** Tools → Dark Mode
