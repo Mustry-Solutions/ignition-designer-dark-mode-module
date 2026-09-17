@@ -60,11 +60,12 @@ class VisionWindowSaveTest {
     private Color base100;
 
     @BeforeAll
-    static void visionBeanInfos() {
+    static void visionBeanInfos() throws Exception {
         // Where Vision keeps the BeanInfo for each of its components; the
         // Designer registers this at startup.
         BeanInfoFactory.addBeanInfoSearchPackage(
             "com.inductiveautomation.factorypmi.designer.beaninfo");
+        VisionClientStubs.install();
     }
 
     @BeforeEach
@@ -246,6 +247,36 @@ class VisionWindowSaveTest {
                 "without LookAndFeelBorders the save must carry the border, or nothing here is under test:\n"
                     + control);
             assertClean(save(window), "dark save of a table after the tree update");
+        });
+    }
+
+    /**
+     * The component actually found live: a Comments Panel is a scroll pane
+     * built borderless, its clean copy has no border, and the tree update
+     * gives the live one FlatLaf's — a null the equality rule cannot reach.
+     * The walk's alignment ({@code VisionConstructionBorders}) puts the null
+     * back, for Vision content only, hence the template around it.
+     */
+    @Test
+    @DisplayName("a comments panel dropped under dark and reached by the tree update saves no FlatLaf border")
+    void commentsPanelTreeUpdatedUnderDarkSavesNoFlatLafBorder() throws Exception {
+        onEdt(() -> {
+            manager.apply(true);
+            VisionTemplate template = new VisionTemplate();
+            BasicContainer window = new BasicContainer();
+            template.addComponent(window);
+            JComponent panel = (JComponent) palette(
+                com.inductiveautomation.factorypmi.application.components.PMICommentsPanel2.class);
+            window.addComponent(panel);
+            assertTrue(panel.getBorder() == null, "under FlatLaf a fresh comments panel has no border");
+            assertClean(save(window), "dark save of a comments panel before the tree update");
+
+            ThemeManager.updateComponentTreeUiResiliently(window, new java.util.LinkedHashSet<>());
+            assertTrue(panel.getBorder() == null,
+                "the walk must have put the border back to none; it is " + panel.getBorder());
+            String saved = save(window);
+            assertClean(saved, "dark save of a comments panel after the tree update");
+            assertFalse(saved.contains("setBorder"), saved);
         });
     }
 

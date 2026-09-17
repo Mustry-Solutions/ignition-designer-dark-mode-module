@@ -12,21 +12,22 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ### Fixed
 
-- **A table-based Vision component dropped under dark mode could make its
-  window unopenable in a client.** Found on 0.4.0 with a Comments Panel: the
-  JDK gives a table's scroll pane a second FlatLaf border instance the
-  moment the Designer's tree update reaches it, the serializer has no rule
-  making two FlatLaf borders equal (it has one for Synthetica's), and the
-  save wrote `com.formdev.flatlaf.ui.FlatScrollPaneBorder` by name. The
-  platform's rule is now extended to every FlatLaf border class, so a
-  look-and-feel border is never written, in any theme. The headless sweep
-  had missed it because it never tree-updated a dark-born component before
-  saving; it does now. A window already saved this way opens again after a
-  light save from the Designer that made it.
+- **A Comments Panel dropped under dark mode made its window unopenable in a
+  client.** Found on 0.4.0. The panel is built without a border; the
+  Designer's tree update gives it FlatLaf's, and the save wrote
+  `com.formdev.flatlaf.ui.FlatScrollPaneBorder` by name, which no client can
+  resolve. Two fixes: the serializer's own "two Synthetica borders are
+  equal" rule is extended to every FlatLaf border class, so a look-and-feel
+  border is never written; and after every tree update under dark a Vision
+  component's look-and-feel border is put back to what a fresh one has,
+  which is what the save compares against. The headless sweep had missed it
+  because it never tree-updated a dark-born component before saving; it
+  does now, and it builds the Comments Panels and the Spinner too. A window
+  already saved this way opens again after a light save from the Designer
+  that made it.
 - **A Date Time Popup Selector lost its border after a switch to dark**, and
-  a dark save then wrote an explicit empty border a client showed. The
-  border it borrows from the text-field defaults is put back after every
-  tree update.
+  a dark save then wrote an explicit empty border a client showed. The same
+  alignment puts it back.
 
 ## [0.4.0] - 2026-09-17
 

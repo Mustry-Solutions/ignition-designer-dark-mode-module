@@ -48,6 +48,14 @@ import com.inductiveautomation.ignition.common.xmlserialization.serialization.eq
  * {@code Border} in the FlatLaf jar this module ships, public or nested.
  * {@code FlatLafBorderClassesTest} scans the jar and fails the build when the
  * list falls out of step with the FlatLaf version in the build.
+ *
+ * <p>The rule cannot reach a {@code null}: a Vision Comments Panel is a
+ * scroll pane whose constructor sets its border to {@code null}, so under
+ * FlatLaf its clean copy has none, and the tree update's
+ * {@code installBorder} then gives the live one {@code ScrollPane.border}.
+ * No equality delegate is consulted for a {@code null}, so that case is
+ * settled before the save, by {@link VisionConstructionBorders}: the live
+ * border is put back to what a fresh instance has.
  */
 final class LookAndFeelBorders {
 
@@ -96,9 +104,6 @@ final class LookAndFeelBorders {
             return border == null ? 0 : border.getClass().hashCode();
         }
     };
-
-    private LookAndFeelBorders() {
-    }
 
     /**
      * Register the rule on a serializer. Failure-soft, and per class: a save

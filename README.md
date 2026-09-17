@@ -57,10 +57,9 @@ window saved from a FlatLaf Designer picked up FlatLaf's fonts, colours and
 border classes and a Vision client could not open it. That is fixed at the
 serializer, proven against the real Vision classes and in a live Designer;
 the details are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#vision). One
-case escaped 0.4.0: a table-based component (Table, Comments Panel, Alarm
-Status Table…) dropped under dark mode and saved could still carry a FlatLaf
-border by name. Fixed since; a window saved that way opens again after a
-light save from the Designer that made it.
+case escaped 0.4.0: a Comments Panel dropped under dark mode and saved
+carried a FlatLaf border by name. Fixed since; a window saved that way opens
+again after a light save from the Designer that made it.
 `ops/vision-check.sh` reads every saved window and template of a project back
 out of the gateway and reports anything a client could not load.
 

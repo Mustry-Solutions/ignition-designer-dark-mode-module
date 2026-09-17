@@ -2,6 +2,7 @@ package com.mustrysolutions.designerdarkmode.designer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.awt.Color;
@@ -85,6 +86,81 @@ class LookAndFeelBorderOnSaveTest {
         String withRule = save(dropped, true);
         assertFalse(withRule.contains(FLATLAF),
             "with the rule a FlatLaf border must never be written:\n" + withRule);
+    }
+
+    /**
+     * The case the rule cannot reach, and the one found live: a scroll pane
+     * built borderless (a Comments Panel) is given {@code ScrollPane.border}
+     * by the tree update, and its clean copy has {@code null}.
+     */
+    @Test
+    @DisplayName("a borderless scroll pane given a FlatLaf border by the tree update is put back to none")
+    void borderlessScrollPaneAlignedBackToNone() throws Exception {
+        manager.apply(true);
+        SerializerProbeBorderlessTable dropped = new SerializerProbeBorderlessTable();
+        assertNull(dropped.getBorder(), "under FlatLaf a fresh one has no border");
+        assertFalse(save(dropped, true).contains("setBorder"));
+
+        ThemeManager.updateComponentTreeUiResiliently(dropped, new LinkedHashSet<>());
+        // The walk's alignment applies to Vision content only; the harness
+        // has none, so the tree update leaves the FlatLaf border in place
+        // and even the rule cannot help a null-versus-border comparison.
+        assertTrue(dropped.getBorder() instanceof com.formdev.flatlaf.ui.FlatScrollPaneBorder);
+        String control = save(dropped, true);
+        assertTrue(control.contains("com.formdev.flatlaf.ui.FlatScrollPaneBorder"),
+            "the control must carry the border, or nothing here is under test:\n" + control);
+
+        assertTrue(VisionConstructionBorders.alignWithFresh(dropped,
+            VisionConstructionBorders.freshBorder(SerializerProbeBorderlessTable.class)));
+        assertNull(dropped.getBorder());
+        assertFalse(save(dropped, true).contains("setBorder"));
+    }
+
+    /** The other direction: a panel that borrowed a border and lost it. */
+    @Test
+    @DisplayName("a panel whose borrowed border the tree update stripped gets the fresh one's back")
+    void borrowedBorderAlignedBack() throws Exception {
+        manager.apply(true);
+        SerializerProbeBorrowedBorderPanel dropped = new SerializerProbeBorrowedBorderPanel();
+        assertTrue(dropped.getBorder() instanceof com.formdev.flatlaf.ui.FlatTextBorder);
+
+        ThemeManager.updateComponentTreeUiResiliently(dropped, new LinkedHashSet<>());
+        assertNull(dropped.getBorder(), "FlatLaf defines no Panel.border; installBorder strips a UIResource to null");
+        String control = save(dropped, true);
+        assertTrue(control.contains("m=\"setBorder\" s=\"1;border\"><null/>"), control);
+
+        assertTrue(VisionConstructionBorders.alignWithFresh(dropped,
+            VisionConstructionBorders.freshBorder(SerializerProbeBorrowedBorderPanel.class)));
+        assertTrue(dropped.getBorder() == UIManager.getBorder("TextField.border"),
+            "the fresh instance's border is FlatLaf's shared instance, the clean copy's too");
+        assertFalse(save(dropped, true).contains("setBorder"));
+    }
+
+    @Test
+    @DisplayName("the alignment leaves a border the user set alone")
+    void alignmentLeavesUserBorderAlone() throws Exception {
+        manager.apply(true);
+        SerializerProbeBorderlessTable dropped = new SerializerProbeBorderlessTable();
+        dropped.setBorder(BorderFactory.createLineBorder(Color.RED, 3));
+        assertFalse(VisionConstructionBorders.alignWithFresh(dropped,
+            VisionConstructionBorders.freshBorder(SerializerProbeBorderlessTable.class)));
+        assertTrue(save(dropped, true).contains("javax.swing.border.LineBorder"));
+    }
+
+    @Test
+    @DisplayName("a class that cannot be built fresh is left as the tree update made it")
+    void unbuildableLeftAlone() throws Exception {
+        manager.apply(true);
+        SerializerProbeBorderlessTable dropped = new SerializerProbeBorderlessTable();
+        ThemeManager.updateComponentTreeUiResiliently(dropped, new LinkedHashSet<>());
+        assertFalse(VisionConstructionBorders.alignWithFresh(dropped,
+            VisionConstructionBorders.freshBorder(NoPublicConstructor.class)));
+        assertTrue(dropped.getBorder() instanceof com.formdev.flatlaf.ui.FlatScrollPaneBorder);
+    }
+
+    static final class NoPublicConstructor extends javax.swing.JPanel {
+        private NoPublicConstructor() {
+        }
     }
 
     @Test

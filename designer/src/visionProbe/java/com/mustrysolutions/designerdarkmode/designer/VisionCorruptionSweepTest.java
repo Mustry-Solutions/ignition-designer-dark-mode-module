@@ -78,9 +78,10 @@ class VisionCorruptionSweepTest {
     private CellRendererSanitizer renderers;
 
     @BeforeAll
-    static void visionBeanInfos() {
+    static void visionBeanInfos() throws Exception {
         BeanInfoFactory.addBeanInfoSearchPackage(
             "com.inductiveautomation.factorypmi.designer.beaninfo");
+        VisionClientStubs.install();
     }
 
     @BeforeEach
@@ -118,6 +119,8 @@ class VisionCorruptionSweepTest {
             }
             assertTrue(reference.size() > 50, "the sweep must cover the palette; built only "
                 + reference.size() + " of " + PALETTE.size() + ": " + unbuildable);
+            System.out.println("Sweep: built " + reference.size() + " of " + PALETTE.size()
+                + " palette kinds; unbuildable headless: " + unbuildable);
 
             goDark();
             List<String> differing = new ArrayList<>();
@@ -398,6 +401,10 @@ class VisionCorruptionSweepTest {
      * {@code fpmi.lc} record. The save returned is the second.
      */
     private String attachedAndSaved(BasicContainer window) throws Exception {
+        // Inside a template, as in the Designer: the walk's border alignment
+        // applies to Vision content only.
+        VisionTemplate holder = new VisionTemplate();
+        holder.addComponent(window);
         ThemeManager.updateComponentTreeUiResiliently(window, new java.util.LinkedHashSet<>());
         save(window);
         return save(window);
@@ -448,7 +455,9 @@ class VisionCorruptionSweepTest {
      *       ({@code <p2df>}): FlatLaf's fonts and insets measure a label two
      *       pixels smaller. Cosmetic, and the user resizes anyway.</li>
      *   <li>Timestamps and the random sample data charts generate, which
-     *       differ between two stock saves too.</li>
+     *       differ between two stock saves too; and every date-valued
+     *       setter, since a component's "now" and its clean copy's differ
+     *       whenever a second boundary falls between them.</li>
      * </ul>
      */
     private static String comparable(String xml) {
@@ -463,7 +472,14 @@ class VisionCorruptionSweepTest {
             // theme it was built or updated under, and saves as a plain int.
             // Fifteen dropdown rows instead of eight; documented, not a colour.
             .replaceAll("\\s*<c-c m=\"setMaximumRowCount\" s=\"1;i\"><int>\\d+</int></c-c>", "")
-            .replaceAll("<c-c m=\"setFormattedDate\" s=\"1;str\"><str>[^<]*</str></c-c>", "<c-c m=\"setFormattedDate\"/>")
+            // A date-time selector's formatted date is the moment it was
+            // built; whether the save writes it depends on whether the clean
+            // copy was built in the same second.
+            .replaceAll("\\s*<c-c m=\"setFormattedDate\" s=\"1;str\"><str>[^<]*</str></c-c>", "")
+            // Likewise every date-valued setter (a spinner's setDateValue, a
+            // date range's setStartDate…): "now" at construction, written or
+            // not by the clock.
+            .replaceAll("\\s*<c-c m=\"set[A-Za-z]*\" s=\"1;date\"><date>\\d+</date></c-c>", "")
             .replaceAll("<date>\\d+</date>", "<date/>")
             .replaceAll("<int>\\d+</int>", "<int/>")
             .replaceAll("<dbl>[\\d.\\-E]+</dbl>", "<dbl/>");
