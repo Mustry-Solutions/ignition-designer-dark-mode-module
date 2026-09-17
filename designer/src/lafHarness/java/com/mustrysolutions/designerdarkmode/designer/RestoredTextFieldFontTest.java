@@ -116,6 +116,60 @@ class RestoredTextFieldFontTest {
     }
 
     @Test
+    @DisplayName("Vision-named components of every kind born under dark come back with the stock font")
+    void componentsOfEveryKindBornUnderDarkGetTheStockFont() throws Exception {
+        onEdt(() -> {
+            java.util.Map<String, java.util.function.Supplier<javax.swing.JComponent>> kinds =
+                new java.util.LinkedHashMap<>();
+            kinds.put("Progress Bar", javax.swing.JProgressBar::new);
+            kinds.put("Check Box", javax.swing.JCheckBox::new);
+            kinds.put("Radio Button", javax.swing.JRadioButton::new);
+            kinds.put("Button", javax.swing.JButton::new);
+            kinds.put("Toggle Button", javax.swing.JToggleButton::new);
+            kinds.put("Label", javax.swing.JLabel::new);
+            kinds.put("Dropdown List", javax.swing.JComboBox::new);
+            kinds.put("Text Area", javax.swing.JTextArea::new);
+            kinds.put("Password Field", javax.swing.JPasswordField::new);
+            kinds.put("Table", javax.swing.JTable::new);
+            kinds.put("Tree View", javax.swing.JTree::new);
+            kinds.put("List", javax.swing.JList::new);
+            kinds.put("Spinner", javax.swing.JSpinner::new);
+            for (String name : kinds.keySet()) {
+                IgnitionLookAndFeel.disableFontScaling(name);
+            }
+            java.util.Map<String, Font> stock = new java.util.LinkedHashMap<>();
+            kinds.forEach((name, kind) -> stock.put(name, named(kind.get(), name, new JPanel()).getFont()));
+
+            goDark();
+            for (String name : kinds.keySet()) {
+                IgnitionLookAndFeel.disableFontScaling(name);
+            }
+            JPanel window = new JPanel();
+            java.util.Map<String, javax.swing.JComponent> born = new java.util.LinkedHashMap<>();
+            kinds.forEach((name, kind) -> born.put(name, named(kind.get(), name, window)));
+            manager.apply(false);
+            SwingUtilities.updateComponentTreeUI(window);
+
+            java.util.List<String> wrong = new java.util.ArrayList<>();
+            born.forEach((name, component) -> {
+                if (!describe(stock.get(name)).equals(describe(component.getFont()))) {
+                    wrong.add(name + ": " + describe(stock.get(name)) + " -> " + describe(component.getFont()));
+                }
+            });
+            assertEquals(List.of(), wrong,
+                "these kinds came back from the restore on a different font; a Vision save of "
+                    + "any of them fails on its ScalableFont");
+        });
+    }
+
+    private static javax.swing.JComponent named(javax.swing.JComponent component, String name, JPanel panel) {
+        component.setName(name);
+        panel.add(component);
+        SwingUtilities.updateComponentTreeUI(panel);
+        return component;
+    }
+
+    @Test
     @DisplayName("the first formatted text field styled after the restore is not special")
     void firstStyledFieldAfterRestoreIsRight() throws Exception {
         onEdt(() -> {

@@ -249,6 +249,8 @@ class VisionWindowSaveTest {
         container.addComponent(palette(PMIButton.class));
         container.addComponent(palette(PMILabel.class));
         container.addComponent(palette(PMITextField.class));
+        container.addComponent(palette(com.inductiveautomation.factorypmi.application.components.PMIProgressBar.class));
+        container.addComponent(palette(com.inductiveautomation.factorypmi.application.components.PMICheckBox.class));
         return container;
     }
 
@@ -277,7 +279,7 @@ class VisionWindowSaveTest {
     private static void assertLoads(String xml) throws Exception {
         Object root = load(xml);
         assertTrue(root instanceof BasicContainer, "the save did not load back as a window: " + root);
-        assertEquals(3, ((BasicContainer) root).getComponentCount(),
+        assertEquals(5, ((BasicContainer) root).getComponentCount(),
             "the loaded window has the wrong number of components");
     }
 

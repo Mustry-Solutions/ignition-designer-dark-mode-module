@@ -710,47 +710,68 @@ public class ThemeManager {
      * Consume Synthetica's stale first style after a reinstall (#92, part 3).
      *
      * <p>After Synthetica is installed a second time in the same JVM, the
-     * first formatted-text-field style it serves still carries the theme's
-     * raw font (Tahoma 11) rather than the one {@code setFont} installed;
-     * every request after that is right, and a component that got the stale
-     * one is corrected by its next tree update. Left alone, the first such
-     * field the restore's own tree walk reaches ends up on the wrong font,
-     * and a Vision save of that window fails outright, since a Synthetica
-     * {@code ScalableFont} that differs from the clean copy cannot be
-     * serialized. Vision components are the ones affected: Ignition tells
+     * first style it serves for a region still carries the theme's raw font
+     * (Tahoma 11) rather than the one {@code setFont} installed; every
+     * request after that is right, and a component that got the stale one is
+     * corrected by its next tree update. Left alone, the first component of
+     * each kind the restore's own tree walk reaches ends up on the wrong
+     * font, and a Vision save of that window fails outright, since a
+     * Synthetica {@code ScalableFont} that differs from the clean copy cannot
+     * be serialized. Vision components are the ones affected: Ignition tells
      * Synthetica to keep its own font off them by name
      * ({@code IgnitionLookAndFeel.disableFontScaling}), which is the path the
-     * stale style sits on. So a throwaway component of each text kind takes
-     * the first request instead, straight after the reinstall and before
-     * anything else can ask. Reproduced without Vision in
-     * {@code RestoredTextFieldFontTest}, with it in the Vision probe.
+     * stale style sits on. So a throwaway component of every kind takes the
+     * first request instead, straight after the reinstall and before anything
+     * else can ask. It is every kind, not just the text ones: the first live
+     * sitting with the gate gone failed a save on a progress bar dropped
+     * under dark, the one region the text-only primer had not touched.
+     * Reproduced without Vision in {@code RestoredTextFieldFontTest}, with it
+     * in the Vision probe.
      *
-     * <p>Text kinds only. Every kind primed makes Swing install that kind's
-     * lazy action map into the fresh defaults table, which is what a Designer
-     * has anyway but the harness's stock install does not until it runs this
-     * too ({@code DesignerLookAndFeel.installStock}); a slider cannot even be
-     * built headlessly. Static and package-private for that harness call.
+     * <p>Each kind is built under its own guard: a slider cannot be built
+     * headlessly at all, and one kind that cannot be built must not cost the
+     * others their prime. Every kind primed makes Swing install that kind's
+     * lazy action map into the fresh defaults table, which a Designer has
+     * anyway but the harness's stock install does not until it runs this too
+     * ({@code DesignerLookAndFeel.installStock}); static and package-private
+     * for that call.
      */
     static void primeSyntheticaStyles() {
         if (!STOCK_LAF_CLASS.equals(UIManager.getLookAndFeel().getClass().getName())) {
             return;
         }
         javax.swing.JPanel primer = new javax.swing.JPanel();
-        primer.add(new javax.swing.JFormattedTextField());
-        primer.add(new javax.swing.JTextField());
-        primer.add(new javax.swing.JPasswordField());
-        primer.add(new javax.swing.JTextArea());
-        primer.add(new javax.swing.JTextPane());
-        primer.add(new javax.swing.JEditorPane());
-        primer.add(new javax.swing.JSpinner());
-        primer.add(new javax.swing.JComboBox<>());
-        primer.add(new javax.swing.JLabel());
-        primer.add(new javax.swing.JButton());
+        java.util.List<java.util.function.Supplier<java.awt.Component>> kinds = java.util.List.of(
+            javax.swing.JFormattedTextField::new, javax.swing.JTextField::new,
+            javax.swing.JPasswordField::new, javax.swing.JTextArea::new,
+            javax.swing.JTextPane::new, javax.swing.JEditorPane::new,
+            javax.swing.JSpinner::new, javax.swing.JComboBox::new,
+            javax.swing.JLabel::new, javax.swing.JButton::new,
+            javax.swing.JToggleButton::new, javax.swing.JCheckBox::new,
+            javax.swing.JRadioButton::new, javax.swing.JProgressBar::new,
+            javax.swing.JSlider::new, javax.swing.JList::new,
+            javax.swing.JTable::new, javax.swing.JTree::new,
+            javax.swing.JTabbedPane::new, javax.swing.JScrollPane::new,
+            javax.swing.JScrollBar::new, javax.swing.JSplitPane::new,
+            javax.swing.JToolBar::new, javax.swing.JSeparator::new,
+            javax.swing.JMenuBar::new, javax.swing.JMenu::new,
+            javax.swing.JMenuItem::new, javax.swing.JCheckBoxMenuItem::new,
+            javax.swing.JRadioButtonMenuItem::new, javax.swing.JPopupMenu::new,
+            javax.swing.JInternalFrame::new, javax.swing.JDesktopPane::new,
+            javax.swing.JToolTip::new, javax.swing.JPanel::new);
+        java.util.List<String> unbuilt = new java.util.ArrayList<>();
+        for (java.util.function.Supplier<java.awt.Component> kind : kinds) {
+            try {
+                primer.add(kind.get());
+            } catch (Throwable t) {
+                unbuilt.add(t.getClass().getSimpleName());
+            }
+        }
         java.util.Set<String> failed = new java.util.LinkedHashSet<>();
         int failures = updateComponentTreeUiResiliently(primer, failed);
-        if (failures > 0) {
-            DebugLog.log("primeSyntheticaStyles: updateUI failed on " + failures
-                + " primer component(s): " + failed);
+        if (failures > 0 || !unbuilt.isEmpty()) {
+            DebugLog.detail("primeSyntheticaStyles: " + unbuilt.size() + " kind(s) could not be built ("
+                + unbuilt + "), updateUI failed on " + failures + " component(s): " + failed);
         }
     }
 
