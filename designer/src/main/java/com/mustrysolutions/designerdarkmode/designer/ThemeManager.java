@@ -1698,6 +1698,16 @@ public class ThemeManager {
     /** Package-private so the harness can drive the walk without a real Window. */
     void swapWhiteTokenBackgrounds(java.awt.Container container) {
         for (java.awt.Component child : container.getComponents()) {
+            if (VisionWindows.isVisionTopLevel(child)) {
+                // A Vision window or template is the operator's screen, and
+                // every colour, foreground and border this pass sets is an
+                // EXPLICIT value that a save then writes into it: the first
+                // live sitting with the gate gone saved a text field with
+                // this pass's #3A3D3F for a background. The look and feel
+                // underneath the canvas goes dark with the rest; nothing on
+                // the canvas may be touched by hand.
+                continue;
+            }
             if (child instanceof javax.swing.JComponent) {
                 javax.swing.JComponent component = (javax.swing.JComponent) child;
                 java.awt.Color background = component.isBackgroundSet()

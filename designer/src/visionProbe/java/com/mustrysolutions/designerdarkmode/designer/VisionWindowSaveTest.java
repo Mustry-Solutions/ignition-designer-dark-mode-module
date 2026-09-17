@@ -194,6 +194,28 @@ class VisionWindowSaveTest {
         });
     }
 
+    @Test
+    @DisplayName("the dark passes leave a Vision template's content alone, so a dark save carries none of their colours")
+    void darkPassesLeaveVisionContentAlone() throws Exception {
+        onEdt(() -> {
+            VisionTemplate template = new VisionTemplate();
+            template.addComponent(palette(PMITextField.class));
+            template.addComponent(palette(PMIButton.class));
+            javax.swing.JPanel workspace = new javax.swing.JPanel();
+            workspace.add(template);
+            manager.apply(true);
+            SwingUtilities.updateComponentTreeUI(workspace);
+            // What the switch and the component watcher run over every window.
+            manager.swapWhiteTokenBackgrounds(workspace);
+            String darkSave = save(template);
+            assertClean(darkSave, "dark save of a template the dark passes ran over");
+            java.awt.Color background = template.getComponent(1).getBackground();
+            assertTrue(background == java.awt.Color.WHITE,
+                "the text field's white token background was swapped by the module: "
+                    + String.format("#%06X", background.getRGB() & 0xFFFFFF));
+        });
+    }
+
     // --- part 3: fonts across the light restore ------------------------
     //
     // Both scenarios below failed before ThemeManager.primeSyntheticaStyles
@@ -296,6 +318,11 @@ class VisionWindowSaveTest {
         }
         if (xml.contains(clr(darkOf(base900))) || xml.contains(clr(darkOf(base100)))) {
             faults.add("a dark token colour (light-grey text or dark surface on a light client)");
+        }
+        for (int moduleColour : new int[] {0xFF3A3D3F, 0xFF55595B, 0xFF3C3F41}) {
+            if (xml.contains(clr(moduleColour))) {
+                faults.add("one of the module's own dark colours, set by hand on a Vision component");
+            }
         }
         assertEquals(List.of(), faults, what + " carries: " + faults + "\n" + xml);
     }
