@@ -72,6 +72,7 @@ class ReflectiveSurfaceTest {
         named.put("VisionGate.navigationListener", VisionGate.NAVIGATION_LISTENER);
         named.put("ThemeManager.keyField", ThemeManager.KEY_FIELD_CLASS);
         named.put("ThemeManager.borderlessField", ThemeManager.BORDERLESS_FIELD_CLASS);
+        named.put("SerializerCleanCopies", SerializerCleanCopies.SERIALIZER_CLASS);
 
         List<String> missing = new ArrayList<>();
         named.forEach((owner, className) -> {
@@ -184,6 +185,12 @@ class ReflectiveSurfaceTest {
         fields(missing, ThemeManager.BORDERLESS_FIELD_CLASS, ThemeManager.UNEDITABLE_FOREGROUND_FIELD);
         method(missing, ThemeManager.KEY_FIELD_CLASS, ThemeManager.UNEDITABLE_FOREGROUND_SETTER,
             Color.class);
+
+        // --- SerializerCleanCopies (#92) -----------------------------------
+        // The cache the refresh empties. Losing this field would leave every
+        // save after a switch carrying the previous look and feel again, and
+        // the phase would report it — but only in the debug log.
+        fields(missing, SerializerCleanCopies.SERIALIZER_CLASS, SerializerCleanCopies.CLEAN_MAP_FIELD);
 
         // --- VisionGate ----------------------------------------------------
         // The gate's whole job is to run BEFORE a window is deserialized, and

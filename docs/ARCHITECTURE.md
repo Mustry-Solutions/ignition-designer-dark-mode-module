@@ -44,7 +44,12 @@ pass is logged (with a stack trace, to the debug log) without stranding the rest
    then `keepStockFont(...)` puts the `Label.font` read just before the swap
    as FlatLaf's `defaultFont`, so the switch is colour-only (see
    [Gotchas](#gotchas-and-hard-won-facts)). Light: reinstall the stock theme
-   through Synthetica's own entry point. Wrapped in a one-shot retry.
+   through Synthetica's own entry point. Wrapped in a one-shot retry. Then,
+   light only and before anything else can ask Synthetica for a style,
+   **prime the text styles** — `primeSyntheticaStyles()` builds a throwaway
+   component of each text kind and updates it, because the first
+   formatted-text-field style Synthetica serves after a reinstall is stale
+   (#92, part 3; see [VisionGate](#visiongate)).
 2. **Synthetica singleton** — `keepSyntheticaAlive()`, first of the `safely(...)`
    passes on the dark switch, because nothing else may call into Synthetica
    until it is back.
@@ -80,6 +85,10 @@ pass is logged (with a stack trace, to the debug log) without stranding the rest
     re-running the dark-leftover pass when a subtree is attached — a dock
     detached during the restore keeps its dark state, and re-attaching it
     recreates the parent-first copy that leaves JIDE wrappers dark.
+12. **Serializer clean copies** — `SerializerCleanCopies.refresh()`, last in
+    both directions, once every default is where the next save will find it:
+    the platform serializer's clean-copy cache was built under the look and
+    feel that just left (see [SerializerCleanCopies](#serializercleancopies)).
 
 On light mode, the restores iterate **tracked component sets**, never the live
 hierarchy — a component detached at restore time (a closed dialog, a hidden
@@ -328,27 +337,113 @@ saves after the switch back — while hand-set values (`setButtonBG`,
 `setText`) still round-trip. The crash, in other words, is curable from
 here.
 
-What is not: a window LOADED under dark still saves `setForeground #DDE0E3`
-on its buttons. `PMIButton.initialize()` copies the static
-`IgnitionLookAndFeel$Colors.ButtonForeground` object into the button's
-foreground; `IaColorTokens` rewrites that object to Base900 (#DDE0E3) under
-dark, while the clean copy's foreground is FlatLaf's `Button.foreground`
-UIResource (#DDDDDD), so the two differ and the DARK text colour is baked
-into the window — light-grey text in a light Vision client. Under the stock
-theme the constant equals the look-and-feel default, which is the assumption
-Vision relies on. Nine `factorypmi.application.components` classes read
-`Colors.*` this way: `PMIButton`, `PMIToggleButton`, `PMINStateButton`,
-`PMIControlButton`, `PMIMultiStateIndicator` (button colours and the
-indicator colours), `PMICheckBox` and `PMIRadioButton` (Base100),
-`PMIProgressBar` (Base100, Base900, Primary), `PMITextArea` (Base000,
-NonEditableBackground). Dark mode inside Vision therefore needs the cache
-refresh AND either FlatLaf defaults kept equal to the rewritten constants for
-those keys or those constants left alone in Vision, plus one more thing the
-probe surfaced: after the light restore a text field still held Tahoma 11
-while the defaults said Dialog 12 until a second `updateComponentTreeUI` —
-the restore's phase order leaves fonts stale, which would write `setFont`
-into any window open across the switch. That is a follow-up feature, not a
-swap for the gate; the probe recipe is in the project notes.
+What the refresh does not cure: a button that Vision has handed a colour
+TOKEN saves `setForeground #DDE0E3` under dark. Two paths hand it one:
+`PMIButton.initialize()`, whose only caller is the palette
+(`JavaBeanPaletteItem.createJavaBean`), and — for every loaded button —
+Vision's own `ComponentDeserializationHandler.endSubElement`, which sets
+`ButtonBackground`/`ButtonForeground` on each `AbstractVisionButton` as its
+common block ends, before the window's explicit calls apply. Both copy the
+static `IgnitionLookAndFeel$Colors.ButtonForeground` OBJECT into the button; `IaColorTokens` has rewritten that
+object to Base900 (#DDE0E3) in place, while the clean copy's foreground is
+FlatLaf's `Button.foreground` UIResource (#DDDDDD), so the two differ and the
+DARK text colour is written into the window — light-grey text in a light
+Vision client. Under the stock theme the token equals the look-and-feel
+default, which is the assumption Vision relies on. Because the component
+holds the token object itself, the light restore puts it back in place too:
+only a save made WHILE dark bakes the dark value. A scan of the Vision 12.3.8
+jars finds the pattern in `PMIButton`, `PMIToggleButton`, `PMIControlButton`,
+`PMIMomentaryButton2`, `PMI2StateButton`, `PMINStateButton` and
+`PMIMultiStateIndicator` (button colours, and the state datasets they build
+from `ButtonBackground`, `ButtonForeground`, `Background`, `Indicator*`),
+`PMICheckBox` and `PMIRadioButton` (Base100), `PMIProgressBar` (Base100,
+Base900, Primary), `PMITabStrip` (Base100, Base900) and, on load of a legacy
+window, `ComponentDeserializationHandler`; of the tokens involved the module
+restyles Base100 (`Background`, `ButtonBackground`), Base900
+(`ButtonForeground`), `DisabledBackground` and `NonEditableBackground`.
+That is cured at the point of writing
+([TokenColorDelegate](#tokencolordelegate)): the token object is recognised
+by identity and written with its stock value.
+
+The third piece, the fonts, turned out to be Synthetica's, not the
+restore's phase order. Ignition tells Synthetica to keep its own font off
+every Vision component by name (`BaseFormattedTextField.setName` calls
+`IgnitionLookAndFeel.disableFontScaling(name)`, which puts
+`Synthetica.font.enabled.<name>=false`), so those components get the theme's
+raw font wrapped in a `ScalableFont` — Dialog 12, because
+`SyntheticaLookAndFeel.setFont` has replaced the theme's Tahoma 11. After
+Synthetica is installed a SECOND time in the same JVM, the first
+formatted-text-field style it serves still carries Tahoma 11; every request
+after that is right, and a component that got the stale one is corrected by
+its next tree update. So the first Vision text field the restore's tree walk
+reached came back on Tahoma 11, and a save of that window then FAILED
+outright — a `ScalableFont` that differs from the clean copy has no no-arg
+constructor for one. The switch to FlatLaf also drops the name registrations
+(Synthetica's uninstall takes its keys), so it only shows once a Vision
+component has been created or named under dark, which is why the earlier
+harness cycles looked clean. `primeSyntheticaStyles()` takes that first
+request with throwaway text components, straight after the reinstall;
+`RestoredTextFieldFontTest` reproduces it without Vision (the name
+registration is client-api) and `VisionWindowSaveTest` on the real
+component. The three pieces of #92 are in; the gate stays until a live
+sitting has run the Vision rows of the QA checklist under dark mode.
+
+The probe itself lives in `designer/src/visionProbe/`, a source set that
+exists only with `-Pvision.jars` (`ops/vision-jars.sh` prints the newest set
+from the Designer's module cache): real `PMIButton`/`PMILabel`/`PMITextField`
+created the way the palette creates them, Vision's own serialization
+delegates and BeanInfos, a client-side load of every save, and the gate's
+`TopLevelContainer` pinned against `FPMIWindow` and `VisionTemplate` so that
+name is no longer checked by hand.
+
+### SerializerCleanCopies
+The first of the three #92 pieces: the platform serializer's clean-copy cache
+is replaced with an empty one as the last phase of every switch, in both
+directions. `XMLSerializer.cleanMap` is a private static `HashMap`, looked up
+with `get` and seeded with `Class.newInstance()` on a miss, so an empty map
+simply rebuilds each entry under the look and feel current at the next save —
+the one the saved components were dressed by — and the diff is clean again.
+Replaced rather than cleared: a save in flight on another thread keeps its own
+reference, and its late puts land in the discarded map. Not done in
+`configureSerializer`, which runs per save and is where Vision seeds its own
+`PathBasedVisionShape` copy.
+
+`ReflectiveSurfaceTest` pins the field. `SerializerCleanCopyTest` drives the
+platform serializer itself over a `JButton` with a Vision-style `BeanInfo`
+(`SerializerProbeButton`) and shows both halves: a deliberately stale copy
+writes `setBackground`, `setBorder <o cls="com.formdev.flatlaf.ui
+.FlatButtonBorder"/>`, `setFont` and `setForeground` into a dark save; after
+the refresh the same save is an empty element, and a hand-set tooltip still
+round-trips. The class is reached by name; if the field moves, the phase fails
+visibly (status bar and debug log) rather than leaving a stale cache behind a
+passing switch. Each switch logs `SerializerCleanCopies: dropped N clean
+copies`.
+
+### TokenColorDelegate
+The second #92 piece. Vision hands a component dropped from the palette the
+static `IgnitionLookAndFeel$Colors` objects themselves (`PMIButton
+.initialize()`: `setForeground(Colors.ButtonForeground)`; the state datasets
+of the multi-state components; a check box's default background; a progress
+bar's text colour), and under dark mode `IaColorTokens` has rewritten those
+same objects in place, so a save made while dark writes the dark value into
+the window. The delegate replaces the serializer's `java.awt.Color` entry on
+every save (`DesignerModuleHook.configureSerializer`, which the Designer
+calls on the fresh serializer it builds per save) with one that asks the
+token pass, BY IDENTITY, for the colour's stock value and hands the
+platform's own encoder a copy holding that instead. A user-picked colour at
+the same RGB is a different object and is written as picked; dataset cells
+go through the same path, since the platform serializes them one object at a
+time. Pass-through while nothing is restyled, so it is registered light or
+dark and the XML is byte-for-byte the platform's when the theme is stock
+(asserted). The saved window then carries the stock value where a stock
+Designer would have written nothing — an explicit colour equal to the
+default, harmless on every client; that residue is Vision copying an object
+rather than reading a default and cannot be removed here. `TokenColorOnSaveTest`
+reproduces `initialize()` verbatim on `SerializerProbeButton` and on a
+`BasicDataset` cell, with the control save first; `VisionWindowSaveTest`
+(the Vision probe) does it on the real classes, including a window loaded
+under dark, whose buttons get the tokens from Vision's deserialization
+handler.
 
 ### ComponentInspector
 Debug only. **Cmd/Ctrl+Shift+I** (or `+F12`) dumps the component chain under the

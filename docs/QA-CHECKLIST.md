@@ -417,13 +417,17 @@ one line in `~/.ignition/designer-dark-mode.log` (`Vision gate: …`).
 | Continue from the row above without touching the menu: quit (or File → Open another project) while still on Vision | No dialog on the way out; the log has no `Vision gate: Dark mode was not applied…` line at shutdown; the next launch away from Vision comes up dark | `pass` | `2026-09-15` | The Designer rebuilds module menus at teardown; the seeded checkbox must not read as a click |
 | Dark Designer. Open a Vision window by a path that skips the project browser: **Find/Replace** result, or `system.nav`-free scripting via the Script Console `context.getWorkspaceManager`… | Dark mode ends as the window attaches; status bar adds `Close and reopen the window before editing it.` | — | — | The fallback. Whichever path you find that opens a window without selecting the workspace first, record it here |
 | Designer without the Vision module | Dark mode behaves as before; log has no `Vision gate:` errors | — | — | The gate resolves Vision by name and must cost nothing when it is absent |
+| Any theme switch, either direction | The log has `SerializerCleanCopies: dropped N clean copies` right after the switch; N is 0 until a Vision save has happened since the last switch | — | — | #92 part 1. The cache the gate exists for is emptied at each switch; nothing to see on screen until part 3 lands |
+| Light Designer. Drop a Button and a Multi-State Indicator from the palette onto a window, save | `ops/vision-check.sh` clean; the saved XML is identical to one from a Designer without the module (no colour calls on the button; the indicator's state dataset carries the stock colours) | — | — | #92 part 2. The module's Color delegate is on every save, light or dark, and must be invisible while light. Nothing in this row is dark; the dark half needs the gate gone |
+| Dark Designer on Perspective. Navigate to Vision (drop-out), open a window with a Text Field, look at the field's font and at any Designer text field's font, then save | Both fonts are the Designer's usual one, not a smaller Tahoma; the log has a `primeStyles` phase in the restore trace; `ops/vision-check.sh` clean, no `setFont` | — | — | #92 part 3. Synthetica's first formatted-text-field style after a reinstall is stale; the restore now spends it on a throwaway component. Visible only once a Vision component has been created under dark, so with the gate this row mostly checks the phase runs |
 
-**By hand, once per Ignition version:** the interface the gate keys on is
+**Once per Ignition version:** the interface the gate keys on is
 `com.inductiveautomation.vision.api.client.components.model.TopLevelContainer`,
-implemented by `FPMIWindow` and `VisionTemplate`. It cannot be pinned by
-`ReflectiveSurfaceTest` (no Vision jar on the harness classpath), so confirm it
-is still there with `javap` against the `vision-client` jar in
-`~/.ignition/cache/resources/modules/com.inductiveautomation.vision/`.
+implemented by `FPMIWindow` and `VisionTemplate`. `ReflectiveSurfaceTest`
+cannot pin it (no Vision jar on the harness classpath); the Vision probe can:
+`./gradlew :designer:visionProbe -Pvision.jars="$(ops/vision-jars.sh)"` runs
+`VisionWindowSaveTest`, whose first test resolves the name against the cached
+Vision jars and checks both classes implement it.
 
 ## Findings from the sweeps
 

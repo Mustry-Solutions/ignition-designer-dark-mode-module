@@ -10,6 +10,71 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ## [Unreleased]
 
+### Added
+
+- **The window serializer's clean-copy cache is refreshed at every theme
+  switch** (#92, part 1 of 3). The platform serializer compares each saved
+  component against a clean instance of its class, cached in a static map
+  under whatever look and feel was installed at the first save; a save under
+  the other look and feel then writes that look and feel's border, font and
+  colours into the window, and the FlatLaf border by class name is what a
+  Vision client cannot load. The cache is now replaced with an empty one as
+  the last phase of every switch, so each entry is rebuilt under the look and
+  feel current at the next save. Reproduced and proven in the harness with
+  the platform serializer itself: a stale copy writes `setBorder
+  <o cls="com.formdev.flatlaf.ui.FlatButtonBorder"/>`, `setFont`,
+  `setForeground` and `setBackground`; after the refresh the same save is an
+  empty element. `VisionGate` stays: Vision still bakes the module's dark
+  colour constants into components as a window opens, and the light restore
+  leaves fonts stale until a second tree update (parts 2 and 3), so nothing
+  changes on screen yet. The debug log gains one line per switch,
+  `SerializerCleanCopies: dropped N clean copies`.
+
+- **A restyled design token that Vision copied into a component is saved
+  with its stock colour** (#92, part 2 of 3). Vision hands a component
+  dropped from the palette the static `IgnitionLookAndFeel$Colors` objects
+  themselves — a button's foreground and background, the state colours of
+  the multi-state components, a check box's default background — and dark
+  mode rewrites those objects in place, so a save made while dark wrote the
+  dark values into the window: light-grey text on a light Vision client.
+  Loaded windows get the same objects on every button from Vision's
+  deserialization handler. On every save
+  the module now replaces the serializer's `java.awt.Color` delegate with
+  one that recognises a restyled token by identity and hands the platform's
+  own encoder its stock value. A colour the user picked is a different
+  object and is written as picked; dataset cells are covered by the same
+  path; with nothing restyled the XML is byte-for-byte the platform's. Proven
+  in the harness against the platform serializer with `initialize()`
+  reproduced verbatim, and against real Vision in the probe below.
+  `VisionGate` still stays: the light restore leaves fonts stale (part 3).
+
+- **A Vision probe: the harness's saves, run through the real Vision
+  classes.** `./gradlew :designer:visionProbe -Pvision.jars="$(ops/vision-jars.sh)"`
+  compiles a source set against the Vision jars in the Designer's module
+  cache (never published, so CI never sees it) and saves and loads real
+  windows across a theme switch with Vision's own delegates. It also pins
+  the `TopLevelContainer` name the gate keys on, which the QA checklist had
+  to verify by hand. Two of its scenarios are `@Disabled` with the finding
+  written on them at first, then re-enabled once part 3 below was fixed.
+
+- **The first Vision text field after a switch back no longer comes back on
+  Synthetica's raw theme font** (#92, part 3 of 3). Ignition keeps
+  Synthetica's own font off every Vision component by name, so those get the
+  theme font wrapped in a `ScalableFont` — Dialog 12 in a Designer. After
+  Synthetica is installed a second time in the same JVM, the first
+  formatted-text-field style it serves still carries the theme's Tahoma 11;
+  every later one is right. So the first Vision text field the restore's tree
+  walk reached ended up on Tahoma 11, and a save of that window then failed
+  outright, since a `ScalableFont` that differs from the clean copy cannot be
+  serialized. It only shows once a Vision component has been created or named
+  under dark, because the switch to FlatLaf drops the name registrations.
+  The light restore now primes Synthetica with a throwaway component of each
+  text kind straight after the reinstall, so the stale request is spent
+  before any real component asks. Reproduced without Vision in the harness
+  (`RestoredTextFieldFontTest`) and on the real component in the probe. With
+  this, all three pieces of #92 are in headlessly; `VisionGate` stays until
+  a live sitting has run the Vision rows of the QA checklist under dark mode.
+
 ## [0.3.0] - 2026-09-16
 
 A Vision-safety and portability release. Dark mode now keeps out of Vision's

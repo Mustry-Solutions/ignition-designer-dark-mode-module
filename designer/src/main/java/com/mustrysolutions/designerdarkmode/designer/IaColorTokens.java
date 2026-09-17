@@ -242,6 +242,20 @@ final class IaColorTokens {
         return mutated;
     }
 
+    /**
+     * The stock ARGB of a token this pass has restyled, or {@code null} for
+     * any other colour — including a token while the pass is not installed,
+     * since it then already holds its stock value.
+     *
+     * <p>By identity: a component that was handed the token object holds the
+     * restyled colour and must be saved with the stock one
+     * ({@link TokenColorDelegate}); a user-picked colour at the same RGB is a
+     * different object and is what it says.
+     */
+    Integer stockRgb(Color color) {
+        return color == null ? null : originals.get(color);
+    }
+
     /** Put every mutated token back to its stock value. */
     void uninstall() {
         originals.forEach((token, argb) -> {
