@@ -42,32 +42,23 @@ The same Designer, toggled off and on:
 
 ## Known limitations
 
-**Dark mode and Vision do not mix, and the module keeps them apart.** A Vision
-window saved from a FlatLaf Designer picks up FlatLaf's fonts, colours and
-border classes as if you had set them by hand, and a Vision client cannot open
-it at all (`ClassNotFoundException: com.formdev.flatlaf.ui.FlatButtonBorder`).
-The cause is the platform's window serializer, which compares every property
-against a "clean copy" cached for the life of the Designer. The module now
-refreshes that cache at every switch, which cures the crash; writes the
-Designer's colour constants — which Vision copies into components, and dark
-mode rewrites — with their stock values when a window is saved; and keeps
-Synthetica from handing the first Vision text field after a switch back its
-raw theme font. All three are proven headlessly against the real Vision
-classes and not yet in a live Designer, so, for now, the module still stays
-out of Vision's way:
+**Vision windows look dark in the Designer, and light in the client.** The
+look-and-feel swap is global, so a Vision window open under dark mode shows
+its components in FlatLaf's dark colours wherever they use the look-and-feel
+defaults. A Vision client is always light, so the canvas is not what the
+operator will see. Nothing is written into the window by this: what a save
+carries is what you set by hand, in every theme. If you design mostly for
+Vision and want the canvas to match the client, the Exchange script under
+[Prior art](#prior-art) never swaps the look and feel and remains the better
+choice; see the next limitation before installing both.
 
-- **Tools → Dark Mode is refused** while any Vision window or template is open,
-  or while the Vision workspace is selected. The status bar and a dialog say why.
-- **A dark Designer turns itself light** the moment you navigate to Vision in
-  the project browser, before the window you are opening is loaded. Turn dark
-  mode back on once you have left Vision and closed its windows. Your saved
-  preference is kept, so the next launch away from Vision comes up dark.
-- If a Vision window still reaches the screen under dark mode, the module turns
-  light and asks you to **close and reopen that window** before editing it.
-
-Perspective, scripting, tags, reports, pipelines and everything else are
-unaffected. The details, and the headless reproduction, are in
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#visiongate).
+Until 0.4.0 the module refused dark mode while Vision was open, because a
+window saved from a FlatLaf Designer picked up FlatLaf's fonts, colours and
+border classes and a Vision client could not open it. That is fixed at the
+serializer, proven against the real Vision classes and in a live Designer;
+the details are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#vision).
+`ops/vision-check.sh` reads every saved window and template of a project back
+out of the gateway and reports anything a client could not load.
 
 **Do not use this module and the Exchange dark-mode script in the same
 project.** [Dark Mode for the Designer](https://inductiveautomation.com/exchange/2719/overview)

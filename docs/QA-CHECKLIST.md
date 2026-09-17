@@ -26,6 +26,7 @@ Newest first.
 
 | Date | OS | Ignition | Vision | Module | Scope covered |
 |---|---|---|---|---|---|
+| 2026-09-17 (afternoon) | macOS | 8.3.6 | 12.3.6 | PR #105 branch, dev-signed | First run of the new §N, Vision under dark mode, driven by Claude on Sam's screen. Found two things and fixed both on #105 the same afternoon: a save after the restore failed on a progress bar dropped under dark (the style primer covered text kinds only), and a text field saved under dark carried the module's own #3A3D3F (the white-token swap had no Vision guard). With both fixed: window and template open under dark, saved under dark and after the restore, all clean in the checker and in a byte scan for every dark value; dark applied with a window open; relaunch came up dark on Vision. The dev project's Main Window text field keeps a hand-set #3A3D3F from the bad save |
 | 2026-09-17 | macOS | 8.3.6 | 12.3.6 | `6269432` (main after PR #101, dev-signed) | Fourth §N run, driven by Claude on Sam's screen (Sam typed the logins): startup dark switch, two navigation drop-outs, refusal with a window open, dark applied again after leaving Vision, relaunch with the dark preference kept, clean teardown, three saves clean in `ops/vision-check.sh`, and the three #92 rows. Found the Vision Property Editor painting BLANK after a drop-out (#102); reproduced on a dev-signed 0.3.0, so it predates #101. Template, fallback and no-Vision rows still unrecorded |
 | 2026-09-15 (evening) | macOS | 8.3.6 | 12.3.6 | `f951416` (PR #84 with the review fixes) | Third §N run by Sam, following the step-by-step guide: control, navigation drop-out, preference kept across quit and relaunch on Vision (twice), both refusals, template, clean save. Found Vision's palette and property-editor filters and the Tag Browser rows dark after the drop-out; fixed in the harness and confirmed by eye on the redeployed build |
 | 2026-09-15 | macOS | 8.3.6 | 12.3.6 | worktree, uncommitted (same build as 2026-09-02) | Second §N run by Sam after the gateway had been down for two weeks: the refusal with the Vision workspace selected and the navigation drop-out fired again per the log; `ops/vision-check.sh` clean. Found and fixed the checker's locale bug (macOS `tr` under UTF-8 emptied the sweep, so every file passed vacuously). Relaunch, template and fallback rows still unrecorded |
@@ -179,7 +180,7 @@ check an editor of each kind rather than assuming "the editors" are covered.
 
 | Surface | Where | Result | Last checked | Notes |
 |---|---|---|---|---|
-| Window editor chrome | Open any Vision window | `n/a` | `2026-09-02` | Cannot be dark any more: opening a Vision window ends dark mode (§N). The rows below are `n/a` for the same reason — the gate refuses dark mode while the Vision workspace is showing, window or not — and are kept for the day dark mode returns to Vision; their earlier `pass` entries predate the gate |
+| Window editor chrome | Open any Vision window | — | — | Dark mode stays on in Vision since 0.4.0; the `n/a` of 0.3.0 is lifted and the rows below are due a fresh pass |
 | Component palette | Left/right dock with a window open | `pass` | `2026-08-31` | Vision workspace open (no window) |
 | Property Inspector | Right dock | `pass` | `2026-08-31` | empty but dark |
 | Border chooser (9 sub-panels) | Property Inspector → border property | — | — | Check every tab of the chooser |
@@ -396,40 +397,38 @@ either theme — nothing else in this checklist would catch them.
 | First launch, before the theme applies | Startup, with dark mode saved | `skip` | `2026-08-31` | The theme is applied only once the UI is ready, so the Designer is briefly stock-themed at launch. That is by design — applying earlier kills the launch |
 | Debug log is being written | `~/.ignition/designer-dark-mode.log` | `pass` | `2026-08-31` | Worth confirming at the start of a sweep: no log means no chain dumps when you need one |
 
-## N. Vision gate
+## N. Vision under dark mode
 
-Not a theming check: the module must **stay out of Vision**, because a Vision
-window saved under FlatLaf cannot be opened by a Vision client
-([ARCHITECTURE.md](ARCHITECTURE.md#visiongate)). Needs a project with at least
-one Vision window and one Vision template. Every row is pass/fail by eye plus
-one line in `~/.ignition/designer-dark-mode.log` (`Vision gate: …`).
+Since 0.4.0 dark mode stays on inside Vision. What has to hold is that a
+window or template saved under dark mode is a window a light Vision client
+can open, looking as it did when saved by hand: no FlatLaf class names, no
+font or colour you did not set, and the colours Vision copies from the
+Designer's tokens written with their light values. `ops/vision-check.sh`
+reads every saved window and template of the project back out of the dev
+gateway and reports on exactly that. Needs a project with at least one Vision
+window and one template. The gate rows of 0.3.0 (refusal, drop-out, close
+and reopen) are gone with the gate; the sittings above record them.
 
 | Step | Expect | Result | Last checked | Notes |
 |---|---|---|---|---|
-| Light Designer, Perspective workspace showing, no Vision window open. **Tools → Dark Mode** | Dark mode applies as before | `pass` | `2026-09-17` | Control. 2026-09-17: applied at startup from the kept preference; log `SerializerCleanCopies: dropped 2 clean copies` |
-| Dark Designer. Single-click a Vision window in the project browser | The Designer turns light BEFORE the window opens; status bar `Dark mode was turned off because the Vision workspace was opened…`; a dialog explains, once per session; Tools → Dark Mode unticked. Quit from here and relaunch away from Vision: comes up dark (the preference is kept by a drop-out) | `pass` | `2026-09-17` | The gate's main path. Fired on both single-clicks on 2026-09-17, dialog and status bar each time. Log: `Vision gate: leaving dark mode because the Vision workspace was opened.` Fired twice in the first run, 8.3.6 / Vision 12.3.6 |
-| Straight after the drop-out, look at the Vision workspace's own chrome: the Component Palette filter, the Vision Property Editor filter, and the Tag Browser rows | All light. The two filters are white fields; tag rows have no dark boxes behind their names | `pass` | `2026-09-17` | 2026-09-17: palette, both filters and the tag rows light — but the property editor's TABLE paints blank once a component is selected, on 0.3.0 as well (#102; NPE in `TreeExpandedIconPainter` from the JIDE `MarginExpandablePanel` renderer). Found dark on the first live run (2026-09-15): the leftover pass skipped anything under a `factorypmi` package, and a `TagRenderer` created while dark kept FlatLaf's tree colours. Both reproduced and fixed in the harness (`LightRestoreComponentStateTest`) |
-| Now double-click that window, edit a label's text, save | `ops/vision-check.sh` reports no FlatLaf classes and no `setFont`/`setForeground` calls you did not make; a Vision client, if you have one, opens it | `pass` | `2026-09-17` | 2026-09-17: two saves clean, one after moving the field, one after dropping a Check Box and a Multi-State Indicator from the palette (`setFont ×0`, one pre-existing colour). This is the whole point. The script reads every saved window and template straight out of the dev gateway's project. First run: window and template both clean, one hand-set colour on the window |
-| Light Designer with a Vision window open (any workspace showing). **Tools → Dark Mode** | Refused: dialog + status bar `Dark mode was not applied: a Vision window or template is open…`; menu stays unticked | `pass` | `2026-09-17` | Log: `Vision gate: Dark mode was not applied…`. 2026-09-17: dialog, status bar, and the preference reset (the next launch came up light with no message, as documented) |
-| Close the window, stay in the Vision workspace. **Tools → Dark Mode** | Refused: `…the Vision workspace is selected` | `pass` | `2026-09-02` | |
-| Leave for Perspective. **Tools → Dark Mode** | Applies | `pass` | `2026-09-17` | 2026-09-17: from the Scripting workspace |
-| Dark Designer. Open a Vision **template** (single-click first) | Same as the window row: light before it opens | `pass` | `2026-09-17` | Templates serialize too. 2026-09-17: selecting the Templates folder alone dropped out, light before the template opened; the once-per-session dialog did not repeat |
-| Dark preference saved, quit with a Vision window open, relaunch | The Designer comes up LIGHT with the status bar `Dark mode was not applied…`; Tools → Dark Mode unticked; close the window, leave Vision, tick it: applies. Quit and relaunch from Perspective: comes up dark | `pass` | `2026-09-17` | The preference survives a blocked launch; the menu follows the screen. 2026-09-17: came up light on the Vision workspace with `Dark mode was not applied: the Vision workspace is selected…` |
-| Continue from the row above without touching the menu: quit (or File → Open another project) while still on Vision | No dialog on the way out; the log has no `Vision gate: Dark mode was not applied…` line at shutdown; the next launch away from Vision comes up dark | `pass` | `2026-09-17` | The Designer rebuilds module menus at teardown; the seeded checkbox must not read as a click |
-| Dark Designer. Open a Vision window by a path that skips the project browser: **Find/Replace** result, or `system.nav`-free scripting via the Script Console `context.getWorkspaceManager`… | Dark mode ends as the window attaches; status bar adds `Close and reopen the window before editing it.` | — | — | The fallback. Whichever path you find that opens a window without selecting the workspace first, record it here |
-| Designer without the Vision module | Dark mode behaves as before; log has no `Vision gate:` errors | — | — | The gate resolves Vision by name and must cost nothing when it is absent |
-| Any theme switch, either direction | The log has `SerializerCleanCopies: dropped N clean copies` right after the switch; N is 0 until a Vision save has happened since the last switch | — | — | #92 part 1. The cache the gate exists for is emptied at each switch; nothing to see on screen until part 3 lands |
-| Light Designer. Drop a Button and a Multi-State Indicator from the palette onto a window, save | `ops/vision-check.sh` clean; the saved XML is identical to one from a Designer without the module (no colour calls on the button; the indicator's state dataset carries the stock colours) | — | — | #92 part 2. The module's Color delegate is on every save, light or dark, and must be invisible while light. Nothing in this row is dark; the dark half needs the gate gone |
-| After any drop-out, open a Vision window and select a component | The Vision Property Editor lists the component's properties with Ignition's chevrons on the category rows; the Output Console has no `TreeExpandedIconPainter` exception; File → Open dialogs and message dialogs carry their usual icons | `pass` | `2026-09-17` | #102. Confirmed live on the fix build the same day: properties listed with the chevrons after two drop-outs (window and template), console clean, log `DeveloperDefaults: restored 63 of 1459 developer defaults`. Blank on 2026-09-17 on both 0.3.0 and main; fixed by restoring the developer defaults Synthetica's uninstall clears. Dark mode itself still shows FlatLaf's icons in those places, by design |
-| Dark Designer on Perspective. Navigate to Vision (drop-out), open a window with a Text Field, look at the field's font and at any Designer text field's font, then save | Both fonts are the Designer's usual one, not a smaller Tahoma; the log has a `primeStyles` phase in the restore trace; `ops/vision-check.sh` clean, no `setFont` | `pass` | `2026-09-17` | #92 part 3. Synthetica's first formatted-text-field style after a reinstall is stale; the restore now spends it on a throwaway component. 2026-09-17: the restore ran with no failed phase (the trace itself is not logged; only a failure would be), the checker found no `setFont`, and once #102 was fixed the property editor showed the field's font as `Dialog, Plain, 12` after the drop-out. Visible only once a Vision component has been created under dark, so with the gate this row mostly checks the phase runs |
+| Dark Designer. Open a Vision window from the project browser | The Designer stays dark; the window opens; the palette, property editor and their filters are dark; the window's components show FlatLaf's dark colours where they use the defaults (a limitation, see README) | `pass` | `2026-09-17` | The gate used to drop out here |
+| Same window. Select a component | The Vision Property Editor lists its properties with Ignition's chevrons; no `TreeExpandedIconPainter` exception in the Output Console | `pass` | `2026-09-17` | #102 under dark: the developer defaults are not restored under dark, so the category icons are JIDE's, but the editor must paint |
+| Edit a label's text, save | `ops/vision-check.sh` clean: no FlatLaf classes, no `setFont`, colour calls only where you set one; a Vision client, if you have one, opens the window | `pass` | `2026-09-17` | #92 part 1. The log has `SerializerCleanCopies: dropped …` from the last switch |
+| Drop a Button and a Multi-State Indicator from the palette under dark, save | Checker: no FlatLaf classes; the button's `setForeground`/`setBackground` are counted (written with the STOCK values, since the palette handed it the dark token objects); a Vision client shows a normal light button and stock indicator colours | `pass` | `2026-09-17` | #92 part 2. The counts are expected here; what must not appear is a dark value. 2026-09-17: a Label and a Progress Bar (the palette's Button sits under a Krisp overlay on this laptop); the raw bytes of the save held no dark token value and eleven stock ones. Compare the client if you can |
+| With that window open, **Tools → Dark Mode** off | The Designer restores; the window's text field keeps its font (property editor: `Dialog, Plain, 12`, not Tahoma 11); save; checker clean | `pass` | `2026-09-17` | #92 part 3 and #102 together. 2026-09-17: failed first on a Progress Bar dropped under dark (`Unable to create clean copy of ScalableFont`) until the primer covered every kind; then clean. The log has `primeStyles` only as a failure if it failed, and `DeveloperDefaults: restored …` |
+| Turn dark mode back on with the window still open, edit, save | Applies; checker clean | `pass` | `2026-09-17` | The refusal is gone |
+| Open a Vision **template** under dark, edit, save | Same standard as the window | `pass` | `2026-09-17` | Templates serialize too. 2026-09-17: the template's Text Area is a white-token component; before the fix on #105 a dark save wrote the module's #3A3D3F into it, after it the save carried no colour at all, under dark and after the restore |
+| Dark preference saved, quit with a Vision window open, relaunch | Comes up DARK on the Vision workspace; the window reopens dark | `pass` | `2026-09-17` | Used to come up light with a notice |
+| Designer without the Vision module | Dark mode behaves as before; no Vision-related lines in the log | — | — | `VisionWindows` resolves the interface by name and must cost nothing when it is absent |
 
-**Once per Ignition version:** the interface the gate keys on is
+**Once per Ignition version:** the interface the module keys on is
 `com.inductiveautomation.vision.api.client.components.model.TopLevelContainer`,
 implemented by `FPMIWindow` and `VisionTemplate`. `ReflectiveSurfaceTest`
 cannot pin it (no Vision jar on the harness classpath); the Vision probe can:
 `./gradlew :designer:visionProbe -Pvision.jars="$(ops/vision-jars.sh)"` runs
 `VisionWindowSaveTest`, whose first test resolves the name against the cached
-Vision jars and checks both classes implement it.
+Vision jars and checks both classes implement it, and whose other tests are
+the saves above, headless.
 
 ## Findings from the sweeps
 
@@ -560,7 +559,7 @@ toggle while looking at one workspace: toggle to light, then visit each
 workspace in turn — Vision, Perspective, SFC, pipelines — and look at the filter
 fields and dock chrome in each.
 
-Seen again on 2026-09-15 after the Vision gate's drop-out, for a different
+Seen again on 2026-09-15 after a switch back to light, for a different
 reason: the leftover pass itself excluded anything under a `factorypmi`
 package (meant for Vision's user content, but the palette and property
 editor live there too), and the Tag Browser's rows stayed dark because IA's
@@ -724,5 +723,7 @@ rediscovering:
   spotty, and can be difficult to use."* Record these as `skip` unless we have a
   reason to disagree.
 
-Also out of scope, and now enforced rather than chosen: **Vision windows and
-templates** are never edited under dark mode at all (§N).
+**Vision windows and templates** are edited under dark mode since 0.4.0. What
+is in scope is what a save carries (§N); what is not is how the canvas looks
+under dark mode, which is FlatLaf's colours rather than the client's — a
+documented limitation, not a theming target.

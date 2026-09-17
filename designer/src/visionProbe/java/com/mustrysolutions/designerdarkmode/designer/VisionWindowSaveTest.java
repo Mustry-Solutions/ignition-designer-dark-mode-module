@@ -86,18 +86,18 @@ class VisionWindowSaveTest {
         SerializerCleanCopies.refresh();
     }
 
-    // --- the gate's Vision-side names, checked by hand until now (QA §N) ----
+    // --- the Vision-side name the module keys on --------------------------
 
     @Test
-    @DisplayName("the interface the Vision gate keys on still exists, and windows and templates implement it")
-    void gateNamesResolve() throws Exception {
-        Class<?> topLevel = Class.forName(VisionGate.TOP_LEVEL_CONTAINER);
+    @DisplayName("the interface that marks Vision content still exists, and windows and templates implement it")
+    void topLevelContainerResolves() throws Exception {
+        Class<?> topLevel = Class.forName(VisionWindows.TOP_LEVEL_CONTAINER);
         assertTrue(topLevel.isAssignableFrom(FPMIWindow.class),
-            "FPMIWindow no longer implements " + VisionGate.TOP_LEVEL_CONTAINER
-                + "; the gate would not see an open window");
+            "FPMIWindow no longer implements " + VisionWindows.TOP_LEVEL_CONTAINER
+                + "; the colour passes would no longer spare a window's content");
         assertTrue(topLevel.isAssignableFrom(VisionTemplate.class),
-            "VisionTemplate no longer implements " + VisionGate.TOP_LEVEL_CONTAINER
-                + "; the gate would not see an open template");
+            "VisionTemplate no longer implements " + VisionWindows.TOP_LEVEL_CONTAINER
+                + "; the colour passes would no longer spare a template's content");
     }
 
     // --- part 1: the clean-copy cache -----------------------------------
@@ -194,6 +194,28 @@ class VisionWindowSaveTest {
         });
     }
 
+    @Test
+    @DisplayName("the dark passes leave a Vision template's content alone, so a dark save carries none of their colours")
+    void darkPassesLeaveVisionContentAlone() throws Exception {
+        onEdt(() -> {
+            VisionTemplate template = new VisionTemplate();
+            template.addComponent(palette(PMITextField.class));
+            template.addComponent(palette(PMIButton.class));
+            javax.swing.JPanel workspace = new javax.swing.JPanel();
+            workspace.add(template);
+            manager.apply(true);
+            SwingUtilities.updateComponentTreeUI(workspace);
+            // What the switch and the component watcher run over every window.
+            manager.swapWhiteTokenBackgrounds(workspace);
+            String darkSave = save(template);
+            assertClean(darkSave, "dark save of a template the dark passes ran over");
+            java.awt.Color background = template.getComponent(1).getBackground();
+            assertTrue(background == java.awt.Color.WHITE,
+                "the text field's white token background was swapped by the module: "
+                    + String.format("#%06X", background.getRGB() & 0xFFFFFF));
+        });
+    }
+
     // --- part 3: fonts across the light restore ------------------------
     //
     // Both scenarios below failed before ThemeManager.primeSyntheticaStyles
@@ -249,6 +271,8 @@ class VisionWindowSaveTest {
         container.addComponent(palette(PMIButton.class));
         container.addComponent(palette(PMILabel.class));
         container.addComponent(palette(PMITextField.class));
+        container.addComponent(palette(com.inductiveautomation.factorypmi.application.components.PMIProgressBar.class));
+        container.addComponent(palette(com.inductiveautomation.factorypmi.application.components.PMICheckBox.class));
         return container;
     }
 
@@ -277,7 +301,7 @@ class VisionWindowSaveTest {
     private static void assertLoads(String xml) throws Exception {
         Object root = load(xml);
         assertTrue(root instanceof BasicContainer, "the save did not load back as a window: " + root);
-        assertEquals(3, ((BasicContainer) root).getComponentCount(),
+        assertEquals(5, ((BasicContainer) root).getComponentCount(),
             "the loaded window has the wrong number of components");
     }
 
@@ -294,6 +318,11 @@ class VisionWindowSaveTest {
         }
         if (xml.contains(clr(darkOf(base900))) || xml.contains(clr(darkOf(base100)))) {
             faults.add("a dark token colour (light-grey text or dark surface on a light client)");
+        }
+        for (int moduleColour : new int[] {0xFF3A3D3F, 0xFF55595B, 0xFF3C3F41}) {
+            if (xml.contains(clr(moduleColour))) {
+                faults.add("one of the module's own dark colours, set by hand on a Vision component");
+            }
         }
         assertEquals(List.of(), faults, what + " carries: " + faults + "\n" + xml);
     }

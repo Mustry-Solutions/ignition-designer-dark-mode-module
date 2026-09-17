@@ -18,7 +18,7 @@ import org.junit.jupiter.api.Test;
 /**
  * The serializer's clean-copy cache across a theme switch (#92, part 1).
  *
- * <p>The corruption VisionGate exists for has a mechanism that needs no
+ * <p>The corruption that once kept dark mode out of Vision has a mechanism that needs no
  * Vision at all: {@link XMLSerializer} caches one clean instance per class,
  * built under whatever look and feel was installed at the first save, and
  * writes every property that differs from it. So the platform serializer and
@@ -36,7 +36,7 @@ import org.junit.jupiter.api.Test;
  * <p>What this cannot see: Vision's own {@code DefaultComponentDelegate} and
  * the colour constants its components bake in at construction (#92, part 2).
  * The Vision jars are not a published artifact; the probe that covers them is
- * described in {@code docs/ARCHITECTURE.md} under VisionGate.
+ * described in {@code docs/ARCHITECTURE.md} under Vision.
  */
 class SerializerCleanCopyTest {
 
