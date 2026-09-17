@@ -266,7 +266,7 @@ Dark mode works inside Vision since 0.4.0. Until then `VisionGate` refused
 **Tools → Dark Mode** while a Vision window or template was open and dropped
 a dark Designer to light on the way into the Vision workspace, because a
 window saved from a FlatLaf Designer could not be opened by a Vision client.
-Three things made that so, and each is fixed where it lives:
+Four things made that so, and each is fixed where it lives:
 
 1. **The serializer's clean-copy cache** — built under whatever look and feel
    was installed at the first save and kept for the life of the Designer, so
@@ -283,6 +283,12 @@ Three things made that so, and each is fixed where it lives:
    Vision text field the restore's tree update reached came back on the
    theme's raw Tahoma 11, and a save of it failed outright. Spent on a
    throwaway component by the restore's style primer (phase 1).
+4. **FlatLaf's borders** — never equal to the clean copy's, where the
+   platform's serializer has a rule that makes any two Synthetica borders
+   equal; and `null` where a fresh one has a border, or the reverse, once
+   the tree update has run. The rule, extended to FlatLaf:
+   [LookAndFeelBorders](#lookandfeelborders); the `null`s settled before the
+   save: [VisionConstructionBorders](#visionconstructionborders).
 
 And one the gate had hidden: **Synthetica's uninstall clears the developer
 defaults**, which left the Vision Property Editor blank after every switch
@@ -323,9 +329,66 @@ what a stock save shows. It found two more leaks and fixed them:
   FlatLaf's, and the correction is what puts them right. Why the two paths
   differ is not settled; the guard covers both.
 
+And two the sweep had missed, found live on the released 0.4.0 with a
+Comments Panel dropped under dark and fixed as a fourth part:
+
+- **FlatLaf's borders have no equality.** Every save writes a component's
+  `border` when it differs from the clean copy's, and "differs" is the
+  platform's `AbstractEqualityDelegateSupport.safeEquals`: identity, a
+  registered equality delegate, then one hard-coded rule — *two borders
+  whose class is named `SynthBorder` are equal* — then `equals`. That rule
+  is why a stock Designer never writes a Synthetica border: every Synth
+  delegate hands its component a fresh `SynthBorder`, the clean copy has
+  another, and the serializer is told they are the same. FlatLaf's borders
+  have no rule and no `equals`, so two instances differ unless they are the
+  same object. Mostly they are (FlatLaf resolves each key once), but the
+  JDK's `JTable.configureEnclosingScrollPaneUI` gives a table's scroll pane
+  `Table.scrollPaneBorder`, a second shared instance, on every `updateUI`
+  and `addNotify`, so a Table saved after the tree update wrote
+  `<o cls="com.formdev.flatlaf.ui.FlatScrollPaneBorder"/>`.
+  `LookAndFeelBorders` extends the platform's rule to FlatLaf: an equality
+  delegate for each of the thirty concrete FlatLaf border classes,
+  registered on every save, declaring two borders of that class equal. A
+  FlatLaf border on a Vision component is always the look and feel's, so
+  "not written" is the only right answer; the client installs Synthetica's
+  on load exactly as it does for the unwritten `SynthBorder`.
+  `FlatLafBorderClassesTest` pins the list to the FlatLaf jar.
+- **A `null` against a border, in either direction.** No equality delegate
+  is consulted for a `null`, and a tree update's `installBorder` treats
+  `null` and a `UIResource` alike while constructors do not. A Comments
+  Panel is a scroll pane whose constructor sets its border to `null`; under
+  Synthetica it is re-bordered during construction, so a fresh one — the
+  clean copy — has a `SynthBorder` and the rule hides it. Under FlatLaf a
+  fresh one stays `null`, and the tree update then gives the live one
+  `ScrollPane.border`: the FlatLaf class name in the save, the window a
+  client cannot open. This is the one found live. The reverse: a Date Time
+  Popup Selector is a panel whose constructor borrows `TextField.border`,
+  so its clean copy has that, and FlatLaf's panel delegate strips the live
+  one to `null` (`Panel.border` is undefined) — `setBorder <null/>` in the
+  save, a borderless selector on the client. Neither can be settled at the
+  save, so `VisionConstructionBorders` settles them before it, in the
+  module's tree walk, by the yardstick the save will use: a fresh instance
+  of the class, built once per switch (the serializer builds the same one
+  for its clean copy). A live border that is the look and feel's (a
+  `UIResource`, or none) is set to the fresh one's; a border the user set
+  is left alone. Dark only, and only inside Vision content, since building
+  arbitrary Designer classes to compare against would be reckless.
+
+The sweep's dark-born scenario now tree-updates every component inside a
+template before its dark save, as the Designer does, and asserts no FlatLaf
+class name in any save — the client's own criterion, and the one
+`ops/vision-check.sh` applies to a saved project. The probe also stubs the
+two client statics some constructors read (a gateway connection, a
+localization manager; `VisionClientStubs`), which brings both Comments
+Panels and the Spinner into the sweep. Still unbuildable headless: the Easy
+Chart (a `DropTarget`), the Slider under Synthetica, and the Date Time
+Selector under a stock tree update — all `HeadlessException` territory.
+
 What the sweep accepts as residue, each documented: the stock token value
 written where a stock Designer writes nothing (see
-[TokenColorDelegate](#tokencolordelegate)); the preferred size the palette
+[TokenColorDelegate](#tokencolordelegate)), including a date-time
+selector's `setWeekendForeground`, which the tree update's `setForeground`
+moves from the Base900 token to the panel foreground; the preferred size the palette
 computes at drop time, which FlatLaf's fonts and insets measure a couple of
 pixels smaller; a combo box's `maximumRowCount`, a FlatLaf-only default of
 15 kept from the theme it was built under, where Synthetica defines none;
@@ -464,6 +527,24 @@ replacing every `color(r,g,b,a)` string that encodes FlatLaf's value for one
 of the four `Tree.*` keys its constructor read with the stock value. Reached
 by name; a Designer without Vision never sees one. See the corruption sweep
 under [Vision](#vision).
+
+### VisionConstructionBorders
+After each `updateUI` in the module's tree walk under dark, sets a Vision
+component's look-and-feel border to what a fresh instance of its class has —
+`null` for a Comments Panel, FlatLaf's shared `TextField.border` for a Date
+Time Popup Selector — because that fresh instance is what its save will be
+compared against, and a `null` on either side is beyond any equality rule.
+One fresh instance per class per switch; a border the user set is never
+touched; Vision content only. See the corruption sweep under
+[Vision](#vision).
+
+### LookAndFeelBorders
+An equality delegate, registered on every save for each concrete FlatLaf
+border class, that declares two borders of the same class equal — the
+platform's own `SynthBorder` rule, extended to FlatLaf, so a FlatLaf border
+is never written into a window. The class list is pinned to the FlatLaf jar
+by `FlatLafBorderClassesTest`. See the corruption sweep under
+[Vision](#vision).
 
 ### ComponentInspector
 Debug only. **Cmd/Ctrl+Shift+I** (or `+F12`) dumps the component chain under the

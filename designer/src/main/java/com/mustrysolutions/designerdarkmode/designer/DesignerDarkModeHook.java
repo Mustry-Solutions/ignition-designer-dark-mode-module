@@ -68,11 +68,14 @@ public class DesignerDarkModeHook extends AbstractDesignerModuleHook {
     /**
      * Every save builds a fresh serializer and offers it to each module here.
      * A restyled design token that Vision copied into a component is written
-     * with its stock colour (#92, part 2) — see {@link TokenColorDelegate}.
+     * with its stock colour (#92, part 2) — see {@link TokenColorDelegate} —
+     * and a FlatLaf border is never written at all, as a Synthetica border
+     * never is — see {@link LookAndFeelBorders}.
      */
     @Override
     public void configureSerializer(XMLSerializer serializer) {
         TokenColorDelegate.register(serializer, themes.stockTokenRgb());
+        LookAndFeelBorders.register(serializer);
     }
 
     @Override

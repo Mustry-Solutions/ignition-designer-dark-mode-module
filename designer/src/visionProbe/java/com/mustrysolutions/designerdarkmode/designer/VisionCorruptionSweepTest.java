@@ -1,6 +1,7 @@
 package com.mustrysolutions.designerdarkmode.designer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.awt.Color;
@@ -77,9 +78,10 @@ class VisionCorruptionSweepTest {
     private CellRendererSanitizer renderers;
 
     @BeforeAll
-    static void visionBeanInfos() {
+    static void visionBeanInfos() throws Exception {
         BeanInfoFactory.addBeanInfoSearchPackage(
             "com.inductiveautomation.factorypmi.designer.beaninfo");
+        VisionClientStubs.install();
     }
 
     @BeforeEach
@@ -110,25 +112,28 @@ class VisionCorruptionSweepTest {
             Map<String, String> unbuildable = new LinkedHashMap<>();
             for (String kind : PALETTE) {
                 try {
-                    reference.put(kind, comparable(save(windowWith(kind))));
+                    reference.put(kind, comparable(attachedAndSaved(windowWith(kind))));
                 } catch (Throwable t) {
                     unbuildable.put(kind, t.toString());
                 }
             }
             assertTrue(reference.size() > 50, "the sweep must cover the palette; built only "
                 + reference.size() + " of " + PALETTE.size() + ": " + unbuildable);
+            System.out.println("Sweep: built " + reference.size() + " of " + PALETTE.size()
+                + " palette kinds; unbuildable headless: " + unbuildable);
 
             goDark();
             List<String> differing = new ArrayList<>();
             for (String kind : reference.keySet()) {
                 BasicContainer window = windowWith(kind);
-                // What the component watcher does as a window is attached.
+                // What the component watcher does as a component is dropped.
                 manager.correctVisionConstructionColors(window);
-                String raw = save(window);
+                String raw = attachedAndSaved(window);
                 String dark = comparable(raw);
                 if (!dark.equals(reference.get(kind))) {
                     differing.add(kind + ":\n" + firstDiff(reference.get(kind), dark));
                 }
+                assertNoFlatLafClass(raw, kind);
                 assertLoads(raw, kind);
             }
             assertEquals(List.of(), differing,
@@ -376,6 +381,7 @@ class VisionCorruptionSweepTest {
             com.inductiveautomation.factorypmi.application.components.PMITable.class,
             new com.inductiveautomation.factorypmi.designer.xmlserialization.TableDelegate());
         TokenColorDelegate.register(serializer, manager.stockTokenRgb());
+        LookAndFeelBorders.register(serializer);
         serializer.addObject(root);
         return serializer.serializeXML();
     }
@@ -385,6 +391,29 @@ class VisionCorruptionSweepTest {
         ClientContextImpl.configureDeserializer(deserializer);
         deserializer.getClassNameMap().addDefaults();
         return deserializer.deserialize(xml).getRootObjects().get(0);
+    }
+
+    /**
+     * A window as the Designer has it by the time of its first save: the
+     * component watcher's tree update has run over it (which is where a
+     * table rewrites its scroll pane's border, and a date range sets the
+     * flag its save then carries), and one save has created its
+     * {@code fpmi.lc} record. The save returned is the second.
+     */
+    private String attachedAndSaved(BasicContainer window) throws Exception {
+        // Inside a template, as in the Designer: the walk's border alignment
+        // applies to Vision content only.
+        VisionTemplate holder = new VisionTemplate();
+        holder.addComponent(window);
+        ThemeManager.updateComponentTreeUiResiliently(window, new java.util.LinkedHashSet<>());
+        save(window);
+        return save(window);
+    }
+
+    /** The client's criterion: a class it does not have makes the window unloadable. */
+    private static void assertNoFlatLafClass(String xml, String what) {
+        assertFalse(xml.contains("com.formdev"), what + ": the dark save names a FlatLaf class, "
+            + "which a Vision client cannot resolve:\n" + xml);
     }
 
     private static void assertLoads(String xml, String what) throws Exception {
@@ -415,18 +444,26 @@ class VisionCorruptionSweepTest {
      *       the default (or the reverse: nothing under dark where stock wrote
      *       the stock value). Same colour on every client. Documented in
      *       ARCHITECTURE under TokenColorDelegate. Only STOCK values are
-     *       dropped, so a dark value still diffs.</li>
+     *       dropped, so a dark value still diffs. {@code setWeekendForeground}
+     *       is the same residue one step removed: a date-time selector's
+     *       weekend colour starts as the Base900 token, the tree update's
+     *       {@code setForeground} replaces it with the panel foreground, and
+     *       under dark that is FlatLaf's, written back as the stock value
+     *       (#2E2E2E) where under stock it is RGB-equal to the token and
+     *       nothing is written.</li>
      *   <li>The preferred size the palette computes at drop time
      *       ({@code <p2df>}): FlatLaf's fonts and insets measure a label two
      *       pixels smaller. Cosmetic, and the user resizes anyway.</li>
      *   <li>Timestamps and the random sample data charts generate, which
-     *       differ between two stock saves too.</li>
+     *       differ between two stock saves too; and every date-valued
+     *       setter, since a component's "now" and its clean copy's differ
+     *       whenever a second boundary falls between them.</li>
      * </ul>
      */
     private static String comparable(String xml) {
         String out = normalise(xml);
         for (int stock : new int[] {0xFFFAFAFB, 0xFF2E2E2E, 0xFFF1F1F1, 0xFFFAFAFA}) {
-            out = out.replaceAll("\\s*<c-c m=\"set(Foreground|Background|ButtonBG)\" s=\"1;clr\">"
+            out = out.replaceAll("\\s*<c-c m=\"set(Foreground|Background|ButtonBG|WeekendForeground)\" s=\"1;clr\">"
                 + Pattern.quote(clr(stock)) + "</c-c>", "");
         }
         return out.replaceAll("<p2df>[\\d.]+;[\\d.]+</p2df>", "<p2df/>")
@@ -435,7 +472,14 @@ class VisionCorruptionSweepTest {
             // theme it was built or updated under, and saves as a plain int.
             // Fifteen dropdown rows instead of eight; documented, not a colour.
             .replaceAll("\\s*<c-c m=\"setMaximumRowCount\" s=\"1;i\"><int>\\d+</int></c-c>", "")
-            .replaceAll("<c-c m=\"setFormattedDate\" s=\"1;str\"><str>[^<]*</str></c-c>", "<c-c m=\"setFormattedDate\"/>")
+            // A date-time selector's formatted date is the moment it was
+            // built; whether the save writes it depends on whether the clean
+            // copy was built in the same second.
+            .replaceAll("\\s*<c-c m=\"setFormattedDate\" s=\"1;str\"><str>[^<]*</str></c-c>", "")
+            // Likewise every date-valued setter (a spinner's setDateValue, a
+            // date range's setStartDate…): "now" at construction, written or
+            // not by the clock.
+            .replaceAll("\\s*<c-c m=\"set[A-Za-z]*\" s=\"1;date\"><date>\\d+</date></c-c>", "")
             .replaceAll("<date>\\d+</date>", "<date/>")
             .replaceAll("<int>\\d+</int>", "<int/>")
             .replaceAll("<dbl>[\\d.\\-E]+</dbl>", "<dbl/>");

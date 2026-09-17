@@ -10,6 +10,25 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A Comments Panel dropped under dark mode made its window unopenable in a
+  client.** Found on 0.4.0. The panel is built without a border; the
+  Designer's tree update gives it FlatLaf's, and the save wrote
+  `com.formdev.flatlaf.ui.FlatScrollPaneBorder` by name, which no client can
+  resolve. Two fixes: the serializer's own "two Synthetica borders are
+  equal" rule is extended to every FlatLaf border class, so a look-and-feel
+  border is never written; and after every tree update under dark a Vision
+  component's look-and-feel border is put back to what a fresh one has,
+  which is what the save compares against. The headless sweep had missed it
+  because it never tree-updated a dark-born component before saving; it
+  does now, and it builds the Comments Panels and the Spinner too. A window
+  already saved this way is repaired by any save from a Designer running
+  this fix, in either theme; on 0.4.0 itself, by a light save.
+- **A Date Time Popup Selector lost its border after a switch to dark**, and
+  a dark save then wrote an explicit empty border a client showed. The same
+  alignment puts it back.
+
 ## [0.4.0] - 2026-09-17
 
 Dark mode inside Vision. The 0.3.0 gate that refused dark mode while a

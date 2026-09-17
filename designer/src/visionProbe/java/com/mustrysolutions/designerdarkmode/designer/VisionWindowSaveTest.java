@@ -60,11 +60,12 @@ class VisionWindowSaveTest {
     private Color base100;
 
     @BeforeAll
-    static void visionBeanInfos() {
+    static void visionBeanInfos() throws Exception {
         // Where Vision keeps the BeanInfo for each of its components; the
         // Designer registers this at startup.
         BeanInfoFactory.addBeanInfoSearchPackage(
             "com.inductiveautomation.factorypmi.designer.beaninfo");
+        VisionClientStubs.install();
     }
 
     @BeforeEach
@@ -216,6 +217,98 @@ class VisionWindowSaveTest {
         });
     }
 
+    // --- part 4: a FlatLaf border after the tree update ------------------
+
+    /**
+     * Found live on 0.4.0: a Comments Panel dropped under dark saved
+     * {@code <o cls="com.formdev.flatlaf.ui.FlatScrollPaneBorder"/>}, and
+     * the window would not open in a client. A Vision Table is the same
+     * shape and builds headless: the JDK's {@code JTable.updateUI} rewrites
+     * its scroll pane's border with {@code Table.scrollPaneBorder}, a second
+     * FlatLaf instance the clean copy does not hold. The sweep had never
+     * tree-updated a dark-born component before saving it; it does now, and
+     * this is the one-component form.
+     */
+    @Test
+    @DisplayName("a table dropped under dark and reached by the tree update saves no FlatLaf border")
+    void tableTreeUpdatedUnderDarkSavesNoFlatLafBorder() throws Exception {
+        onEdt(() -> {
+            manager.apply(true);
+            BasicContainer window = new BasicContainer();
+            window.addComponent(palette(
+                com.inductiveautomation.factorypmi.application.components.PMITable.class));
+            manager.correctVisionConstructionColors(window);
+            assertClean(save(window), "dark save of a table before the tree update");
+
+            // The component watcher's rescan over a freshly attached component.
+            ThemeManager.updateComponentTreeUiResiliently(window, new java.util.LinkedHashSet<>());
+            String control = saveWithoutBorderRule(window);
+            assertTrue(control.contains("com.formdev.flatlaf.ui.FlatScrollPaneBorder"),
+                "without LookAndFeelBorders the save must carry the border, or nothing here is under test:\n"
+                    + control);
+            assertClean(save(window), "dark save of a table after the tree update");
+        });
+    }
+
+    /**
+     * The component actually found live: a Comments Panel is a scroll pane
+     * built borderless, its clean copy has no border, and the tree update
+     * gives the live one FlatLaf's — a null the equality rule cannot reach.
+     * The walk's alignment ({@code VisionConstructionBorders}) puts the null
+     * back, for Vision content only, hence the template around it.
+     */
+    @Test
+    @DisplayName("a comments panel dropped under dark and reached by the tree update saves no FlatLaf border")
+    void commentsPanelTreeUpdatedUnderDarkSavesNoFlatLafBorder() throws Exception {
+        onEdt(() -> {
+            manager.apply(true);
+            VisionTemplate template = new VisionTemplate();
+            BasicContainer window = new BasicContainer();
+            template.addComponent(window);
+            JComponent panel = (JComponent) palette(
+                com.inductiveautomation.factorypmi.application.components.PMICommentsPanel2.class);
+            window.addComponent(panel);
+            assertTrue(panel.getBorder() == null, "under FlatLaf a fresh comments panel has no border");
+            assertClean(save(window), "dark save of a comments panel before the tree update");
+
+            ThemeManager.updateComponentTreeUiResiliently(window, new java.util.LinkedHashSet<>());
+            assertTrue(panel.getBorder() == null,
+                "the walk must have put the border back to none; it is " + panel.getBorder());
+            String saved = save(window);
+            assertClean(saved, "dark save of a comments panel after the tree update");
+            assertFalse(saved.contains("setBorder"), saved);
+        });
+    }
+
+    /**
+     * The remedy the changelog gives a user of 0.4.0: the window that was
+     * saved with the border opens in the Designer that made it (FlatLaf is
+     * on its classpath), and a save after the switch to light is clean —
+     * the light tree update replaces the {@code UIResource} border with
+     * Synthetica's, which the platform's own rule never writes.
+     */
+    @Test
+    @DisplayName("a window 0.4.0 saved with a FlatLaf border saves clean again after a light save")
+    void windowSavedWithFlatLafBorderRecoversOnLightSave() throws Exception {
+        onEdt(() -> {
+            manager.apply(true);
+            BasicContainer window = new BasicContainer();
+            window.addComponent(palette(
+                com.inductiveautomation.factorypmi.application.components.PMITable.class));
+            ThemeManager.updateComponentTreeUiResiliently(window, new java.util.LinkedHashSet<>());
+            String saved = saveWithoutBorderRule(window);
+            assertTrue(saved.contains("FlatScrollPaneBorder"), "not the 0.4.0 save:\n" + saved);
+
+            // Reopened in the same Designer, still dark, then switched to light.
+            BasicContainer reopened = (BasicContainer) load(saved);
+            manager.apply(false);
+            ThemeManager.updateComponentTreeUiResiliently(reopened, new java.util.LinkedHashSet<>());
+            manager.refreshComponentsLeftDark(reopened);
+            String lightSave = saveWithoutBorderRule(reopened);
+            assertClean(lightSave, "light save of a window 0.4.0 had saved with a FlatLaf border");
+        });
+    }
+
     // --- part 3: fonts across the light restore ------------------------
     //
     // Both scenarios below failed before ThemeManager.primeSyntheticaStyles
@@ -280,12 +373,23 @@ class VisionWindowSaveTest {
         return JavaBeanPaletteItem.createJavaBean(componentClass);
     }
 
+    /** The control for the border test: the Designer's save minus the border rule. */
+    private String saveWithoutBorderRule(Object root) throws Exception {
+        XMLSerializer serializer = new XMLSerializer().initDefaults();
+        serializer.addSupertypeDelegate(JComponent.class, new DefaultComponentDelegate());
+        serializer.addSerializationDelegate(BasicContainer.class, new BasicContainerDelegate());
+        TokenColorDelegate.register(serializer, manager.stockTokenRgb());
+        serializer.addObject(root);
+        return serializer.serializeXML();
+    }
+
     /** A save as the Designer makes one: fresh serializer, Vision's delegates, our hook. */
     private String save(Object root) throws Exception {
         XMLSerializer serializer = new XMLSerializer().initDefaults();
         serializer.addSupertypeDelegate(JComponent.class, new DefaultComponentDelegate());
         serializer.addSerializationDelegate(BasicContainer.class, new BasicContainerDelegate());
         TokenColorDelegate.register(serializer, manager.stockTokenRgb());
+        LookAndFeelBorders.register(serializer);
         serializer.addObject(root);
         return serializer.serializeXML();
     }

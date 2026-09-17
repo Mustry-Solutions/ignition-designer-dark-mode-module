@@ -567,11 +567,13 @@ public class ThemeManager {
             safely("darkColors", () -> {
                 lafColors.captureDark();
                 visionConstruction.captureDark();
+                VisionConstructionBorders.clear();
             });
         } else {
             safely("darkColors", () -> {
                 lafColors.clear();
                 visionConstruction.clear();
+                VisionConstructionBorders.clear();
             });
         }
         if (dark) {
@@ -2494,6 +2496,10 @@ public class ThemeManager {
             java.awt.Color pinned = neutraliseInternalFrameBackground(child);
             try {
                 child.updateUI();
+                // Under dark, a Vision component's look-and-feel border is
+                // put back to what a fresh one has, which is what its save
+                // is compared against (VisionConstructionBorders).
+                VisionConstructionBorders.align(child);
             } catch (Throwable t) {
                 failures++;
                 if (failed.add(child.getClass().getName())) {
