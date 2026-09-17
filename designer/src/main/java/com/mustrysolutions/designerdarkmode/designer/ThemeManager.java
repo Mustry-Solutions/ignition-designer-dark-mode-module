@@ -588,6 +588,11 @@ public class ThemeManager {
             if (dark) {
                 trace("painterSnapshot");
                 snapshotThemePainters();
+                // Before FlatLaf: Synthetica's uninstall, which the install
+                // below triggers, clears the developer defaults table and
+                // takes Ignition's own startup defaults with it (#102).
+                trace("developerDefaults");
+                developerDefaultsAtStock = DeveloperDefaults.snapshot();
                 // Read now, while the stock look and feel is still the one
                 // answering: this is the font the Designer has been drawing
                 // with, and the one dark mode keeps (see below).
@@ -669,6 +674,12 @@ public class ThemeManager {
             safely("tokens", tokens::uninstall);
         }
         safely("jideExtension", () -> installJideExtension(dark));
+        if (!dark) {
+            // After the reinstall and JIDE's re-put, so Ignition's values win
+            // where JIDE has just put its own (the property tables' category
+            // icons), the way they did at startup (#102).
+            safely("developerDefaults", () -> DeveloperDefaults.restore(developerDefaultsAtStock));
+        }
         safely("painters", () -> overrideThemePainters(dark));
         if (dark) {
             // FlatLaf re-assert first, then the JIDE-specific keys on top so
@@ -2795,6 +2806,13 @@ public class ThemeManager {
         java.util.Set.of("ClassLoader", "Theme.painter");
 
     private final java.util.Map<String, Object> flatLafDefaults = new java.util.HashMap<>();
+
+    /**
+     * The developer defaults table as it stood just before FlatLaf went in:
+     * Ignition's startup {@code UIManager.put}s and JIDE's, which Synthetica's
+     * uninstall then clears (#102). Put back after the stock reinstall.
+     */
+    private java.util.Map<String, Object> developerDefaultsAtStock = java.util.Collections.emptyMap();
 
     /** Capture ALL of FlatLaf's resolved defaults right after it is installed. */
     void snapshotMenuDefaults() {
