@@ -10,110 +10,113 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ## [Unreleased]
 
-### Fixed
+## [0.4.0] - 2026-09-17
 
-- **Two more things a Vision save could carry from a dark Designer, found
-  by sweeping the whole palette.** A component with no foreground of its
-  own (rectangle, barcode, paintable canvas, cylindrical tank, fill level
-  indicator) inherits its container's look-and-feel foreground, which
-  Vision writes, and under dark that was FlatLaf's near-white; it is now
-  written as the stock colour. And a Tree View dropped under dark could
-  carry FlatLaf's tree colours as strings in its sample rows; they are put
-  back to stock as the component is attached. `VisionCorruptionSweepTest`
-  holds all 55 headlessly buildable palette components to the standard that
-  a save from a dark Designer, in every state a session can be in, is the
-  same bytes as from a stock one, net of four documented residues (a stock
-  token value written explicitly, a drop size a couple of pixels smaller, a
-  combo box row count of 15, and chart sample data).
+Dark mode inside Vision. The 0.3.0 gate that refused dark mode while a
+Vision window was open, and dropped a dark Designer to light on the way into
+Vision, is gone: what made it necessary is fixed at the serializer, proven
+against every Vision palette component headlessly and on real windows in a
+Vision client. Also fixed: a blank Vision Property Editor after any switch
+back to light, present since 0.3.0.
 
 ### Changed
 
-- **Dark mode now works inside Vision; the gate is gone.** Tools → Dark Mode
-  applies with Vision windows and templates open, a dark Designer stays dark
-  when you navigate to Vision, and a dark preference applies on a launch onto
-  the Vision workspace. The refusal dialog, the drop-out and the "close and
-  reopen" notice of 0.3.0 are removed. What made them necessary is fixed at
-  the serializer (the three #92 pieces below, proven against the real Vision
-  classes and in a live Designer). What remains is a limitation, not a
-  defect: the Vision canvas renders in FlatLaf's dark colours under dark
-  mode, which is not what a light Vision client shows. `VisionWindows` keeps
-  the one thing the gate knew that the colour passes still need, how to
-  recognise a Vision window or template by name.
+- **Dark mode stays on inside Vision.** Tools → Dark Mode applies with
+  Vision windows and templates open, a dark Designer stays dark when you
+  navigate to Vision, and a dark preference applies on a launch onto the
+  Vision workspace. The refusal dialog, the drop-out and the "close and
+  reopen" notice of 0.3.0 are removed. What remains is a limitation, not a
+  defect: a Vision window open under dark mode renders in FlatLaf's dark
+  colours wherever its components use the look-and-feel defaults, which is
+  not what a light Vision client shows. Nothing is written into the window
+  by it. `VisionWindows` keeps the one thing the gate knew that the colour
+  passes still need, how to recognise a Vision window or template by name.
 
 ### Fixed
 
-- **The Vision Property Editor no longer paints blank after a dark-mode
-  drop-out** (#102, present since 0.3.0). Synthetica's uninstall, which the
-  switch to FlatLaf triggers, clears Swing's developer defaults — the
+- **A Vision window saved from a dark Designer is the window a stock
+  Designer would have saved** (#92). Four things could put a look-and-feel
+  value into the file, and each is fixed where it lives:
+  - *The serializer's clean-copy cache.* The platform compares each saved
+    component against a clean instance of its class, cached for the life of
+    the Designer under whatever look and feel was installed at the first
+    save; a save under the other look and feel wrote that look and feel's
+    border, font and colours into the window, and the FlatLaf border by
+    class name is what a Vision client could not load. The cache is now
+    replaced with an empty one as the last phase of every switch
+    (`SerializerCleanCopies`).
+  - *Ignition's colour tokens.* Vision hands components the static
+    `IgnitionLookAndFeel$Colors` objects — at palette drop and, for every
+    loaded button, from its deserialization handler — and dark mode rewrites
+    those objects in place, so a save made while dark wrote the dark values:
+    light-grey text on a light client. The module's `java.awt.Color`
+    delegate, on every save, recognises a restyled token by identity and
+    writes its stock value (`TokenColorDelegate`). A colour the user picked
+    is a different object and is written as picked; dataset cells go through
+    the same path.
+  - *Inherited look-and-feel colours.* A component with no foreground of its
+    own (rectangle, barcode, paintable canvas, cylindrical tank, fill level
+    indicator) inherits its container's `Panel.foreground`, which Vision
+    writes; under dark that was FlatLaf's near-white. Written as the stock
+    value by the same delegate (`LookAndFeelColors`), which is now registered
+    for `ColorUIResource` as well, since the platform keys its delegates by
+    exact class.
+  - *The Tree View's sample rows.* Its constructor copies four `Tree.*`
+    colours into its sample dataset as strings, which no save-time delegate
+    can see; a Tree View dropped under dark could carry FlatLaf's tree
+    colours. They are put back to stock as the component is attached
+    (`VisionConstructionColors`).
+
+  Proven by `VisionCorruptionSweepTest` in the new Vision probe: every one
+  of Vision's palette components that builds headlessly (55 of 61), built
+  and saved under dark, born under stock and cycled twice with the window
+  open, with hand-set values, nested with a template, and as a full window,
+  serializes to the same bytes a stock Designer writes, net of four
+  documented residues (a stock token value written explicitly, a drop size
+  a couple of pixels smaller, a combo box row count of 15, chart sample
+  data). Confirmed live: windows and templates saved under dark and after
+  the restore, and a real Vision client opened them showing what a stock
+  save shows.
+
+- **A save after switching back to light no longer fails on a component
+  built under dark.** After Synthetica is installed a second time in the
+  same JVM, the first style it serves for each component kind still carries
+  the theme's raw font, so the first Vision component of that kind the
+  restore reached came back on Tahoma 11 and its save failed outright, since
+  a Synthetica `ScalableFont` that differs from the clean copy cannot be
+  serialized. The light restore now spends that stale request on a throwaway
+  component of every Swing kind, straight after the reinstall. Found on the
+  text field headlessly and on a progress bar live; reproduced without
+  Vision in `RestoredTextFieldFontTest`.
+
+- **The Vision Property Editor no longer paints blank after a switch back to
+  light** (#102, #61; present since 0.3.0). Synthetica's uninstall, which
+  the switch to FlatLaf triggers, clears Swing's developer defaults — the
   `UIManager.put`s Ignition makes at startup, among them the category icons
   of every JIDE property table. After the restore JIDE fell back to
   Synthetica's tree icon, which cannot paint outside a Synth context, and
   every paint of the editor threw. The dark switch now copies the developer
-  entries first and the light restore puts back what is missing, so the
-  editor, the option-pane and file-chooser icons and the OK/Cancel mnemonics
-  come back as they were. Proven in the harness, whose stock install now runs
-  `IgnitionLookAndFeel.init()` itself; not yet seen in a live Designer.
+  entries first and the light restore puts back what is missing
+  (`DeveloperDefaults`), so the editor, the option-pane and file-chooser
+  icons and the OK/Cancel mnemonics come back as they were. Confirmed live.
+
+- **The dark passes leave Vision window content alone.** The pass that
+  swaps a component's literal white token background for the module's dark
+  surface had no Vision guard and set an explicit colour on Vision text
+  fields, which a dark save then wrote as if set by hand. It now skips every
+  Vision window and template.
 
 ### Added
 
-- **The window serializer's clean-copy cache is refreshed at every theme
-  switch** (#92, part 1 of 3). The platform serializer compares each saved
-  component against a clean instance of its class, cached in a static map
-  under whatever look and feel was installed at the first save; a save under
-  the other look and feel then writes that look and feel's border, font and
-  colours into the window, and the FlatLaf border by class name is what a
-  Vision client cannot load. The cache is now replaced with an empty one as
-  the last phase of every switch, so each entry is rebuilt under the look and
-  feel current at the next save. Reproduced and proven in the harness with
-  the platform serializer itself: a stale copy writes `setBorder
-  <o cls="com.formdev.flatlaf.ui.FlatButtonBorder"/>`, `setFont`,
-  `setForeground` and `setBackground`; after the refresh the same save is an
-  empty element. The debug log gains one line per switch,
-  `SerializerCleanCopies: dropped N clean copies`.
-
-- **A restyled design token that Vision copied into a component is saved
-  with its stock colour** (#92, part 2 of 3). Vision hands a component
-  dropped from the palette the static `IgnitionLookAndFeel$Colors` objects
-  themselves — a button's foreground and background, the state colours of
-  the multi-state components, a check box's default background — and dark
-  mode rewrites those objects in place, so a save made while dark wrote the
-  dark values into the window: light-grey text on a light Vision client.
-  Loaded windows get the same objects on every button from Vision's
-  deserialization handler. On every save
-  the module now replaces the serializer's `java.awt.Color` delegate with
-  one that recognises a restyled token by identity and hands the platform's
-  own encoder its stock value. A colour the user picked is a different
-  object and is written as picked; dataset cells are covered by the same
-  path; with nothing restyled the XML is byte-for-byte the platform's. Proven
-  in the harness against the platform serializer with `initialize()`
-  reproduced verbatim, and against real Vision in the probe below.
-
-- **A Vision probe: the harness's saves, run through the real Vision
-  classes.** `./gradlew :designer:visionProbe -Pvision.jars="$(ops/vision-jars.sh)"`
-  compiles a source set against the Vision jars in the Designer's module
-  cache (never published, so CI never sees it) and saves and loads real
-  windows across a theme switch with Vision's own delegates. It also pins
-  the `TopLevelContainer` name the module keys on, which the QA checklist had
-  to verify by hand. Two of its scenarios are `@Disabled` with the finding
-  written on them at first, then re-enabled once part 3 below was fixed.
-
-- **The first Vision text field after a switch back no longer comes back on
-  Synthetica's raw theme font** (#92, part 3 of 3). Ignition keeps
-  Synthetica's own font off every Vision component by name, so those get the
-  theme font wrapped in a `ScalableFont` — Dialog 12 in a Designer. After
-  Synthetica is installed a second time in the same JVM, the first
-  formatted-text-field style it serves still carries the theme's Tahoma 11;
-  every later one is right. So the first Vision text field the restore's tree
-  walk reached ended up on Tahoma 11, and a save of that window then failed
-  outright, since a `ScalableFont` that differs from the clean copy cannot be
-  serialized. It only shows once a Vision component has been created or named
-  under dark, because the switch to FlatLaf drops the name registrations.
-  The light restore now primes Synthetica with a throwaway component of each
-  text kind straight after the reinstall, so the stale request is spent
-  before any real component asks. Reproduced without Vision in the harness
-  (`RestoredTextFieldFontTest`) and on the real component in the probe. With
-  this, all three pieces of #92 are in; the live sitting that followed ran
-  the gate rows clean, and the gate went (see Changed).
+- **A Vision probe.** `./gradlew :designer:visionProbe
+  -Pvision.jars="$(ops/vision-jars.sh)"` compiles a source set against the
+  Vision jars in the Designer's module cache (never published, so CI never
+  sees it) and saves and loads real Vision windows across a theme switch
+  with Vision's own delegates and BeanInfos, on the whole palette. It pins
+  the `TopLevelContainer` name the module keys on, which the QA checklist
+  had to verify by hand. The debug log gains one line per switch,
+  `SerializerCleanCopies: dropped N clean copies`, and one per restore,
+  `DeveloperDefaults: restored N of M developer defaults`.
 
 ## [0.3.0] - 2026-09-16
 
