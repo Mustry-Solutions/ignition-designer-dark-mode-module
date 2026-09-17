@@ -2494,6 +2494,10 @@ public class ThemeManager {
             java.awt.Color pinned = neutraliseInternalFrameBackground(child);
             try {
                 child.updateUI();
+                // A Vision date-time selector borrows TextField.border at
+                // construction and FlatLaf's panel delegate strips it; put
+                // the current look and feel's back (VisionConstructionBorders).
+                VisionConstructionBorders.restore(child);
             } catch (Throwable t) {
                 failures++;
                 if (failed.add(child.getClass().getName())) {

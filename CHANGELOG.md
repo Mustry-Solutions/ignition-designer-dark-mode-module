@@ -10,6 +10,24 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A table-based Vision component dropped under dark mode could make its
+  window unopenable in a client.** Found on 0.4.0 with a Comments Panel: the
+  JDK gives a table's scroll pane a second FlatLaf border instance the
+  moment the Designer's tree update reaches it, the serializer has no rule
+  making two FlatLaf borders equal (it has one for Synthetica's), and the
+  save wrote `com.formdev.flatlaf.ui.FlatScrollPaneBorder` by name. The
+  platform's rule is now extended to every FlatLaf border class, so a
+  look-and-feel border is never written, in any theme. The headless sweep
+  had missed it because it never tree-updated a dark-born component before
+  saving; it does now. A window already saved this way opens again after a
+  light save from the Designer that made it.
+- **A Date Time Popup Selector lost its border after a switch to dark**, and
+  a dark save then wrote an explicit empty border a client showed. The
+  border it borrows from the text-field defaults is put back after every
+  tree update.
+
 ## [0.4.0] - 2026-09-17
 
 Dark mode inside Vision. The 0.3.0 gate that refused dark mode while a
