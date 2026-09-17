@@ -194,6 +194,12 @@ gate keys on. CI never sees it; run it before touching anything under
 style primer. Its two restore scenarios were the reproduction of the last
 piece of [#92][92], the fonts after a light restore, and now pin the fix.
 
+**The harness's stock install is the Designer's own.** `DesignerLookAndFeel
+.installStock()` runs `IgnitionLookAndFeel.init()` — Synthetica through
+Ignition's look and feel, Dialog 12, and the developer defaults Ignition puts
+on top — then JIDE's extension. Those puts are what [#102][102] was about,
+and the #23 cycle test only sees them go missing because they are there.
+
 **Synthetica's property lookups have side effects.** Reading
 `SyntheticaLookAndFeel.get("Synthetica.font.enabled", component)` or
 `getStyleName` inside a diagnostic changed what the next tree update did to
@@ -298,6 +304,7 @@ judgment calls into a rule with four exceptions. [#22][22] was two of these
 [45]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/45
 [81]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/81
 [92]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/92
+[102]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/102
 [14]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/14
 [19]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/19
 [21]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/21

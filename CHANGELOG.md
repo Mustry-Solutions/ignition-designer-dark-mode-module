@@ -10,6 +10,20 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The Vision Property Editor no longer paints blank after a dark-mode
+  drop-out** (#102, present since 0.3.0). Synthetica's uninstall, which the
+  switch to FlatLaf triggers, clears Swing's developer defaults — the
+  `UIManager.put`s Ignition makes at startup, among them the category icons
+  of every JIDE property table. After the restore JIDE fell back to
+  Synthetica's tree icon, which cannot paint outside a Synth context, and
+  every paint of the editor threw. The dark switch now copies the developer
+  entries first and the light restore puts back what is missing, so the
+  editor, the option-pane and file-chooser icons and the OK/Cancel mnemonics
+  come back as they were. Proven in the harness, whose stock install now runs
+  `IgnitionLookAndFeel.init()` itself; not yet seen in a live Designer.
+
 ### Added
 
 - **The window serializer's clean-copy cache is refreshed at every theme

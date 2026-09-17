@@ -40,7 +40,10 @@ orchestrator; the other classes are the fronts.
 the switch aborts. Phases 2+ are each wrapped in `safely(...)` so one failing
 pass is logged (with a stack trace, to the debug log) without stranding the rest.
 
-1. **Look and feel swap.** Dark: `UIManager.setLookAndFeel(new FlatDarkLaf())`,
+1. **Look and feel swap.** Dark: first a copy of the DEVELOPER defaults —
+   Ignition's own `UIManager.put`s, which Synthetica's uninstall is about to
+   clear (see [DeveloperDefaults](#developerdefaults)) — then
+   `UIManager.setLookAndFeel(new FlatDarkLaf())`,
    then `keepStockFont(...)` puts the `Label.font` read just before the swap
    as FlatLaf's `defaultFont`, so the switch is colour-only (see
    [Gotchas](#gotchas-and-hard-won-facts)). Light: reinstall the stock theme
@@ -56,7 +59,9 @@ pass is logged (with a stack trace, to the debug log) without stranding the rest
 3. **Color tokens** — `IaColorTokens.install()` (dark) / `.uninstall()` (light).
 4. **JIDE extension** — `installJideExtension(dark)`. FlatLaf isn't a look and
    feel JIDE recognizes, so under dark it must be told the VSNET style
-   explicitly: `installJideExtension(1)`.
+   explicitly: `installJideExtension(1)`. Light only, straight after it:
+   **developer defaults** — put back what Ignition had put at startup, over
+   what JIDE has just re-put (`DeveloperDefaults.restore`).
 5. **Theme painters** — `overrideThemePainters(dark)` repoints JIDE's painter
    map (see below).
 6. **Default re-assert** — `applyMenuDefaults(dark)` re-puts *all* FlatLaf
@@ -445,6 +450,41 @@ reproduces `initialize()` verbatim on `SerializerProbeButton` and on a
 under dark, whose buttons get the tokens from Vision's deserialization
 handler.
 
+### DeveloperDefaults
+Swing keeps the look and feel's defaults in a table every `setLookAndFeel`
+replaces, and the *developer* defaults — what `UIManager.put` writes — in
+the merged `UIDefaults` object's own storage, meant to outlive look-and-feel
+changes. Ignition relies on that: `IgnitionLookAndFeel.init()` puts its
+option-pane and file-chooser icons, the category icons of every JIDE
+property table and the OK/Cancel mnemonics there at startup, and JIDE's
+extension writes several hundred more. Synthetica's `uninitialize()`, run by
+Swing when FlatLaf is installed over it, calls `clear()` on that merged
+object, which empties the developer storage with the tables. The reinstall
+on the way back lets Synthetica and JIDE put theirs again; Ignition's were
+never seen again.
+
+The one that showed (#102): `CategorizedTable.categoryExpandedIcon`. In a
+Designer that has never been dark it is Ignition's vector chevron; after a
+cycle it was missing, JIDE fell back to `Tree.expandedIcon`, and Synthetica's
+tree icon painted outside a Synth context — by a JIDE renderer, not a tree —
+handed Ignition's `TreeExpandedIconPainter` a context with no component.
+Every paint of the Vision Property Editor then died in that painter, and the
+editor was blank after every drop-out, on 0.3.0 as well.
+
+So the dark switch copies the developer entries just before FlatLaf goes in,
+and the light restore, after the stock reinstall and JIDE's re-put, puts back
+every one that is missing or different — except what the reinstall must own:
+Synthetica's objects, fonts, UI delegates, and the action and input maps
+Swing installs lazily. `Synth.doNotSetTextAA`, which `init()` puts into the
+look and feel's own table, goes back there. No reflection: the merged
+object's `containsKey` is `Hashtable`'s own and answers for the developer
+storage alone. Under dark the developer entries stay as FlatLaf and JIDE
+leave them — a fidelity gap (FlatLaf's option-pane icons, JIDE's category
+chevrons), not a defect. The harness's stock install now runs
+`IgnitionLookAndFeel.init()` itself, so the #23 cycle test sees these puts
+and would catch their loss; `PropertyEditorAfterRestoreTest` paints a JIDE
+property table's category row across a cycle.
+
 ### ComponentInspector
 Debug only. **Cmd/Ctrl+Shift+I** (or `+F12`) dumps the component chain under the
 mouse to the debug log — class, background/foreground with `UIResource` vs
@@ -485,6 +525,15 @@ lines are unbounded, and each used to cost an open/write/close on the event
 dispatch thread.
 
 ## Gotchas and hard-won facts
+
+- **Synthetica's uninstall clears the developer defaults.** Every
+  `UIManager.put` made before the switch to dark — Ignition's, JIDE's, the
+  module's own — is gone once FlatLaf is in, without a property-change event
+  (it is one `clear()`, not per-key removals). The module keeps a copy and
+  puts it back on the light restore ([DeveloperDefaults](#developerdefaults));
+  anything that must survive under dark has to be re-put after the swap.
+  This is also why a diagnostic that watches `UIManager.getDefaults()` with a
+  listener sees nothing.
 
 - **The Designer calls `getModuleMenu()` again during its own teardown**
   (`IgnitionDesigner$LoadedModule.shutdown()` does so twice before

@@ -49,9 +49,19 @@ final class DesignerLookAndFeel {
         // UIManager (SyntheticaLookAndFeel.lookup); a real Designer has a
         // display and never needs it.
         UIManager.put("Synthetica.font.respectSystemDPI", Boolean.FALSE);
-        de.javasoft.plaf.synthetica.SyntheticaLookAndFeel
-            .setLookAndFeel(STOCK_LAF_CLASS, true, true);
-        de.javasoft.plaf.synthetica.SyntheticaLookAndFeel.setFont("Dialog", 12);
+        // The Designer's own startup: Synthetica through IgnitionLookAndFeel$LaF,
+        // Dialog 12, and the developer defaults Ignition puts on top — option
+        // pane and file chooser icons, the category icons of every JIDE
+        // property table, mnemonics. Those puts are what #102 was about, and a
+        // stock install without them cannot see them go missing.
+        com.inductiveautomation.ignition.client.IgnitionLookAndFeel.init();
+        // One of init()'s option-pane PNGs is not on this classpath, so init()
+        // put a null there — which removes the key from every table, and a
+        // reinstall then reads as "an icon appeared". A Designer has the PNG.
+        // Stand in for it so the cycle tests measure the module, not the jar.
+        if (UIManager.get("OptionPane.informationIcon") == null) {
+            UIManager.put("OptionPane.informationIcon", UIManager.get("OptionPane.questionIcon"));
+        }
         com.jidesoft.plaf.LookAndFeelFactory.installJideExtension();
         // A Designer has built every kind of text component long before the
         // first switch, and Swing installs each kind's lazy action map into
