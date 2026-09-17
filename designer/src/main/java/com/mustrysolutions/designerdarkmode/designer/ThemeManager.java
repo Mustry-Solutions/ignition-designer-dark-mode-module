@@ -69,22 +69,7 @@ public class ThemeManager {
 
     private final DesignerStatus status = new DesignerStatus();
 
-    /**
-     * Keeps dark mode away from Vision resources — see {@link VisionGate} for
-     * why a FlatLaf Designer corrupts every Vision window it saves.
-     */
-    private final VisionGate visionGate;
 
-    /** The Vision explanation dialog is shown once per session; the status bar repeats it. */
-    private boolean visionNoticeShown;
-
-    /**
-     * A Vision window was attached under dark mode and the drop-out is already
-     * queued. Every template instance inside a window is its own Vision
-     * top-level, and each one is attached separately, so without this the
-     * watcher would log and queue once per template.
-     */
-    private boolean visionDropPending;
 
     /**
      * Set by {@link #shutdown}. The Designer rebuilds module menus during its
@@ -180,13 +165,6 @@ public class ThemeManager {
      */
     ThemeManager(Preferences prefs) {
         this.prefs = prefs;
-        this.visionGate = new VisionGate(() -> context == null ? null : context.getFrame());
-    }
-
-    /** Test seam: a gate whose verdict the test controls. */
-    ThemeManager(Preferences prefs, VisionGate visionGate) {
-        this.prefs = prefs;
-        this.visionGate = visionGate;
     }
 
     /** Register the menu's listener before {@link #startup}. */
@@ -215,7 +193,6 @@ public class ThemeManager {
     public void shutdown() {
         shutDown = true;
         onEdt(() -> {
-            visionGate.unwatchNavigation();
             inspector.uninstall();
             apply(false);
         });
@@ -253,47 +230,17 @@ public class ThemeManager {
      * reasonably concludes the click did not register.
      */
     private void beginSwitch(boolean dark) {
-        if (dark && visionWins()) {
-            return;
-        }
         stateListener.switchStarted();
         status.message(dark
             ? "Applying dark mode\u2026"
             : "Restoring the stock Designer theme\u2026");
         SwingUtilities.invokeLater(() -> {
-            // Asked again, because a turn has passed: a click on a Vision
-            // window queued behind the menu click selects the Vision workspace
-            // in that turn, and the answer above is stale by the time the
-            // theme is actually installed.
-            if (dark && visionWins()) {
-                return;
-            }
             try {
                 apply(dark);
             } finally {
                 finishSwitch();
             }
         });
-    }
-
-    /**
-     * Whether Vision is in play, and if so what to do about a request for
-     * dark mode: refuse it while the Designer is light, or drop dark mode if
-     * it is somehow already on (a menu rebuild re-asserting the preference).
-     *
-     * @return true when the switch must not go ahead
-     */
-    private boolean visionWins() {
-        String reason = visionGate.blockingReason();
-        if (reason == null) {
-            return false;
-        }
-        if (isDarkActive()) {
-            leaveDarkForVision(reason, false);
-        } else {
-            refuseDark(reason);
-        }
-        return true;
     }
 
     /**
@@ -311,71 +258,6 @@ public class ThemeManager {
         boolean darkActive = isDarkActive();
         savePreference(darkActive);
         stateListener.switchFinished(darkActive);
-    }
-
-    /**
-     * The user asked for dark mode with Vision in play. Say why not, where they
-     * are looking, and square the preference and the menu with the light theme
-     * that is staying — {@link #setDark} has already written "dark".
-     */
-    private void refuseDark(String reason) {
-        String message = VisionGate.refusalMessage(reason);
-        log.info(message);
-        DebugLog.log("Vision gate: " + message);
-        status.message(message);
-        finishSwitch();
-        visionGate.explain(message);
-    }
-
-    /**
-     * Vision is about to be edited under dark mode; leave it now.
-     *
-     * <p>Synchronous on purpose. The navigation listener calls this while the
-     * Vision workspace is being selected, and the window a double click is
-     * about to open is deserialized in the very next event. A deferred restore
-     * could land after that, which is the round trip this exists to prevent.
-     *
-     * <p>The saved preference is left alone. Nothing failed: the user still
-     * prefers dark, the Designer is light only while Vision is in play, and
-     * the next launch away from Vision should come up dark again — the same
-     * rule {@link #applyStartupPreference} applies to a launch onto Vision.
-     * Only the menu follows the screen.
-     *
-     * <p>Nothing may escape: the navigation listener runs inside the
-     * {@code WorkspaceManager}'s own selection, and an exception there leaves
-     * the previous workspace's dock frames showing and its "selected" event
-     * unfired.
-     *
-     * @param windowAlreadyOpen the trigger was a window reaching the tree,
-     *                          not the workspace being selected — too late to
-     *                          keep FlatLaf out of it, so the user is told to
-     *                          close and reopen it
-     */
-    void leaveDarkForVision(String reason, boolean windowAlreadyOpen) {
-        if (!isDarkActive()) {
-            return;
-        }
-        try {
-            DebugLog.log("Vision gate: leaving dark mode because " + reason + ".");
-            stateListener.switchStarted();
-            status.message("Turning dark mode off: " + reason + "\u2026");
-            try {
-                apply(false);
-            } finally {
-                stateListener.switchFinished(isDarkActive());
-            }
-            String message = VisionGate.dropOutMessage(reason, windowAlreadyOpen);
-            log.info(message);
-            status.message(message);
-            if (!visionNoticeShown) {
-                visionNoticeShown = true;
-                // After the restore has painted, not in the middle of it.
-                SwingUtilities.invokeLater(() -> visionGate.explain(message));
-            }
-        } catch (Throwable t) {
-            log.warn("Leaving dark mode for Vision failed.", t);
-            DebugLog.log("Vision gate: leaving dark mode failed.", t);
-        }
     }
 
     /**
@@ -478,22 +360,7 @@ public class ThemeManager {
      */
     void applyStartupPreference() {
         uiReady = true;
-        if (context != null) {
-            visionGate.watchNavigation(
-                () -> leaveDarkForVision("the Vision workspace was opened", false));
-        }
         if (isDarkModeEnabled()) {
-            String reason = visionGate.blockingReason();
-            if (reason != null) {
-                // The preference is kept: nothing failed, the Designer simply
-                // came up on Vision. The menu follows the theme on screen.
-                String message = VisionGate.refusalMessage(reason);
-                log.info(message);
-                DebugLog.log("Vision gate at startup: " + message);
-                status.message(message);
-                stateListener.switchFinished(false);
-                return;
-            }
             apply(true);
             finishSwitch();
         }
@@ -2039,12 +1906,11 @@ public class ThemeManager {
      * "any ancestor from a {@code factorypmi} package", which also covered
      * Vision's component palette and property editor: Designer chrome, not
      * user content, and the two filter fields a Designer showed dark after
-     * the Vision gate had dropped it back to light, because the leftover
-     * pass below skipped them.
+     * a switch back to light, because the leftover pass below skipped them.
      */
     private static boolean insideVisionWorkspace(java.awt.Component component) {
         for (java.awt.Component p = component; p != null; p = p.getParent()) {
-            if (VisionGate.isVisionTopLevel(p)
+            if (VisionWindows.isVisionTopLevel(p)
                     || ClassNames.extendsNamed(p.getClass(), DESIGNABLE_WORKSPACE)) {
                 return true;
             }
@@ -2303,22 +2169,6 @@ public class ThemeManager {
                     // long before the rescan would reach them.
                     correctBeforeFirstPaint(child);
                     pendingAdded.add(new java.lang.ref.WeakReference<>(child));
-                    // A Vision window that got here under dark mode was opened
-                    // by a path that never selected the workspace, so the
-                    // navigation watch could not get ahead of it. Leave dark
-                    // mode on the next turn; the window cannot be saved before
-                    // then, and the user is told to close and reopen it.
-                    java.awt.Component vision = visionDropPending ? null
-                        : VisionGate.findVisionTopLevel(child, VisionGate.ATTACH_SEARCH_DEPTH);
-                    if (vision != null) {
-                        visionDropPending = true;
-                        DebugLog.log("Vision gate: " + vision.getClass().getName()
-                            + " was attached under dark mode.");
-                        SwingUtilities.invokeLater(() -> {
-                            visionDropPending = false;
-                            leaveDarkForVision("a Vision window or template was opened", true);
-                        });
-                    }
                 }
                 if (child instanceof javax.swing.JPopupMenu) {
                     // Cached menus created under the other theme keep stale UI

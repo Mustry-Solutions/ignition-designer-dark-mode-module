@@ -30,7 +30,7 @@ import java.util.TreeSet;
  * scenarios over a stock &rarr; dark &rarr; stock cycle: with the refresh, no
  * save carried a FlatLaf class name, a {@code setFont} or a look-and-feel
  * colour, while hand-set values still round-tripped. (The write-up is in
- * {@code docs/ARCHITECTURE.md}, under VisionGate.)
+ * {@code docs/ARCHITECTURE.md}, under Vision.)
  *
  * <p>Why here and not in {@code DesignerModuleHook.configureSerializer}: that
  * runs on every save, and Vision seeds its own {@code PathBasedVisionShape}
@@ -48,9 +48,8 @@ import java.util.TreeSet;
  * themselves at construction, and the module rewrites those under dark, so a
  * window <em>loaded</em> under dark still writes the dark button foreground
  * into its save — wrong on a light client, not fatal. That and the font
- * staleness after a light restore are parts 2 and 3 of #92; until they land,
- * {@link VisionGate} keeps dark mode out of Vision and this refresh is a safety
- * net for the windows the gate cannot see.
+ * staleness after a light restore are parts 2 and 3 of #92, handled by
+ * {@link TokenColorDelegate} and the restore's style primer.
  */
 final class SerializerCleanCopies {
 

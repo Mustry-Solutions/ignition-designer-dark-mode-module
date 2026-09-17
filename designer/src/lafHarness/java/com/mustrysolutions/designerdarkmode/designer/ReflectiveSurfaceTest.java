@@ -64,12 +64,10 @@ class ReflectiveSurfaceTest {
         named.put("ThemeManager.jideFactory", ThemeManager.JIDE_LAF_FACTORY);
         named.put("ThemeManager.basicPainter", ThemeManager.BASIC_PAINTER);
         named.put("ThemeManager.themePainter", ThemeManager.THEME_PAINTER_TYPE);
-        // The Vision gate. Vision's own TopLevelContainer is NOT listed: the
-        // Vision jars are not a published artifact and are not on this
-        // classpath, so that name is checked by hand (docs/QA-CHECKLIST.md, §N).
-        named.put("VisionGate.workspaceManager", VisionGate.WORKSPACE_MANAGER);
+        // Vision's own TopLevelContainer is NOT listed: the Vision jars are
+        // not a published artifact and are not on this classpath. The Vision
+        // probe (VisionWindowSaveTest) pins it against the cached jars.
         named.put("ThemeManager.designableWorkspace", ThemeManager.DESIGNABLE_WORKSPACE);
-        named.put("VisionGate.navigationListener", VisionGate.NAVIGATION_LISTENER);
         named.put("ThemeManager.keyField", ThemeManager.KEY_FIELD_CLASS);
         named.put("ThemeManager.borderlessField", ThemeManager.BORDERLESS_FIELD_CLASS);
         named.put("SerializerCleanCopies", SerializerCleanCopies.SERIALIZER_CLASS);
@@ -191,23 +189,6 @@ class ReflectiveSurfaceTest {
         // save after a switch carrying the previous look and feel again, and
         // the phase would report it — but only in the debug log.
         fields(missing, SerializerCleanCopies.SERIALIZER_CLASS, SerializerCleanCopies.CLEAN_MAP_FIELD);
-
-        // --- VisionGate ----------------------------------------------------
-        // The gate's whole job is to run BEFORE a window is deserialized, and
-        // the navigation listener is the only hook that fires at that point.
-        // Losing it would degrade the gate silently to the attach-time fallback.
-        methods(missing, "com.inductiveautomation.ignition.designer.IgnitionDesigner", "getWorkspace");
-        methods(missing, VisionGate.WORKSPACE_MANAGER, "getSelectedWorkspace");
-        methods(missing, "com.inductiveautomation.ignition.designer.model.ResourceWorkspace", "getKey");
-        method(missing, VisionGate.NAVIGATION_LISTENER, "workspaceActivated", String.class);
-        method(missing, VisionGate.NAVIGATION_LISTENER, "workspaceDeactivated", String.class);
-        try {
-            Class<?> listener = load(VisionGate.NAVIGATION_LISTENER);
-            method(missing, VisionGate.WORKSPACE_MANAGER, "addNavigationListener", listener);
-            method(missing, VisionGate.WORKSPACE_MANAGER, "removeNavigationListener", listener);
-        } catch (ClassNotFoundException absent) {
-            missing.add(VisionGate.NAVIGATION_LISTENER + " (class)");
-        }
 
         // --- ScriptEditorTheme ---------------------------------------------
         methods(missing, ScriptEditorTheme.NAMED_THEME, "getTheme");

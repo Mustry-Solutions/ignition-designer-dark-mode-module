@@ -189,8 +189,8 @@ set that exists only when told where they are:
 `PMIButton`, `PMILabel`, `PMITextField`, each `initialize()`d), saves it
 with Vision's own delegates and BeanInfos plus the module's hook, loads every
 save back the way a client does, and pins the `TopLevelContainer` name the
-gate keys on. CI never sees it; run it before touching anything under
-`VisionGate`, `SerializerCleanCopies`, `TokenColorDelegate` or the restore's
+module keys on. CI never sees it; run it before touching anything under
+`VisionWindows`, `SerializerCleanCopies`, `TokenColorDelegate` or the restore's
 style primer. Its two restore scenarios were the reproduction of the last
 piece of [#92][92], the fonts after a light restore, and now pin the fix.
 

@@ -86,18 +86,18 @@ class VisionWindowSaveTest {
         SerializerCleanCopies.refresh();
     }
 
-    // --- the gate's Vision-side names, checked by hand until now (QA §N) ----
+    // --- the Vision-side name the module keys on --------------------------
 
     @Test
-    @DisplayName("the interface the Vision gate keys on still exists, and windows and templates implement it")
-    void gateNamesResolve() throws Exception {
-        Class<?> topLevel = Class.forName(VisionGate.TOP_LEVEL_CONTAINER);
+    @DisplayName("the interface that marks Vision content still exists, and windows and templates implement it")
+    void topLevelContainerResolves() throws Exception {
+        Class<?> topLevel = Class.forName(VisionWindows.TOP_LEVEL_CONTAINER);
         assertTrue(topLevel.isAssignableFrom(FPMIWindow.class),
-            "FPMIWindow no longer implements " + VisionGate.TOP_LEVEL_CONTAINER
-                + "; the gate would not see an open window");
+            "FPMIWindow no longer implements " + VisionWindows.TOP_LEVEL_CONTAINER
+                + "; the colour passes would no longer spare a window's content");
         assertTrue(topLevel.isAssignableFrom(VisionTemplate.class),
-            "VisionTemplate no longer implements " + VisionGate.TOP_LEVEL_CONTAINER
-                + "; the gate would not see an open template");
+            "VisionTemplate no longer implements " + VisionWindows.TOP_LEVEL_CONTAINER
+                + "; the colour passes would no longer spare a template's content");
     }
 
     // --- part 1: the clean-copy cache -----------------------------------

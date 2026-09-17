@@ -10,6 +10,20 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ## [Unreleased]
 
+### Changed
+
+- **Dark mode now works inside Vision; the gate is gone.** Tools → Dark Mode
+  applies with Vision windows and templates open, a dark Designer stays dark
+  when you navigate to Vision, and a dark preference applies on a launch onto
+  the Vision workspace. The refusal dialog, the drop-out and the "close and
+  reopen" notice of 0.3.0 are removed. What made them necessary is fixed at
+  the serializer (the three #92 pieces below, proven against the real Vision
+  classes and in a live Designer). What remains is a limitation, not a
+  defect: the Vision canvas renders in FlatLaf's dark colours under dark
+  mode, which is not what a light Vision client shows. `VisionWindows` keeps
+  the one thing the gate knew that the colour passes still need, how to
+  recognise a Vision window or template by name.
+
 ### Fixed
 
 - **The Vision Property Editor no longer paints blank after a dark-mode
@@ -38,10 +52,7 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   the platform serializer itself: a stale copy writes `setBorder
   <o cls="com.formdev.flatlaf.ui.FlatButtonBorder"/>`, `setFont`,
   `setForeground` and `setBackground`; after the refresh the same save is an
-  empty element. `VisionGate` stays: Vision still bakes the module's dark
-  colour constants into components as a window opens, and the light restore
-  leaves fonts stale until a second tree update (parts 2 and 3), so nothing
-  changes on screen yet. The debug log gains one line per switch,
+  empty element. The debug log gains one line per switch,
   `SerializerCleanCopies: dropped N clean copies`.
 
 - **A restyled design token that Vision copied into a component is saved
@@ -60,14 +71,13 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   path; with nothing restyled the XML is byte-for-byte the platform's. Proven
   in the harness against the platform serializer with `initialize()`
   reproduced verbatim, and against real Vision in the probe below.
-  `VisionGate` still stays: the light restore leaves fonts stale (part 3).
 
 - **A Vision probe: the harness's saves, run through the real Vision
   classes.** `./gradlew :designer:visionProbe -Pvision.jars="$(ops/vision-jars.sh)"`
   compiles a source set against the Vision jars in the Designer's module
   cache (never published, so CI never sees it) and saves and loads real
   windows across a theme switch with Vision's own delegates. It also pins
-  the `TopLevelContainer` name the gate keys on, which the QA checklist had
+  the `TopLevelContainer` name the module keys on, which the QA checklist had
   to verify by hand. Two of its scenarios are `@Disabled` with the finding
   written on them at first, then re-enabled once part 3 below was fixed.
 
@@ -86,8 +96,8 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   text kind straight after the reinstall, so the stale request is spent
   before any real component asks. Reproduced without Vision in the harness
   (`RestoredTextFieldFontTest`) and on the real component in the probe. With
-  this, all three pieces of #92 are in headlessly; `VisionGate` stays until
-  a live sitting has run the Vision rows of the QA checklist under dark mode.
+  this, all three pieces of #92 are in; the live sitting that followed ran
+  the gate rows clean, and the gate went (see Changed).
 
 ## [0.3.0] - 2026-09-16
 
