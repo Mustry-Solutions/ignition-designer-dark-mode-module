@@ -10,6 +10,13 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-09-17
+
+A patch for 0.4.0, which every 0.4.0 user should take: a Comments Panel
+dropped under dark mode and saved left the window unopenable in a Vision
+client. Found the same day, in the live check of the palette kinds the
+headless sweep could not build.
+
 ### Fixed
 
 - **A Comments Panel dropped under dark mode made its window unopenable in a
