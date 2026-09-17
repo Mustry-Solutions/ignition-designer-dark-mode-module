@@ -62,6 +62,8 @@ public class ThemeManager {
     private final Preferences prefs;
     private final TreeIconRecolorer treeIcons = new TreeIconRecolorer();
     private final IaColorTokens tokens = new IaColorTokens();
+    private final LookAndFeelColors lafColors = new LookAndFeelColors();
+    private final VisionConstructionColors visionConstruction = new VisionConstructionColors();
     private final CellRendererSanitizer cellRenderers = new CellRendererSanitizer();
 
     private DesignerContext context;
@@ -460,6 +462,12 @@ public class ThemeManager {
                 // takes Ignition's own startup defaults with it (#102).
                 trace("developerDefaults");
                 developerDefaultsAtStock = DeveloperDefaults.snapshot();
+                // And the stock colours by key, so a Vision save made under
+                // dark can write the stock value for a look-and-feel colour a
+                // component inherited (LookAndFeelColors).
+                trace("stockColors");
+                lafColors.captureStock();
+                visionConstruction.captureStock();
                 // Read now, while the stock look and feel is still the one
                 // answering: this is the font the Designer has been drawing
                 // with, and the one dark mode keeps (see below).
@@ -554,6 +562,17 @@ public class ThemeManager {
             // light direction clears both in phase 0 instead — see there.
             safely("flatDefaults", () -> applyMenuDefaults(true));
             safely("jideOverrides", () -> applyJideDarkOverrides(true));
+            // After every default is final: FlatLaf's colours joined to the
+            // stock ones by key, for what a Vision save writes.
+            safely("darkColors", () -> {
+                lafColors.captureDark();
+                visionConstruction.captureDark();
+            });
+        } else {
+            safely("darkColors", () -> {
+                lafColors.clear();
+                visionConstruction.clear();
+            });
         }
         if (dark) {
             // Before the tree update, not after: JTableHeader.updateUI() calls
@@ -702,8 +721,16 @@ public class ThemeManager {
      * off this class's own surface so the platform serializer types stay out
      * of it: the unit tests load this class without the platform jars.
      */
+    /** Test seam: the Tree View correction the watcher runs on attach. */
+    int correctVisionConstructionColors(java.awt.Component root) {
+        return visionConstruction.correct(root);
+    }
+
     java.util.function.Function<java.awt.Color, Integer> stockTokenRgb() {
-        return tokens::stockRgb;
+        return color -> {
+            Integer token = tokens.stockRgb(color);
+            return token != null ? token : lafColors.stockRgb(color);
+        };
     }
 
     /**
@@ -2118,6 +2145,10 @@ public class ThemeManager {
             if (added instanceof javax.swing.JComponent) {
                 refreshStaleUiDelegates((javax.swing.JComponent) added);
             }
+            // A Vision Tree View dropped under dark mode copied FlatLaf's tree
+            // colours into plain fields; put the stock ones back before it can
+            // be saved (VisionConstructionColors).
+            visionConstruction.correct(added);
             if (themePainterType != null && basicPainterInstance != null) {
                 int repointed = repointCachedThemePainters(
                     (java.awt.Container) added, themePainterType, basicPainterInstance);

@@ -30,9 +30,12 @@ import com.inductiveautomation.ignition.common.xmlserialization.serialization.de
  * place by the light restore, so a later light save is clean.
  *
  * <p>The fix is at the point of writing. This delegate replaces the
- * serializer's own {@code java.awt.Color} delegate with one that asks the
- * token pass, by identity, whether the colour is a token it has restyled, and
- * if so hands the platform's encoder a copy holding the stock value instead.
+ * serializer's own {@code java.awt.Color} delegate with one that asks, by
+ * identity, whether the colour is a token the token pass has restyled or a
+ * look-and-feel colour FlatLaf owns ({@link LookAndFeelColors}: a component
+ * that inherits its container's {@code Panel.foreground} has that written
+ * too, and under dark it is FlatLaf's), and if so hands the platform's
+ * encoder a copy holding the stock value instead.
  * A colour the user picked is a different object, even at the same RGB, and
  * is written as picked. Datasets are covered by the same path: the platform
  * serializes their cells one object at a time through the delegate table.
@@ -71,7 +74,12 @@ final class TokenColorDelegate implements SerializationDelegate<Color> {
      */
     static void register(XMLSerializer serializer, Function<Color, Integer> stockRgb) {
         try {
-            serializer.addSerializationDelegate(Color.class, new TokenColorDelegate(stockRgb));
+            TokenColorDelegate delegate = new TokenColorDelegate(stockRgb);
+            serializer.addSerializationDelegate(Color.class, delegate);
+            // The platform keys its delegates by exact class and registers
+            // ColorUIResource separately; an inherited look-and-feel colour is
+            // one of those, and it must come through here too.
+            serializer.addSerializationDelegate(javax.swing.plaf.ColorUIResource.class, delegate);
         } catch (Throwable t) {
             DebugLog.log("TokenColorDelegate could not be registered; a save made under "
                 + "dark mode may carry dark token colours.", t);

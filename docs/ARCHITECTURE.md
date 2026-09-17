@@ -288,6 +288,50 @@ And one the gate had hidden: **Synthetica's uninstall clears the developer
 defaults**, which left the Vision Property Editor blank after every switch
 back ([DeveloperDefaults](#developerdefaults)).
 
+**The corruption sweep.** The three fixes were proven on a three-component
+window. `VisionCorruptionSweepTest` in the Vision probe takes the same
+standard to the whole palette: every one of Vision's 61 palette components
+(55 build headlessly; the rest need a client context), built from the
+palette and saved under dark, born under stock and cycled twice with the
+window open, with hand-set values, nested three deep with a template, and
+as a full `FPMIWindow`, must serialize to the same bytes a stock Designer
+writes, net of the residue listed below, and load back in a client showing
+what a stock save shows. It found two more leaks and fixed them:
+
+- **Inherited look-and-feel colours.** A component with no foreground of its
+  own (a rectangle, a barcode, a canvas, a tank, a fill indicator) inherits
+  its container's `Panel.foreground`, a `UIResource`; the platform
+  serializer, comparing that against a parentless clean copy whose
+  foreground is `null`, writes it. Under stock that is #2E2E2E and
+  harmless; under dark it was FlatLaf's #DDDDDD, near-white text on a light
+  client. Every Vision container carries exactly `Panel.foreground` and
+  `Panel.background`, so `LookAndFeelColors` captures the stock values of
+  those two keys before FlatLaf goes in, FlatLaf's instances for them after,
+  and the save delegate writes the stock value for either — registered on
+  `ColorUIResource` as well as `Color`, because the platform keys its
+  delegates by exact class. Nothing broader: FlatLaf's dark values stand in
+  for several stock keys each, so a general map is ambiguous.
+- **The Tree View's sample data.** Its constructor reads four `Tree.*`
+  colours, copies each into a plain `Color`, and builds its ten-row sample
+  dataset with them as `color(r,g,b,a)` strings; a save cannot tell those
+  from values the user typed. `VisionConstructionColors` rewrites, as the
+  component is attached under dark, every cell that still encodes FlatLaf's
+  value for one of the four keys with the stock value, through `setData`.
+  In the sweep's full sequence a tree view built under dark already holds
+  stock strings, and the correction is a no-op; in a shorter sequence (a
+  tree view built soon after the switch, before other kinds) it holds
+  FlatLaf's, and the correction is what puts them right. Why the two paths
+  differ is not settled; the guard covers both.
+
+What the sweep accepts as residue, each documented: the stock token value
+written where a stock Designer writes nothing (see
+[TokenColorDelegate](#tokencolordelegate)); the preferred size the palette
+computes at drop time, which FlatLaf's fonts and insets measure a couple of
+pixels smaller; a combo box's `maximumRowCount`, a FlatLaf-only default of
+15 kept from the theme it was built under, where Synthetica defines none;
+and the timestamps and random sample data charts generate, which differ
+between two stock saves too.
+
 What is left of the gate is `VisionWindows.isVisionTopLevel`, the by-name
 test for the interface both `FPMIWindow` and `VisionTemplate` implement,
 which the leftover pass uses to tell Vision content from the chrome around
@@ -404,6 +448,22 @@ chevrons), not a defect. The harness's stock install now runs
 `IgnitionLookAndFeel.init()` itself, so the #23 cycle test sees these puts
 and would catch their loss; `PropertyEditorAfterRestoreTest` paints a JIDE
 property table's category row across a cycle.
+
+### LookAndFeelColors
+The stock value for a look-and-feel colour a Vision component inherits, for
+what a save writes. Two keys only, `Panel.foreground` and
+`Panel.background`, because those are what every Vision container carries
+and so what a child with no colour of its own inherits; captured by RGB
+before FlatLaf goes in and by FlatLaf's shared instance after. Consulted by
+`TokenColorDelegate` after the token pass. See the corruption sweep under
+[Vision](#vision).
+
+### VisionConstructionColors
+Rewrites a Tree View's sample dataset as it is attached under dark mode,
+replacing every `color(r,g,b,a)` string that encodes FlatLaf's value for one
+of the four `Tree.*` keys its constructor read with the stock value. Reached
+by name; a Designer without Vision never sees one. See the corruption sweep
+under [Vision](#vision).
 
 ### ComponentInspector
 Debug only. **Cmd/Ctrl+Shift+I** (or `+F12`) dumps the component chain under the
