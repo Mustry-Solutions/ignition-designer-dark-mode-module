@@ -23,8 +23,8 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   which is what the save compares against. The headless sweep had missed it
   because it never tree-updated a dark-born component before saving; it
   does now, and it builds the Comments Panels and the Spinner too. A window
-  already saved this way opens again after a light save from the Designer
-  that made it.
+  already saved this way is repaired by any save from a Designer running
+  this fix, in either theme; on 0.4.0 itself, by a light save.
 - **A Date Time Popup Selector lost its border after a switch to dark**, and
   a dark save then wrote an explicit empty border a client showed. The same
   alignment puts it back.
