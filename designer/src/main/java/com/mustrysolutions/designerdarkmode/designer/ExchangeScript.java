@@ -84,7 +84,8 @@ final class ExchangeScript {
      * — checked live on 2026-09-18, where the lookup under that type found
      * nothing and the one under this type found the script.
      */
-    static final ResourceType SCRIPT_LIBRARY = new ResourceType("ignition", "script-python");
+    static final String SCRIPT_LIBRARY_MODULE = "ignition";
+    static final String SCRIPT_LIBRARY_TYPE = "script-python";
 
     /** The script module the Exchange project import creates. */
     static final String SCRIPT_MODULE_PATH = "designer/darkModePatch";
@@ -279,7 +280,11 @@ final class ExchangeScript {
             if (!(open instanceof ResourceCollection)) {
                 return false;
             }
-            ResourcePath path = new ResourcePath(SCRIPT_LIBRARY, SCRIPT_MODULE_PATH);
+            // Built here, not in a static field: the unit tests run without
+            // the platform jars, and the catch below is what keeps a missing
+            // class from taking the whole check down.
+            ResourcePath path = new ResourcePath(
+                new ResourceType(SCRIPT_LIBRARY_MODULE, SCRIPT_LIBRARY_TYPE), SCRIPT_MODULE_PATH);
             return ((ResourceCollection) open).getResource(path).isPresent();
         } catch (Throwable t) {
             DebugLog.detail("ExchangeScript: the project's resources are unavailable.", t);
