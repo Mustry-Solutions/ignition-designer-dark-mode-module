@@ -97,6 +97,9 @@ public class TreeIconRecolorer {
         wrapTrees(trees);
     }
 
+    /** Tree classes whose listeners threw during a wrap, logged once each. */
+    private final java.util.Set<String> failed = new java.util.HashSet<>();
+
     private void wrapTrees(List<JTree> trees) {
         int wrapped = 0;
         for (JTree tree : trees) {
@@ -121,7 +124,20 @@ public class TreeIconRecolorer {
                 continue;
             }
             wrappedTrees.put(tree, current);
-            tree.setCellRenderer(new RecoloringRenderer(current));
+            try {
+                tree.setCellRenderer(new RecoloringRenderer(current));
+            } catch (Throwable t) {
+                // A property-change listener someone else put on the tree
+                // threw out of setCellRenderer: the Exchange dark-mode
+                // script's TreeListener does, assuming every renderer is a
+                // DefaultTreeCellRenderer (#89). The renderer is set by
+                // then; only the listener failed. One tree must not take
+                // the phase down for every tree after it.
+                if (failed.add(tree.getClass().getName())) {
+                    DebugLog.log("TreeIconRecolorer: a listener on " + tree.getClass().getName()
+                        + " threw as its renderer was wrapped; the wrap stands, the listener's work does not.", t);
+                }
+            }
             tree.repaint();
             wrapped++;
         }
