@@ -19,7 +19,7 @@ import javax.swing.Timer;
 
 import com.inductiveautomation.ignition.common.resourcecollection.ResourceCollection;
 import com.inductiveautomation.ignition.common.resourcecollection.ResourcePath;
-import com.inductiveautomation.ignition.common.script.ScriptConfig;
+import com.inductiveautomation.ignition.common.resourcecollection.ResourceType;
 
 /**
  * Keeps the Exchange's "Dark Mode for the Designer" script from painting
@@ -77,6 +77,14 @@ import com.inductiveautomation.ignition.common.script.ScriptConfig;
  * {@value #SCRIPT_MODULE_PATH}.
  */
 final class ExchangeScript {
+
+    /**
+     * The resource type of a project-library script. Not the SDK's
+     * {@code ScriptConfig.RESOURCE_TYPE}, which is {@code ignition/event-scripts}
+     * — checked live on 2026-09-18, where the lookup under that type found
+     * nothing and the one under this type found the script.
+     */
+    static final ResourceType SCRIPT_LIBRARY = new ResourceType("ignition", "script-python");
 
     /** The script module the Exchange project import creates. */
     static final String SCRIPT_MODULE_PATH = "designer/darkModePatch";
@@ -271,7 +279,7 @@ final class ExchangeScript {
             if (!(open instanceof ResourceCollection)) {
                 return false;
             }
-            ResourcePath path = new ResourcePath(ScriptConfig.RESOURCE_TYPE, SCRIPT_MODULE_PATH);
+            ResourcePath path = new ResourcePath(SCRIPT_LIBRARY, SCRIPT_MODULE_PATH);
             return ((ResourceCollection) open).getResource(path).isPresent();
         } catch (Throwable t) {
             DebugLog.detail("ExchangeScript: the project's resources are unavailable.", t);
