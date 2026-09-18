@@ -553,6 +553,23 @@ explicit vs inherited markers, opacity, and UI delegate per level. This is the
 primary tool for diagnosing a "still light" area. See
 [DEVELOPMENT.md](DEVELOPMENT.md#the-inspector--diagnosing-a-still-light-component).
 
+### ExchangeScript
+Takes the Exchange "Dark Mode for the Designer" script's View → Dark Mode
+checkbox out of play (#89): finds it by text in the View menu (the script's
+own identity test), unticks it without firing the script's action listener,
+disables it with a tooltip, and posts one notice. Checks run on two timers
+after startup (the script's tag fires at two seconds), on every Tools →
+Dark Mode click, and when such an item is added to any menu. The script's
+presence without its tag is read from the project's resources, under the
+`ignition/script-python` type — not `ScriptConfig.RESOURCE_TYPE`, which is
+event scripts. Built from a live reproduction (QA checklist §O), which
+found the coexistence milder than feared: present but unticked, the script
+does nothing to a dark Designer, and windows opened later follow the
+module; only the checkbox's two transitions break things, one of them past
+any toggle's reach. Nothing is refused and no paint is undone. The
+script's tree listener also throws inside `setCellRenderer` when a
+renderer is wrapped, which `TreeIconRecolorer` now contains per tree.
+
 ### DesignerStatus
 The module's one-line channel to the user, via the Designer's own status bar
 (`DesignerContext.getStatusBar()`, reached reflectively — it is not SDK

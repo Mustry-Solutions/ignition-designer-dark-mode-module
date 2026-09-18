@@ -10,6 +10,23 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The Exchange "Dark Mode for the Designer" script no longer paints over
+  the module.** A project that imported that script adds its own View →
+  Dark Mode checkbox; ticked on top of this module's theme it painted black
+  fields and grey table cells that a toggle off and on did not clear, and
+  unticked again it painted the toolbar and dock title bars white. The
+  module now greys that checkbox out with a tooltip saying why, unticks it
+  if it finds it ticked, and says so once in the status bar and the log.
+  The script's paints are never undone: a box ticked before the module saw
+  it means a relaunch. Remove the project's `designerPatch` Vision client
+  tag to silence the notice
+  ([#89](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/89)).
+- **One tree with a foreign listener no longer stops the tree-icon pass for
+  every tree after it.** The Exchange script's tree listener throws inside
+  `setCellRenderer`; the pass now contains that per tree.
+
 ## [0.4.1] - 2026-09-17
 
 A patch for 0.4.0, which every 0.4.0 user should take: a Comments Panel
