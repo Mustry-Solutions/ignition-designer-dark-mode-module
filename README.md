@@ -63,19 +63,21 @@ any save from a Designer running 0.4.1, or on 0.4.0 by a light save.
 `ops/vision-check.sh` reads every saved window and template of a project back
 out of the gateway and reports anything a client could not load.
 
-**Do not use this module and the Exchange dark-mode script in the same
-project.** [Dark Mode for the Designer](https://inductiveautomation.com/exchange/2719/overview)
+**The Exchange dark-mode script's own toggle is disabled while this module
+is installed.** [Dark Mode for the Designer](https://inductiveautomation.com/exchange/2719/overview)
 (see [Prior art](#prior-art)) is a project-library script plus a Vision client
 tag, so a project that imported it keeps running it in every Designer that
-opens the project, whether or not this module is installed. The tag adds its
-own **View → Dark Mode** checkbox shortly after launch. Ticked alongside
-Tools → Dark Mode, the script paints explicit colours over this module's theme,
-and its own light setting paints explicit white, and neither is anything this
-module's toggle-off can undo. Before turning dark mode on in such a project,
-remove the script's `designerPatch` Vision client tag; the `darkModePatch`
-project library script does nothing on its own and can stay. Detecting the
-script at startup is tracked in
-[#89](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/89).
+opens the project. The tag adds a **View → Dark Mode** checkbox shortly after
+launch, and that checkbox is the trap: ticked on top of this module's theme
+it paints black fields and grey cells that a toggle off and on does not
+clear, and unticked again it paints the toolbar and dock titles white. So
+the module greys the checkbox out with a tooltip saying why, and says so
+once in the status bar and the log. Use Tools → Dark Mode; the script's
+paints are never undone, so a box that was ticked before the module saw it
+means a relaunch. To silence the notice, remove the project's
+`designerPatch` Vision client tag; the `darkModePatch` project library
+script does nothing on its own and can stay. To use the script instead,
+uninstall the module.
 
 Some surfaces are left light **on purpose**, because they render *your* content
 rather than the Designer's chrome, and theming them would misrepresent what your

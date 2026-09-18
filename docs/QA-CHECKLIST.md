@@ -26,6 +26,7 @@ Newest first.
 
 | Date | OS | Ignition | Vision | Module | Scope covered |
 |---|---|---|---|---|---|
+| 2026-09-18 (afternoon) | macOS | 8.3.6 | 12.3.6 | dev build of main, then the #89 branch, dev-signed via the new worktree-aware `ops/deploy.sh` | First run of §O, driven by Claude on Sam's screen: the Exchange 1.3.0 script seeded into `test`, its checkbox added from the Script Console, all five transitions of the two toggles recorded with screenshots (see §O's last row). Then on the fix: startup notice, checkbox arriving disabled, the console-ticked case unticked by the next click |
 | 2026-09-18 (release) | macOS | 8.3.6 | 12.3.6 | **v0.4.1 as released** (the GitHub asset, release certificate, seeded on the dev gateway) | Short sitting on the released patch, driven by Claude on Sam's screen: Designer came up dark on Vision (`Designer Dark Mode [v0.4.1]` in the console), Main Window opened under dark, a fresh Comments Panel dropped from the palette (property editor: Border "No Border"), Save All; checker clean, byte scan clean (no FlatLaf class, no font, no dark value), no failed phase in the log; the Vision client opened the window with the new panel light, Synthetica's own outline and black text, beside the two panels the fix had repaired the evening before |
 | 2026-09-17 (evening) | macOS | 8.3.6 | 12.3.6 | **v0.4.0 as released** | The five palette kinds the headless sweep cannot build, dropped under dark on Sam's screen: Slider, Spinner, both Comments Panels, Easy Chart. Every save carried a FlatLaf border class by name — the first real corruption since the gate came out, missed by the sweep. Root cause and fix the same evening (`LookAndFeelBorders`, `VisionConstructionBorders`); then the dev gateway ran the fix, the corrupted window was re-saved clean from a dark Designer, and the Vision client opened it |
 | 2026-09-17 (release) | macOS | 8.3.6 | 12.3.6 | **v0.4.0 as released** (the GitHub asset, signed with the release certificate, accepted by the dev gateway after seeding its fingerprint and license hash) | Short sitting on the released build: Designer came up dark on Vision, window opened under dark, saved under dark, restored to light (Text Field font `Dialog, Plain, 12`, property editor populated), saved, dark again with the window open, saved; every save clean in the checker and in a byte scan (no dark value, no FlatLaf class, no font); the log has every switch with `SerializerCleanCopies` and `DeveloperDefaults: restored`, no failed phase; the Vision client opened the window showing every component as a stock save would. The first non-dev build ever run on this gateway |
@@ -437,6 +438,26 @@ cannot pin it (no Vision jar on the harness classpath); the Vision probe can:
 `VisionWindowSaveTest`, whose first test resolves the name against the cached
 Vision jars and checks both classes implement it, and whose other tests are
 the saves above, headless.
+
+## O. The Exchange dark-mode script in the project
+
+The Exchange "Dark Mode for the Designer" script (1.3.0) lives inside a
+project: a project-library script at `designer/darkModePatch` plus a Vision
+client tag `designerPatch` that adds a **View → Dark Mode** checkbox two
+seconds after launch. The module takes that checkbox out of play (#89). To
+set up: seed the script into the dev project (`ignition/script-python/
+designer/darkModePatch/{code.py,resource.json}` from the Exchange zip's
+project export, `chown 2003:2003`, restart the gateway), and either import
+the tag from `Tags/autoAdd Vision Client Tag.xml` through the Tag Browser's
+Vision Client Tags provider, or call `designer.darkModePatch.addSelectionBox()`
+from the Script Console, which is what the tag does.
+
+| Step | Expect | Result | Last checked | Notes |
+|---|---|---|---|---|
+| Launch a dark Designer on a project carrying the script | Status bar and log: one notice naming the script and the `designerPatch` tag, two seconds after the dark apply; nothing else changes | `pass` | `2026-09-18` | `ExchangeScript: This project contains…` in the log. The lookup is under the `ignition/script-python` resource type; `ScriptConfig.RESOURCE_TYPE` is event scripts and finds nothing |
+| The script adds its checkbox (tag fires, or `addSelectionBox()` from the console) | Within a second the View → Dark Mode item is greyed out with the module's tooltip; the notice, if not yet shown, appears | `pass` | `2026-09-18` | From the console: `getSelectionCheckbox()` reported enabled False, selected False, tooltip set; View menu showed it grey |
+| `designer.darkModePatch.setDarkMode(True)` from the console (ticks the box regardless), then Tools → Dark Mode | The script's paint applies (nothing stops a console call); the next Tools → Dark Mode click unticks the box again | `pass` | `2026-09-18` | Reported enabled False, selected True after the call, selected False after the click |
+| **Without the fix, for the record** (the reproduction of 2026-09-18 on a dev build of 0.4.1) | — | — | `2026-09-18` | Script present, unticked: nothing wrong. Ticked on top of the module's dark: black filter field, black tree background, grey table cells; survives Tools → Dark Mode off and on. Unticked again under the module's dark: toolbar strip and every dock title light. Module off: stock light, script's whites invisible. Module on again: normal dark (the module's own white-hunting passes cover its light paint). Dialogs opened later come up dark. The script's `TreeListener` threw inside our tree-icon phase, failing it for every tree after the first |
 
 ## Findings from the sweeps
 

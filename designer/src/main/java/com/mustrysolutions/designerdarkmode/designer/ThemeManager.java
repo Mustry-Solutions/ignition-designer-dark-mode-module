@@ -71,6 +71,13 @@ public class ThemeManager {
 
     private final DesignerStatus status = new DesignerStatus();
 
+    /** The Exchange script's checkbox, taken out of play when it appears (#89). */
+    private final ExchangeScript exchangeScript = new ExchangeScript(
+        () -> context != null && context.getFrame() instanceof javax.swing.JFrame
+            ? ((javax.swing.JFrame) context.getFrame()).getJMenuBar() : null,
+        () -> context == null ? null : context.getProject(),
+        this::exchangeScriptNotice);
+
 
 
     /**
@@ -187,14 +194,23 @@ public class ThemeManager {
         onEdt(() -> {
             captureStockLaf();
             inspector.install();
+            exchangeScript.install();
             applyWhenDesignerVisible();
         });
+    }
+
+    /** One status-bar line and a WARN when the Exchange script is in the project. */
+    private void exchangeScriptNotice(String message) {
+        log.warn(message);
+        DebugLog.log("ExchangeScript: " + message);
+        status.message(message);
     }
 
     /** Called on module shutdown; puts the Designer back the way we found it. */
     public void shutdown() {
         shutDown = true;
         onEdt(() -> {
+            exchangeScript.uninstall();
             inspector.uninstall();
             apply(false);
         });
@@ -232,6 +248,9 @@ public class ThemeManager {
      * reasonably concludes the click did not register.
      */
     private void beginSwitch(boolean dark) {
+        // A click is a good moment to look for the Exchange script's checkbox
+        // again: it must not be live while ours is (#89). Cheap and never throws.
+        exchangeScript.check();
         stateListener.switchStarted();
         status.message(dark
             ? "Applying dark mode\u2026"
