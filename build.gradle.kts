@@ -74,7 +74,8 @@ ignitionModule {
      *  Example entry: listOf( ":gateway" to "G", ":common" to "GC", ":vision-client" to "C" )
      */
     projectScopes.putAll(mapOf(
-        ":designer" to "D"
+        ":designer" to "D",
+        ":gateway" to "G"
     ))
 
     /*
@@ -106,7 +107,8 @@ ignitionModule {
      * Example entry: "com.myorganization.vectorizer.VectorizerDesignerHook" to "D"
      */
     hooks.putAll(mapOf(
-        "com.mustrysolutions.designerdarkmode.designer.DesignerDarkModeHook" to "D"
+        "com.mustrysolutions.designerdarkmode.designer.DesignerDarkModeHook" to "D",
+        "com.mustrysolutions.designerdarkmode.gateway.DesignerDarkModeGatewayHook" to "G"
     ))
 
     /*
@@ -120,6 +122,12 @@ ignitionModule {
      * Apache-2.0 and free: no trial period, no activation, no per-gateway fee.
      * A free module still states its terms via `license` above, it just doesn't
      * opt into the platform's trial/licensing machinery.
+     *
+     * This writes <freeModule>true</freeModule> into module.xml, which the 8.3
+     * gateway does NOT read (#114). What it does read is
+     * GatewayModuleHook.isFreeModule() on the gateway-scope hook, which is the
+     * whole reason DesignerDarkModeGatewayHook exists. Kept for the record and
+     * for any gateway that starts honouring the element.
      */
     freeModule.set(true)
 

@@ -26,6 +26,15 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 - **One tree with a foreign listener no longer stops the tree-icon pass for
   every tree after it.** The Exchange script's tree listener throws inside
   `setCellRenderer`; the pass now contains that per tree.
+- **Config → Modules listed the module as "Trial".** Reported on 0.4.1. The module has said `<freeModule>true</freeModule>` in its
+  module.xml since 0.1.0, but the 8.3 gateway never reads that element: the
+  one thing it consults is `isFreeModule()` on the module's *gateway*-scope
+  hook, and a designer-only module has none to ask, so the license
+  evaluation fell through to the platform trial state. The module now ships
+  a gateway hook whose sole method returns `true`. Nothing else changes —
+  there was never a gate, and the "Trial" row cost nothing but confusion.
+  The Modules page reads *Free* after the upgrade
+  ([#114](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/114)).
 
 ## [0.4.1] - 2026-09-17
 
