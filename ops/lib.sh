@@ -6,13 +6,38 @@ set -euo pipefail
 # Resolve key paths relative to this file, so scripts work from any directory.
 OPS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${OPS_DIR}/.." && pwd)"
-MODULES_DIR="${OPS_DIR}/modules"
+
+# --- git worktrees ----------------------------------------------------------
+# There is ONE dev gateway per clone, and it belongs to the main checkout: its
+# compose project is named after that directory, it bind-mounts THAT
+# checkout's ops/modules, and it trusts the certificate in THAT checkout's
+# ops/signing (gitignored, so a worktree has none). Run from a worktree with
+# every path relative to the worktree, deploy.sh used to build the branch,
+# stage it where nothing is mounted, generate a fresh keystore the gateway does
+# not trust, and report success while the gateway kept serving the old build
+# (or parked in commissioning). So: the CODE is built from wherever the script
+# lives, and everything the gateway sees comes from the main checkout.
+MAIN_ROOT="${PROJECT_ROOT}"
+if _common="$(git -C "${PROJECT_ROOT}" rev-parse --git-common-dir 2>/dev/null)"; then
+  _common="$(cd "${PROJECT_ROOT}" && cd "${_common}" && pwd)"
+  _candidate="$(dirname "${_common}")"
+  if [[ "${_candidate}" != "${PROJECT_ROOT}" && -f "${_candidate}/docker-compose.yml" ]]; then
+    MAIN_ROOT="${_candidate}"
+  fi
+  unset _common _candidate
+fi
+IN_WORKTREE=0
+[[ "${MAIN_ROOT}" != "${PROJECT_ROOT}" ]] && IN_WORKTREE=1
+
+MODULES_DIR="${MAIN_ROOT}/ops/modules"
 
 # Local self-signed signing material for development (gitignored). On a fresh
 # gateway the certificate is accepted unattended, by seeding its fingerprint into
 # data/modules.json (see accept_staged_module below); after that it persists in
-# the gateway data volume. These are throwaway dev creds.
-SIGNING_DIR="${OPS_DIR}/signing"
+# the gateway data volume. These are throwaway dev creds. Always the MAIN
+# checkout's: a second keystore would be a second certificate the gateway has
+# never accepted.
+SIGNING_DIR="${MAIN_ROOT}/ops/signing"
 KEYSTORE_FILE="${SIGNING_DIR}/dev-keystore.p12"
 CERT_FILE="${SIGNING_DIR}/dev-cert.pem"
 CERT_ALIAS="designer-dark-mode-dev"
@@ -30,17 +55,26 @@ if [[ -d "${JAVA_17_HOME}" ]]; then
 fi
 
 # Read host port overrides from .env (if present) so the printed URL matches compose.
-if [[ -f "${PROJECT_ROOT}/.env" ]]; then
+if [[ -f "${MAIN_ROOT}/.env" ]]; then
   # shellcheck disable=SC1091
-  set -a; source "${PROJECT_ROOT}/.env"; set +a
+  set -a; source "${MAIN_ROOT}/.env"; set +a
 fi
 GATEWAY_HTTP_PORT="${GATEWAY_HTTP_PORT:-8088}"
+# A container that already exists was created with whatever port was in force
+# at `up` time (an .env since deleted, an env var since dropped). It is the
+# truth for every script that talks to it; .env only decides a fresh `up`.
+if _published="$(docker port "${CONTAINER_NAME}" 8088/tcp 2>/dev/null | head -1)"; then
+  [[ "${_published}" =~ :([0-9]+)$ ]] && GATEWAY_HTTP_PORT="${BASH_REMATCH[1]}"
+fi
+unset _published
 GATEWAY_URL="http://localhost:${GATEWAY_HTTP_PORT}"
 ADMIN_USER="admin"
 ADMIN_PASS="password"
 
-# docker compose invocation, always pointed at this project's compose file.
-COMPOSE=(docker compose -f "${PROJECT_ROOT}/docker-compose.yml")
+# docker compose invocation, always pointed at the main checkout's compose
+# file: the compose PROJECT is named after that directory, and a worktree's
+# copy would be a second project fighting over the same container name.
+COMPOSE=(docker compose -f "${MAIN_ROOT}/docker-compose.yml" --project-directory "${MAIN_ROOT}")
 
 # --- pretty logging -------------------------------------------------------
 if [[ -t 1 ]]; then
@@ -59,6 +93,50 @@ require_docker() {
     err "Docker does not appear to be running. Start Docker Desktop and try again."
     exit 1
   fi
+  if (( IN_WORKTREE )); then
+    warn "Git worktree: building ${PROJECT_ROOT}"
+    warn "               but the gateway, its staging folder and the dev keystore are ${MAIN_ROOT}'s."
+  fi
+}
+
+# The certificate fingerprint the gateway's registry holds for OUR module, or
+# empty when the module is not registered (fresh volume) or the gateway is
+# not running.
+registry_fingerprint() {
+  docker exec "${CONTAINER_NAME}" cat /usr/local/bin/ignition/data/modules.json 2>/dev/null \
+    | MODULE_ID="${MODULE_ID}" python3 -c '
+import json, os, sys
+try:
+    print(json.load(sys.stdin).get(os.environ["MODULE_ID"], {}).get("certFingerprint", ""))
+except Exception:
+    print("")
+' 2>/dev/null || true
+}
+
+# The fingerprint of the dev certificate the staged build is signed with.
+dev_cert_fingerprint() {
+  openssl x509 -in "${CERT_FILE}" -noout -fingerprint -sha1 \
+    | cut -d= -f2 | tr -d ':' | tr '[:upper:]' '[:lower:]'
+}
+
+# After a restart: the gateway must be RUNNING (not parked in commissioning
+# over an unaccepted certificate) and must be serving the bytes we staged.
+verify_deployed() {
+  local staged state inside
+  staged="$(find "${MODULES_DIR}" -maxdepth 1 -name '*.modl' | head -1)"
+  state="$(curl -fsS "${GATEWAY_URL}/StatusPing" 2>/dev/null || true)"
+  if echo "${state}" | grep -q COMMISSIONING; then
+    err "Gateway is parked in COMMISSIONING: it does not trust the staged module's certificate."
+    err "Compare 'ops/status.sh' fingerprints; ops/setup.sh re-seeds acceptance."
+    return 1
+  fi
+  inside="$(docker exec "${CONTAINER_NAME}" md5sum "/external-modules/$(basename "${staged}")" 2>/dev/null | cut -d' ' -f1)"
+  if [[ -z "${inside}" || "${inside}" != "$(md5 -q "${staged}" 2>/dev/null || md5sum "${staged}" | cut -d' ' -f1)" ]]; then
+    err "The gateway does not see the staged build: /external-modules is mounted from somewhere else."
+    docker inspect "${CONTAINER_NAME}" --format '{{range .Mounts}}   {{.Source}} -> {{.Destination}}{{"\n"}}{{end}}' 2>/dev/null || true
+    return 1
+  fi
+  ok "Gateway is serving the staged build ($(basename "${staged}"), md5 ${inside})."
 }
 
 # --- signing --------------------------------------------------------------
@@ -115,7 +193,7 @@ build_and_stage_module() {
   # Clear old copies so only the current build is staged.
   rm -f "${MODULES_DIR}"/*.modl 2>/dev/null || true
   cp "${modl}" "${MODULES_DIR}/"
-  ok "Staged $(basename "${modl}") -> ops/modules/"
+  ok "Staged $(basename "${modl}") -> ${MODULES_DIR}/"
 }
 
 # --- wait for gateway -----------------------------------------------------

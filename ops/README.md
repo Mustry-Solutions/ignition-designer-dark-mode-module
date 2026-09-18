@@ -7,7 +7,7 @@ auto-accepted EULA. Never point this at anything real.
 | Script | What it does |
 |--------|--------------|
 | `setup.sh` | Build + sign the module and start the gateway with it installed. Commissioning is unattended — the module's certificate and EULA are seeded into `data/modules.json` for you, so there is no browser wizard to click through. |
-| `deploy.sh` | Rebuild after code changes and restart the gateway to reload the module. Relaunch the Designer afterwards to pick up designer-scope code. |
+| `deploy.sh` | Rebuild after code changes and restart the gateway to reload the module. If the gateway's registry holds another certificate for the module (a released build was run on it, or the dev keystore was regenerated), acceptance is re-seeded instead of a plain restart. Ends by checking that the gateway is running, not commissioning, and serving the bytes just staged. Relaunch the Designer afterwards to pick up designer-scope code. |
 | `status.sh` | Container status, gateway URL, staged module files. |
 | `logs.sh` | Tail gateway logs. |
 | `teardown.sh` | Stop the gateway (`--purge` also wipes its data volume). |
@@ -15,7 +15,20 @@ auto-accepted EULA. Never point this at anything real.
 | `laf-harness-watchdog.sh [gradle args]` | Run `:designer:lafHarness` with a deadline; on a hang it thread-dumps every Gradle JVM into `build/laf-harness-threads-*.txt` and fails. CI uses this instead of calling Gradle directly, because the harness sometimes hangs and a cancelled job leaves no evidence. |
 
 The gateway publishes on **http://localhost:8088** (HTTPS 8043), Ignition's own defaults — configurable in
-`../.env` (copy `../.env.example` if you already run a gateway on 8088).
+`../.env` (copy `../.env.example` if you already run a gateway on 8088). A
+container that already exists keeps the port it was created with; the scripts
+read that from the container, so `.env` only decides a fresh `up`.
+
+**Git worktrees.** There is one dev gateway per clone and it belongs to the
+main checkout: the compose project is named after that directory, it
+bind-mounts that checkout's `modules/`, and it trusts the certificate in that
+checkout's `signing/` (gitignored, so a worktree has none). Run from a
+worktree, every script builds the worktree's code but stages, signs and talks
+to the gateway through the main checkout, and says so on its first line. That
+is the workflow you want: `ops/deploy.sh` on a branch puts that branch on the
+gateway. Before this the same command built, staged into a folder nothing
+mounted, generated a fresh keystore the gateway had never accepted, and
+reported success while the gateway kept serving the old build.
 
 How the pieces fit:
 
