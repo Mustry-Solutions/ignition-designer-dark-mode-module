@@ -21,5 +21,6 @@ dependencyResolutionManagement {
 
 include(
 ":",
-    ":designer"
+    ":designer",
+    ":gateway"
 )

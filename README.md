@@ -128,8 +128,11 @@ newer `.modl` over the old one and relaunch the Designer.
 
 Everything this module does happens inside the Designer. It adds no gateway
 service, no tags, and no scripting functions, and it changes nothing for
-Perspective sessions, Vision clients, or anyone else using your gateway. To
-remove it: **Config → Modules → Uninstall**, and relaunch the Designer.
+Perspective sessions, Vision clients, or anyone else using your gateway. (It
+does carry a tiny gateway-scope hook whose only job is to tell the gateway the
+module is free, so **Config → Modules** lists it as *Free* rather than
+*Trial*.) To remove it: **Config → Modules → Uninstall**, and relaunch the
+Designer.
 
 ## Where the setting is stored
 
@@ -202,7 +205,8 @@ Requires Docker. Full details in [ops/README.md](ops/README.md).
 ```
 build.gradle.kts            Module definition (id, scopes, hook, signing)
 settings.gradle             Gradle project + IA Maven repositories
-designer/                   The only scope: Designer-side code
+gateway/                    One class: the hook that declares the module free (#114)
+designer/                   Everything else: Designer-side code
   build.gradle.kts          Designer deps (FlatLaf bundled via modlImplementation)
   src/main/java/.../designer/
     DesignerDarkModeHook     Module entry point; registers the Tools menu item
