@@ -16,9 +16,20 @@ fi
 
 build_and_stage_module
 
-info "Restarting the gateway to load the new build..."
-"${COMPOSE[@]}" restart gateway
+# The registry keys the module's acceptance on the signing certificate. After
+# a RELEASED build (signed with the release certificate) was run on this
+# gateway, or after the dev keystore was regenerated, a plain restart parks
+# the gateway in commissioning over the "unknown" dev certificate. Re-seed
+# in that case; it is a stop/edit/start, not a restart.
+if [[ "$(registry_fingerprint)" != "$(dev_cert_fingerprint)" ]]; then
+  warn "The gateway's registry does not hold the dev certificate; re-seeding acceptance."
+  accept_staged_module
+else
+  info "Restarting the gateway to load the new build..."
+  "${COMPOSE[@]}" restart gateway
+fi
 wait_for_gateway 60 || true
+verify_deployed
 
 echo
 ok "Redeployed. Refresh ${GATEWAY_URL} -> Config -> Modules to confirm the new version."
