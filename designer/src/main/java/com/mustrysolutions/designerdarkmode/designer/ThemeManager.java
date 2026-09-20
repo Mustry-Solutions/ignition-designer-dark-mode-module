@@ -188,8 +188,15 @@ public class ThemeManager {
         // Must be set before FlatLaf ever initializes: with user scaling on,
         // FlatLaf registers a permanent UIScale listener on the UI defaults
         // that NPEs (null defaultFont) when Synthetica's uninitialize fires
-        // during a later light->dark switch, aborting the switch. macOS is
-        // system-scaled, so user scaling adds nothing here.
+        // during a later light->dark switch, aborting the switch. That is
+        // OS-independent. FlatLaf's *system* scaling (JDK HiDPI, Java 9+)
+        // stays on — Windows and macOS rely on it, and so does a Linux JDK
+        // that honours sun.java2d.uiScale / GDK_SCALE. On a display where
+        // Synthetica has already enlarged the font, keepStockFont carries
+        // that size into FlatLaf; re-enabling user scaling would derive a
+        // factor from the already-scaled font and stretch insets on top,
+        // and bring the permanent listener back. See #76 and
+        // UiScaleDisableTest.
         System.setProperty("flatlaf.uiScale.enabled", "false");
         onEdt(() -> {
             captureStockLaf();

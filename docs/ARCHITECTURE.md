@@ -640,7 +640,8 @@ dispatch thread.
   Synthetica `uninitialize()` fires `defaultFont = null` through it → NPE that
   aborts the switch, and only from the *second* toggle on. Fix:
   `System.setProperty("flatlaf.uiScale.enabled", "false")` before FlatLaf ever
-  initializes (macOS is system-scaled, so this costs nothing), plus a one-shot
+  initializes (FlatLaf *system* scaling — the JDK HiDPI transform — stays on
+  on every Java 9+ platform; see the gotcha below and #76), plus a one-shot
   retry around `setLookAndFeel`.
 
   Measured since, both ways. With scaling on, `UIScale$1` lands on **all three**
@@ -717,17 +718,30 @@ dispatch thread.
   the launcher, ahead of the log pointer. Verified by running the harness
   with that opening removed: 1 of 23 phases fails, everything else
   completes.
-- **`flatlaf.uiScale.enabled=false` is justified by macOS.** The comment
-  says system scaling covers it, which is true there and on Windows (Java
-  9+), and doubtful on a HiDPI Linux desktop, where FlatLaf user scaling is
-  the usual path. Deliberately left as is until a Linux `env:` block shows
-  what the JVM actually sees; if it does render wrong, the fix is a
-  platform conditional that keeps the retry, not a plain re-enable, and the
-  `theFlatLafScalingListenerIsNeverRegistered` pin becomes conditional too.
+- **`flatlaf.uiScale.enabled=false` is required on every OS, and is not a
+  HiDPI tax.** FlatLaf has two modes: *system* scaling (the JDK HiDPI
+  transform, Java 9+, all platforms) and *user* scaling (a font-derived
+  factor FlatLaf applies itself). The property turns only user scaling off,
+  because the `UIScale` listener it installs is permanent and NPEs on a
+  later Synthetica `uninitialize` — see the toggle-ignored gotcha above.
+  System scaling stays on. Measured in the harness under simulated
+  Synthetica-scaled fonts (Dialog 18 / 24, the sizes a 150–200 % display
+  hands the module): dark mode keeps that size via `keepStockFont`, user
+  scale stays 1.0, and `UIScale.computeFontScaleFactor` on the same font
+  would be `> 1` — so re-enabling user scaling would stretch insets on top
+  of an already-scaled font and bring the listener back. The Linux concern
+  in [#76][76] (user scaling as the usual HiDPI path there) is therefore
+  answered by the font pin, not by a platform conditional. Pinned by
+  `UiScaleDisableTest`. A live 125–150 % Windows or HiDPI Linux `env:`
+  block is still welcome corroboration ([#96][96]), not a blocker.
 
 [35]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/35
 
 [12]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/12
+
+[76]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/76
+
+[96]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/96
 
 ## When Ignition changes underneath us
 

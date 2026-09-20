@@ -10,6 +10,20 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ## [Unreleased]
 
+### Changed
+
+- **`flatlaf.uiScale.enabled=false` is documented as required on every OS,
+  not a macOS-only optimisation**
+  ([#76](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/76)).
+  FlatLaf system scaling (JDK HiDPI) stays on; only user scaling is off,
+  because its permanent `UIScale` listener NPEs on a later Synthetica
+  uninitialize. A new harness test simulates Synthetica-scaled fonts
+  (Dialog 18 / 24 pt) and pins that dark mode keeps that size via the
+  existing font pin while user scale stays 1.0 — re-enabling user scaling
+  would stretch insets on top of an already-scaled font. The `startup`
+  comment, the ARCHITECTURE gotcha, and the QA checklist are updated to
+  match.
+
 ## [0.4.2] - 2026-09-18
 
 Two fixes for things reported on 0.4.1, neither of which touches the theme

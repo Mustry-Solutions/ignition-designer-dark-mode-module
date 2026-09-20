@@ -22,7 +22,8 @@ import com.formdev.flatlaf.util.UIScale;
  * the host JVM — is {@code java.desktop/java.awt} opened to us (the token
  * mutation in {@link IaColorTokens} needs it), which font FlatLaf resolved
  * against which font Synthetica had, and whether system scaling is in play
- * (the reason {@code flatlaf.uiScale.enabled} is off at all). None of those
+ * (user scaling is off on purpose — see {@code ThemeManager.startup} and
+ * #76 — so the log records what the JDK and FlatLaf actually see). None of those
  * can be answered from here for a machine we do not have; all of them can be
  * answered by a Windows or Linux user pasting their log. So the log answers
  * them up front, and a bug report from another platform carries the evidence
