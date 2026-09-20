@@ -22,7 +22,10 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   existing font pin while user scale stays 1.0 — re-enabling user scaling
   would stretch insets on top of an already-scaled font. The `startup`
   comment, the ARCHITECTURE gotcha, and the QA checklist are updated to
-  match.
+  match. While there, `WorkspaceTabStripTest` restores the real Windows
+  desktop properties it displaced instead of deleting them, which left the
+  next test on a Toolkit with no 3D colours and flaked under the
+  support-floor SDK on Windows CI.
 
 ## [0.4.2] - 2026-09-18
 

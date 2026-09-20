@@ -54,19 +54,28 @@ import org.junit.jupiter.api.Test;
 class UiScaleDisableTest {
 
     private ThemeManager manager;
+    private Font labelFontBefore;
+    private Object defaultFontBefore;
 
     @BeforeEach
     void installStockDesignerLookAndFeel() throws Exception {
         DesignerLookAndFeel.installStock();
         manager = new ThemeManager();
         manager.captureStockLaf();
+        labelFontBefore = UIManager.getFont("Label.font");
+        defaultFontBefore = UIManager.get("defaultFont");
     }
 
     @AfterEach
-    void leaveTheJvmLight() {
+    void leaveTheJvmLight() throws Exception {
         if (UIManager.getLookAndFeel() instanceof FlatDarkLaf) {
             manager.apply(false);
         }
+        // The scaled-font put is a developer-defaults stamp; put the stock
+        // values back so a later test does not inherit Dialog 24.
+        UIManager.put("Label.font", labelFontBefore);
+        UIManager.put("defaultFont", defaultFontBefore);
+        DesignerLookAndFeel.installStock();
     }
 
     @Test

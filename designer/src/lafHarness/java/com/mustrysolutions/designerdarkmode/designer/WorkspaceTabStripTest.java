@@ -57,8 +57,8 @@ import org.junit.jupiter.api.Test;
  * boolean and seeding that map with the standard Windows light-theme 3D
  * colours reproduces the Windows table on any OS, byte for byte: before the
  * fix this test rendered the selected tab at #E3E3E3 on this Mac. Both are
- * put back in {@link #leaveTheJvmLight()} so the rest of the harness is
- * unaffected.
+ * put back in {@link #leaveTheJvmLight()} (restoring any real desktop
+ * properties the spoof displaced) so the rest of the harness is unaffected.
  *
  * <p>The pane overrides {@code isDragOverDisabled()} because
  * {@code BasicJideTabbedPaneUI.installListeners} otherwise registers a
@@ -109,6 +109,8 @@ class WorkspaceTabStripTest {
 
     private ThemeManager manager;
     private Boolean windowsBefore;
+    /** Real Toolkit values displaced by {@link #spoofWindows}, restored by unspoof. */
+    private Map<String, Object> desktopBefore;
 
     @BeforeEach
     void installStockDesignerLookAndFeel() throws Exception {
@@ -238,10 +240,21 @@ class WorkspaceTabStripTest {
         windowsBefore = isWindows.getBoolean(null);
         isWindows.setBoolean(null, true);
 
+        // On a real Windows CI host these keys already have values. Remember
+        // them so unspoof can put them back: removing the keys left the next
+        // test ("Everywhere else") on a Toolkit with no 3D colours, and
+        // JIDE's tab scroll layout then AIOOBE'd under the support-floor SDK
+        // ("No such child: 6") while the current SDK happened to survive.
+        desktopBefore = new LinkedHashMap<>();
+        Toolkit toolkit = Toolkit.getDefaultToolkit();
+        for (String key : WINDOWS_DESKTOP.keySet()) {
+            desktopBefore.put(key, toolkit.getDesktopProperty(key));
+        }
+
         Method set = Toolkit.class.getDeclaredMethod("setDesktopProperty", String.class, Object.class);
         set.setAccessible(true);
         for (Map.Entry<String, Object> entry : WINDOWS_DESKTOP.entrySet()) {
-            set.invoke(Toolkit.getDefaultToolkit(), entry.getKey(), entry.getValue());
+            set.invoke(toolkit, entry.getKey(), entry.getValue());
         }
     }
 
@@ -255,12 +268,21 @@ class WorkspaceTabStripTest {
         isWindows.setBoolean(null, windowsBefore);
         windowsBefore = null;
 
+        Method set = Toolkit.class.getDeclaredMethod("setDesktopProperty", String.class, Object.class);
+        set.setAccessible(true);
+        Toolkit toolkit = Toolkit.getDefaultToolkit();
         Field props = Toolkit.class.getDeclaredField("desktopProperties");
         props.setAccessible(true);
-        Map<String, Object> map = (Map<String, Object>) props.get(Toolkit.getDefaultToolkit());
+        Map<String, Object> map = (Map<String, Object>) props.get(toolkit);
         for (String key : WINDOWS_DESKTOP.keySet()) {
-            map.remove(key);
+            Object previous = desktopBefore == null ? null : desktopBefore.get(key);
+            if (previous != null) {
+                set.invoke(toolkit, key, previous);
+            } else {
+                map.remove(key);
+            }
         }
+        desktopBefore = null;
     }
 
     /**
