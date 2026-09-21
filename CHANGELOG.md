@@ -10,6 +10,32 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ## [Unreleased]
 
+### Changed
+
+- **`flatlaf.uiScale.enabled=false` is documented as required on every OS,
+  not a macOS-only optimisation**
+  ([#76](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/76)).
+  FlatLaf system scaling (JDK HiDPI) is untouched by the property; only
+  user scaling is off, because its permanent `UIScale` listener NPEs on a
+  later Synthetica uninitialize. A new harness test simulates
+  Synthetica-scaled fonts (Dialog 18 / 24 pt) and pins that dark mode keeps
+  that size via the existing font pin, so it cannot come out undersized
+  relative to stock. Re-enabling user scaling would stretch insets on top
+  of that font on Linux/macOS and buy nothing on Windows (FlatLaf's own
+  guard), while bringing the listener back everywhere. The `startup`
+  comment, the ARCHITECTURE gotcha, and the QA checklist are updated to
+  match; a live HiDPI `env:` block ([#96](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/96))
+  remains the only real corroboration.
+- **`WorkspaceTabStripTest` now does its Swing work on the dispatch thread
+  and clears its Windows spoof through `setDesktopProperty`.** The reflective
+  map removal it used never worked headless (the default toolkit is a
+  `HeadlessToolkit` whose own map is empty), so the spoofed 3D colours
+  outlived the test. The JIDE layout also ran on the test thread while JIDE
+  had posted dispatch-thread work for the same pane; one Windows CI run
+  (floor SDK) hit `No such child: 6` out of that layout, which needs the
+  child list to change under it. Same remedy as #95; not reproduced on a
+  Mac, so recorded as the likely cause, not a proven one.
+
 ## [0.4.2] - 2026-09-18
 
 Two fixes for things reported on 0.4.1, neither of which touches the theme
