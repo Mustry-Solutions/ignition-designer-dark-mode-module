@@ -724,16 +724,22 @@ dispatch thread.
   factor FlatLaf applies itself). The property turns only user scaling off,
   because the `UIScale` listener it installs is permanent and NPEs on a
   later Synthetica `uninitialize` — see the toggle-ignored gotcha above.
-  System scaling stays on. Measured in the harness under simulated
-  Synthetica-scaled fonts (Dialog 18 / 24, the sizes a 150–200 % display
-  hands the module): dark mode keeps that size via `keepStockFont`, user
-  scale stays 1.0, and `UIScale.computeFontScaleFactor` on the same font
-  would be `> 1` — so re-enabling user scaling would stretch insets on top
-  of an already-scaled font and bring the listener back. The Linux concern
-  in [#76][76] (user scaling as the usual HiDPI path there) is therefore
+  System scaling is untouched by the property (`isSystemScalingEnabled` is
+  a Java-version check; it never reads it). What the harness can pin is
+  narrower than "measured on HiDPI": under simulated Synthetica-scaled
+  fonts (Dialog 18 / 24, the sizes a 150–200 % display hands the module)
+  dark mode keeps that size via `keepStockFont` — so it cannot come out
+  undersized relative to stock, whatever the display does. Re-enabling user
+  scaling would not help either: on Linux and macOS FlatLaf would derive a
+  factor `> 1` from the already-scaled font and stretch insets on top; on
+  Windows FlatLaf declines to double-scale a `UIResource` font that matches
+  `win.messagebox.font` (its own guard), so a re-enable would buy nothing
+  there — and on every OS it brings the listener back. The Linux concern in
+  [#76][76] (user scaling as the usual HiDPI path there) is therefore
   answered by the font pin, not by a platform conditional. Pinned by
-  `UiScaleDisableTest`. A live 125–150 % Windows or HiDPI Linux `env:`
-  block is still welcome corroboration ([#96][96]), not a blocker.
+  `UiScaleDisableTest`. Nothing headless sees the JDK transform itself, so a
+  live 125–150 % Windows or HiDPI Linux `env:` block is still the only real
+  corroboration ([#96][96]); it is not a blocker for keeping the property.
 
 [35]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/35
 

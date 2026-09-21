@@ -16,6 +16,7 @@ import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 import javax.swing.JPanel;
 import javax.swing.SwingConstants;
@@ -29,6 +30,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.function.Executable;
 
 /**
  * The workspace tab strip — the row of open-resource tabs along the bottom of
@@ -57,14 +59,29 @@ import org.junit.jupiter.api.Test;
  * boolean and seeding that map with the standard Windows light-theme 3D
  * colours reproduces the Windows table on any OS, byte for byte: before the
  * fix this test rendered the selected tab at #E3E3E3 on this Mac. Both are
- * put back in {@link #leaveTheJvmLight()} (restoring any real desktop
- * properties the spoof displaced) so the rest of the harness is unaffected.
+ * put back in {@link #leaveTheJvmLight()} so the rest of the harness is
+ * unaffected — through {@code setDesktopProperty}, not the map: headless, the
+ * default toolkit is a {@code HeadlessToolkit} whose own map stays empty and
+ * whose get/set delegate to the real toolkit underneath, so a reflective
+ * {@code remove} on the wrapper's map (what this test did until #119) touched
+ * nothing and the spoof outlived the test.
  *
  * <p>The pane overrides {@code isDragOverDisabled()} because
  * {@code BasicJideTabbedPaneUI.installListeners} otherwise registers a
  * {@code DropTarget}, whose constructor throws {@code HeadlessException}. Only
  * the dark half is rendered: the stock Synthetica delegate needs a screen
  * device to paint.
+ *
+ * <p>Everything that touches the pane runs on the event dispatch thread. The
+ * fixture's {@code setSelectedIndex} makes JIDE post {@code
+ * ensureActiveTabIsVisible} with {@code invokeLater}, so building and laying
+ * the pane out on the test thread leaves a second thread with work on the same
+ * component. The one failure seen — {@code ArrayIndexOutOfBoundsException: No
+ * such child: 6} out of {@code TabbedPaneScrollLayout.layoutContainer} on
+ * windows-latest, floor SDK, #119's first run — needs the child list to shrink
+ * while the layout iterates it, and the dispatch thread is the only other
+ * thread here. Not reproduced on a Mac (same reasoning as #95: a fast machine
+ * wins the race every time).
  */
 class WorkspaceTabStripTest {
 
@@ -120,53 +137,74 @@ class WorkspaceTabStripTest {
     }
 
     @AfterEach
-    void leaveTheJvmLight() throws Exception {
+    void leaveTheJvmLight() throws Throwable {
         // The OS flag goes back BEFORE the light restore: the stock path must
         // not see a spoofed platform either.
         unspoofWindows();
         if (UIManager.getLookAndFeel() instanceof FlatDarkLaf) {
-            manager.apply(false);
+            onEdt(() -> manager.apply(false));
         }
     }
 
     @Test
     @DisplayName("Windows: the selected tab paints dark from JideTabbedPane.light, with legible text")
-    void windowsSelectedTabIsDarkWithLegibleText() throws Exception {
-        JideTabbedPane pane = workspacePane();
-        JPanel host = host(pane);
+    void windowsSelectedTabIsDarkWithLegibleText() throws Throwable {
+        onEdt(() -> {
+            JideTabbedPane pane = workspacePane();
+            JPanel host = host(pane);
 
-        spoofWindows();
-        manager.apply(true);
-        SwingUtilities.updateComponentTreeUI(host);
+            spoofWindows();
+            manager.apply(true);
+            SwingUtilities.updateComponentTreeUI(host);
 
-        assertStripIsLegible(pane, host);
+            assertStripIsLegible(pane, host);
+        });
     }
 
     @Test
     @DisplayName("Everywhere else: the same strip, same expectations")
-    void otherPlatformsSelectedTabIsDarkWithLegibleText() throws Exception {
-        JideTabbedPane pane = workspacePane();
-        JPanel host = host(pane);
+    void otherPlatformsSelectedTabIsDarkWithLegibleText() throws Throwable {
+        onEdt(() -> {
+            JideTabbedPane pane = workspacePane();
+            JPanel host = host(pane);
 
-        manager.apply(true);
-        SwingUtilities.updateComponentTreeUI(host);
+            manager.apply(true);
+            SwingUtilities.updateComponentTreeUI(host);
 
-        assertStripIsLegible(pane, host);
+            assertStripIsLegible(pane, host);
+        });
     }
 
     @Test
     @DisplayName("Switching back returns every pinned key to its stock value")
-    void restoreReturnsTheStockTabColours() throws Exception {
+    void restoreReturnsTheStockTabColours() throws Throwable {
         Map<String, String> stock = new HashMap<>();
         for (String key : PINNED_KEYS) {
             stock.put(key, String.valueOf(UIManager.get(key)));
         }
 
-        manager.apply(true);
-        manager.apply(false);
+        onEdt(() -> {
+            manager.apply(true);
+            manager.apply(false);
+        });
 
         for (String key : PINNED_KEYS) {
             assertEquals(stock.get(key), String.valueOf(UIManager.get(key)), key);
+        }
+    }
+
+    /** Run on the dispatch thread and rethrow whatever it threw, assertions included. */
+    private static void onEdt(Executable task) throws Throwable {
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        SwingUtilities.invokeAndWait(() -> {
+            try {
+                task.execute();
+            } catch (Throwable t) {
+                failure.set(t);
+            }
+        });
+        if (failure.get() != null) {
+            throw failure.get();
         }
     }
 
@@ -240,25 +278,20 @@ class WorkspaceTabStripTest {
         windowsBefore = isWindows.getBoolean(null);
         isWindows.setBoolean(null, true);
 
-        // On a real Windows CI host these keys already have values. Remember
-        // them so unspoof can put them back: removing the keys left the next
-        // test ("Everywhere else") on a Toolkit with no 3D colours, and
-        // JIDE's tab scroll layout then AIOOBE'd under the support-floor SDK
-        // ("No such child: 6") while the current SDK happened to survive.
+        // On a real Windows host these keys already have values (the same
+        // ones, on a default-theme runner). Remember whatever is there so
+        // unspoof can put it back.
         desktopBefore = new LinkedHashMap<>();
         Toolkit toolkit = Toolkit.getDefaultToolkit();
         for (String key : WINDOWS_DESKTOP.keySet()) {
             desktopBefore.put(key, toolkit.getDesktopProperty(key));
         }
 
-        Method set = Toolkit.class.getDeclaredMethod("setDesktopProperty", String.class, Object.class);
-        set.setAccessible(true);
         for (Map.Entry<String, Object> entry : WINDOWS_DESKTOP.entrySet()) {
-            set.invoke(toolkit, entry.getKey(), entry.getValue());
+            setDesktopProperty(toolkit, entry.getKey(), entry.getValue());
         }
     }
 
-    @SuppressWarnings("unchecked")
     private void unspoofWindows() throws Exception {
         if (windowsBefore == null) {
             return;
@@ -268,21 +301,27 @@ class WorkspaceTabStripTest {
         isWindows.setBoolean(null, windowsBefore);
         windowsBefore = null;
 
-        Method set = Toolkit.class.getDeclaredMethod("setDesktopProperty", String.class, Object.class);
-        set.setAccessible(true);
+        // Through the setter, on purpose: with null it leaves the key mapped
+        // to null in the REAL toolkit's map, which getDesktopProperty treats
+        // as absent (it falls through to the lazy load, which answers null for
+        // a win.* key off Windows). Reaching into the map by reflection hit
+        // the HeadlessToolkit wrapper's empty map — see the class comment.
         Toolkit toolkit = Toolkit.getDefaultToolkit();
-        Field props = Toolkit.class.getDeclaredField("desktopProperties");
-        props.setAccessible(true);
-        Map<String, Object> map = (Map<String, Object>) props.get(toolkit);
         for (String key : WINDOWS_DESKTOP.keySet()) {
             Object previous = desktopBefore == null ? null : desktopBefore.get(key);
-            if (previous != null) {
-                set.invoke(toolkit, key, previous);
-            } else {
-                map.remove(key);
-            }
+            setDesktopProperty(toolkit, key, previous);
+            // The check the old map removal would have failed.
+            assertEquals(previous, toolkit.getDesktopProperty(key),
+                key + " must read as it did before the spoof");
         }
         desktopBefore = null;
+    }
+
+    /** {@code Toolkit.setDesktopProperty} is protected; it delegates through a HeadlessToolkit. */
+    private static void setDesktopProperty(Toolkit toolkit, String key, Object value) throws Exception {
+        Method set = Toolkit.class.getDeclaredMethod("setDesktopProperty", String.class, Object.class);
+        set.setAccessible(true);
+        set.invoke(toolkit, key, value);
     }
 
     /**

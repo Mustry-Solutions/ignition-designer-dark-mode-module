@@ -10,6 +10,7 @@ import javax.swing.UIManager;
 import javax.swing.plaf.FontUIResource;
 
 import com.formdev.flatlaf.FlatDarkLaf;
+import com.formdev.flatlaf.util.SystemInfo;
 import com.formdev.flatlaf.util.UIScale;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,21 +34,25 @@ import org.junit.jupiter.api.Test;
  * Headless CI has no real screen transform, so the HiDPI case is simulated
  * the way a live Designer presents it to the module: Synthetica has already
  * enlarged {@code Label.font} (its own scale factor), and that is the font
- * {@code keepStockFont} reads. Under the shipped property:
+ * {@code keepStockFont} reads. The one thing with content here is that the
+ * stock (already scaled) font size is what dark mode paints — colour only,
+ * which is the whole point of the pin in #93 — at 18 and 24 pt rather than
+ * the Dialog 12 the cycle test uses.
  *
- * <ul>
- *   <li>system scaling stays on ({@link UIScale#isSystemScalingEnabled});
- *   <li>user scale stays 1.0, so FlatLaf does not additionally stretch
- *       insets via {@link UIScale#scale(int)};
- *   <li>the stock (already scaled) font size is what dark mode paints —
- *       colour only, which is the whole point of the pin in #93.
- * </ul>
+ * <p>The rest is bookkeeping, and is labelled as such: {@link
+ * UIScale#isSystemScalingEnabled} is a Java-version check (true on 9+, it
+ * never reads the property), and with user scaling off {@code UIScale}
+ * returns before it computes anything, so a factor of 1.0 follows from the
+ * property rather than measuring it. Nothing headless can see the JDK
+ * transform; a live 125–150 % {@code env:} block still can (#96).
  *
  * <p>Re-enabling user scaling is not a fix for the Linux concern in #76.
- * With an already-scaled stock font, FlatLaf would derive a user factor
- * {@code > 1} from that font and scale insets on top of it — and the
- * permanent listener would come back. The font pin is the portable answer;
- * the comment in {@code startup} now says so for all three platforms.
+ * With an already-scaled stock font, FlatLaf on Linux or macOS would derive
+ * a user factor {@code > 1} from that font and scale insets on top of it —
+ * and on every OS the permanent listener would come back. (On Windows
+ * FlatLaf itself declines to double-scale; see the test body.) The font pin
+ * is the portable answer; the comment in {@code startup} now says so for all
+ * three platforms.
  *
  * <p>[76]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/76
  */
@@ -79,16 +84,18 @@ class UiScaleDisableTest {
     }
 
     @Test
-    @DisplayName("Java 9+ system scaling stays on; only FlatLaf user scaling is off (#76)")
+    @DisplayName("the harness runs under the shipped property, and FlatLaf's user-scale path is inert under it (#76)")
     void systemScalingStaysOnWhileUserScalingIsOff() {
         assertEquals("false", System.getProperty("flatlaf.uiScale.enabled"),
             "the harness must ship the same property ThemeManager.startup sets, "
-                + "or this is measuring a different configuration");
+                + "or the font test below runs a different configuration");
+        // Bookkeeping, not measurement (see the class comment): the flag is a
+        // Java-version check and the factor is what UIScale returns before it
+        // computes anything. Kept so a FlatLaf upgrade that changes either
+        // contract shows up here rather than in a user's log.
         assertTrue(UIScale.isSystemScalingEnabled(),
-            "FlatLaf's system-scaling flag is true on Java 9+ on every platform. "
-                + "Disabling user scaling must not turn that off — it is what "
-                + "Windows and macOS HiDPI (and a Linux JDK that honours "
-                + "sun.java2d.uiScale / GDK_SCALE) actually use.");
+            "FlatLaf's system-scaling flag is true on Java 9+ and independent "
+                + "of flatlaf.uiScale.enabled");
         assertEquals(1.0f, UIScale.getUserScaleFactor(), 0.001f,
             "with user scaling disabled the factor stays 1.0; FlatLaf.scale(n) "
                 + "is then a no-op and the JDK transform does the work");
@@ -126,15 +133,25 @@ class UiScaleDisableTest {
 
             // What FlatLaf *would* do if user scaling were re-enabled with
             // this font still in the table: derive a factor from the font
-            // size. On Linux that is pt/15; anywhere it is > 1 for these
+            // size — pt/15 on GNOME, pt/13 on KDE and macOS, so > 1 for these
             // sizes. Recording it here so a future change that flips the
-            // property can see why that is not free.
+            // property can see why that is not free off Windows.
+            //
+            // Not on Windows, where FlatLaf has its own guard against exactly
+            // this double scaling: for a UIResource font whose size matches
+            // the desktop's win.messagebox.font (or when that property is
+            // null) it returns 1 as long as system scaling is on. On a 150 %
+            // Windows desktop the message font IS 18 px, so the factor there
+            // is 1, and the inset argument does not apply — the permanent
+            // listener is the reason the property stays off on that OS.
             float wouldBe = UIScale.computeFontScaleFactor(scaled);
-            assertTrue(wouldBe > 1.0f,
-                "sanity: FlatLaf would treat Dialog " + pt
-                    + "pt as a user scale of " + wouldBe
-                    + " if user scaling were on — which is exactly why the "
-                    + "font pin, not a re-enable, is the HiDPI answer");
+            if (!SystemInfo.isWindows) {
+                assertTrue(wouldBe > 1.0f,
+                    "sanity: FlatLaf would treat Dialog " + pt
+                        + "pt as a user scale of " + wouldBe
+                        + " if user scaling were on — which is why the font "
+                        + "pin, not a re-enable, is the HiDPI answer here");
+            }
 
             manager.apply(false);
             assertEquals(List.of(), manager.failedPhases(),
