@@ -31,6 +31,19 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   cycle, and a mutation sweep shows either half of the fix being dropped
   fails it.
 
+- **Two follow-on cases of the same unwrap, found reviewing it**
+  ([#42](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/42)).
+  A tree wrapped while it still had the look and feel's renderer and given
+  its own one later — a view that builds its renderer when its model arrives
+  — kept the first wrap's mark for the whole dark session, so the restore
+  handed it `null` and its renderer was gone; the mark is now re-assigned on
+  every wrap. And a table that entered the UI AFTER the switch to dark was in
+  no colour record, because `captureStockColors` is a phase of that switch:
+  with the unwrap now ahead of the tree update, `JTable.updateUI()` reaches
+  such a renderer and nulls both its colours, so one that colours itself in
+  its constructor came out of the restore with none. Those colours are now
+  recorded as the renderer is wrapped.
+
 ### Added
 
 - **The look-and-feel harness has a windowed mode**

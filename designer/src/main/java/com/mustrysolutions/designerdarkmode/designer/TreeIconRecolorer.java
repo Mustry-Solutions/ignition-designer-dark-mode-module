@@ -130,8 +130,16 @@ public class TreeIconRecolorer {
                 continue;
             }
             wrappedTrees.put(tree, current);
+            // Assigned, not accumulated: the watcher re-wraps the same tree
+            // for the whole dark session, and a tree that HAD the look and
+            // feel's renderer when it was first wrapped may have been given a
+            // real one since (a view that builds its renderer lazily). Leaving
+            // the old mark on would hand that tree null at unwrap time and
+            // lose the renderer somebody set.
             if (rendererWasCreatedByTheLookAndFeel(tree)) {
                 lafCreatedRenderers.add(tree);
+            } else {
+                lafCreatedRenderers.remove(tree);
             }
             try {
                 tree.setCellRenderer(new RecoloringRenderer(current));

@@ -133,13 +133,23 @@ class WindowedCycleTest {
     @AfterEach
     void leaveTheJvmLightAndWindowless() throws Throwable {
         onEdt(() -> {
-            if (UIManager.getLookAndFeel() instanceof FlatDarkLaf) {
-                manager.apply(false);
+            // The dispose runs whatever the restore did. Every test in this
+            // task now shares one windowed JVM, so a frame left in
+            // Window.getWindows() is walked by every apply() after it —
+            // including the internal frame whose content pane throws on
+            // setBackground(null). One failing test would take the rest of
+            // the class with it, and the reported failures would point
+            // anywhere but here.
+            try {
+                if (manager != null && UIManager.getLookAndFeel() instanceof FlatDarkLaf) {
+                    manager.apply(false);
+                }
+            } finally {
+                for (Window frame : frames) {
+                    frame.dispose();
+                }
+                frames.clear();
             }
-            for (Window frame : frames) {
-                frame.dispose();
-            }
-            frames.clear();
         });
     }
 

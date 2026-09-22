@@ -151,6 +151,42 @@ public class CellRendererSanitizer {
     }
 
     /**
+     * The same record, taken as a renderer is wrapped rather than at the
+     * switch to dark.
+     *
+     * <p>{@link #captureStockColors()} is a phase of that switch and sees only
+     * the windows open then. A table that arrives later — a query result, a
+     * Tag Editor — reaches this class through the component watcher instead,
+     * and its renderers were in no record at all. That cost nothing while the
+     * wrappers stayed on across the light tree update, because
+     * {@code JTable.updateUI()} only reaches a cell renderer that is a {@code
+     * Component} and a {@link SanitizingTableRenderer} is not one. Since the
+     * unwrap moved AHEAD of that update (#42), the original is exposed to it,
+     * and {@code DefaultTableCellRenderer.updateUI()} nulls both colours — so
+     * a renderer that colours itself in its constructor and is never rebuilt
+     * came out of the restore with no colours at all.
+     *
+     * <p>Where a colour has already been sanitized, the pre-sanitize value is
+     * recorded rather than ours: {@link #mutatedBackgrounds} holds it for a
+     * renderer instance shared with a table that was wrapped and painted
+     * earlier. Recording what the component holds NOW would pin dark-era
+     * colours into light mode, since this record is applied last of all.
+     */
+    private void rememberColorsAtWrapTime(Object renderer) {
+        if (!(renderer instanceof Component)) {
+            return;
+        }
+        Map<Component, Color[]> colors = new java.util.LinkedHashMap<>();
+        snapshotColors((Component) renderer, colors);
+        colors.forEach((component, pair) -> stockRendererColors.putIfAbsent(component, new Color[] {
+            mutatedBackgrounds.containsKey(component)
+                ? mutatedBackgrounds.get(component) : pair[0],
+            mutatedForegrounds.containsKey(component)
+                ? mutatedForegrounds.get(component) : pair[1],
+        }));
+    }
+
+    /**
      * Refresh a renderer's stale UI delegate without losing its colours.
      *
      * <p>The refresh is an {@code updateUI()}, and {@code updateUI()} on a
@@ -380,6 +416,7 @@ public class CellRendererSanitizer {
             TableCellRenderer renderer = column.getCellRenderer();
             if (renderer != null && !(renderer instanceof SanitizingTableRenderer)) {
                 originals[i] = renderer;
+                rememberColorsAtWrapTime(renderer);
                 column.setCellRenderer(new SanitizingTableRenderer(renderer));
             }
         }
@@ -391,6 +428,7 @@ public class CellRendererSanitizer {
             TableCellRenderer renderer = table.getDefaultRenderer(valueClass);
             if (renderer != null && !(renderer instanceof SanitizingTableRenderer)) {
                 defaults.put(valueClass, renderer);
+                rememberColorsAtWrapTime(renderer);
                 table.setDefaultRenderer(valueClass, new SanitizingTableRenderer(renderer));
             }
         }
@@ -405,6 +443,7 @@ public class CellRendererSanitizer {
             return;
         }
         wrappedHeaders.put(header, renderer);
+        rememberColorsAtWrapTime(renderer);
         header.setDefaultRenderer(new SanitizingTableRenderer(renderer));
         header.repaint();
     }
@@ -423,6 +462,7 @@ public class CellRendererSanitizer {
             return;
         }
         wrappedLists.put(list, renderer);
+        rememberColorsAtWrapTime(renderer);
         list.setCellRenderer(new SanitizingListRenderer(renderer));
         list.repaint();
     }
@@ -643,6 +683,7 @@ public class CellRendererSanitizer {
             return;
         }
         try {
+            rememberColorsAtWrapTime(renderer);
             setter.invoke(list, new SanitizingListRenderer(renderer));
             wrappedGroupRenderers.put(list, renderer);
             list.repaint();
