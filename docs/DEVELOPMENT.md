@@ -29,7 +29,8 @@ Useful variants:
 ```bash
 ./gradlew :designer:compileJava   # fast compile-only check while iterating
 ./gradlew test                    # unit tests only (no gateway needed)
-./gradlew :designer:lafHarness    # the headless look-and-feel harness (below)
+./gradlew :designer:lafHarness    # the look-and-feel harness, headless (below)
+./gradlew :designer:lafHarness -Pharness.windowed=true   # ...against real windows
 ```
 
 ## Run it against a gateway
@@ -66,10 +67,11 @@ Dark-mode work is mostly a diagnose-then-fix loop against the running Designer.
 Three tools make it tractable — and reach for the first one before you build a
 `.modl`.
 
-### The headless look-and-feel harness
+### The look-and-feel harness
 
 ```bash
-./gradlew :designer:lafHarness
+./gradlew :designer:lafHarness                          # headless
+./gradlew :designer:lafHarness -Pharness.windowed=true  # with a display (below)
 ```
 
 Runs `ThemeManager`'s real switch sequence against the real Designer look and
@@ -93,10 +95,21 @@ JIDE's `Theme.painter` map comes back to the Synthetica entries ([#14][14],
 [#19][19]).
 
 Mostly it replaces the "which defaults are wrong" half of the loop, not the
-"does this look right" half: with no windows open, every pass that walks the
-component tree runs and finds nothing, so component-level state (the painters
-JIDE caches in private fields, the white background swaps) is out of reach of
-the defaults diff. A Designer and a pair of eyes still settle those.
+"does this look right" half. Headlessly, every pass that walks the component
+tree runs and finds nothing — `java.awt.headless=true` is what empties
+`Window.getWindows()` — so component-level state (the painters JIDE caches in
+private fields, the white background swaps) is out of reach of the defaults
+diff. **The windowed mode ([#42][42]) is for exactly that.** With
+`-Pharness.windowed=true` the task drops the headless flag, and
+`WindowedCycleTest` builds a packed, never-shown `JFrame` of Designer-like
+shapes and puts it through `apply(true)`/`apply(false)` the way a Designer
+does: the white/`UIResource` swaps come back as the same instance, every
+cached `ThemePainter` field is repointed and restored, a `JInternalFrame`
+survives the tree update, and the light theme renders pixel-identical
+after a cycle. It skips itself without a display (unless the property was
+given, in which case a headless JVM is a broken runner and it fails). CI runs
+it on all three platforms, Linux under Xvfb. A Designer and a pair of eyes
+still settle "does this look right".
 
 **One test does read pixels.** `TagBrowserHeaderBandTest` builds the real
 `SimpleTreeTable` by hand, drives the dark passes over it, and paints it into a
@@ -119,24 +132,33 @@ Two mechanics matter if you write another one. `validate()` is a no-op on a tree
 with no peer, so lay out by hand (twice — the scroll pane sizes its row header
 from the tree's width). And only the **dark** half can be rendered headlessly:
 Synthetica's `ImagePainter` asks for a default screen device and throws
-`HeadlessException`, so a light-theme render needs `java.awt.headless=false`.
+`HeadlessException`, so a light-theme render needs the windowed mode.
 
-**The light half does render on a machine with a display** — worth knowing,
-because a before/after of the light theme is the most direct evidence there is
-that a restore works, and it is what settled the Tag Browser header and the
-property-editor filter. It is a local-only trick until [#42][42] gives the
-harness a proper windowed mode, and it has two traps:
+**The light half renders in the windowed mode**, and a before/after of the
+light theme is the most direct evidence there is that a restore works —
+`WindowedCycleTest` asserts a pixel-identical render after a cycle. Its
+baseline is the light tree after one plain `updateComponentTreeUI`, not the
+pristine tree: a tree update is not a no-op even with the same look and feel
+on both sides (JIDE rebuilds a dock frame's title pane inside it, and the
+rebuilt title label gets Synthetica's `Label.font` set on it where the
+startup-built one inherited the pane's — 137 pixels, with no module
+involved). What the module owes the Designer is a tree that looks as if the
+stock look and feel had simply been re-applied. Three facts about running
+windowed, two of them retired traps:
 
-- Not from a Gradle test worker. JIDE pops a modal *"Unauthorized usage of JIDE
-  products"* dialog the first time it is used unlicensed outside headless mode,
-  and inside the worker that dialog blocks forever — the task simply hangs with
-  no output, on the user's screen rather than yours. Run the probe with a plain
-  `java` off `sourceSets["lafHarness"].runtimeClasspath` instead.
-- One more opening than the task passes: `--add-opens
+- One more opening than the headless task passes: `--add-opens
   java.desktop/javax.swing.tree=ALL-UNNAMED`. Synthetica's `LabelPainter`
   reflects into `DefaultTreeCellRenderer.selected` while painting a tree row,
   and without it the render dies with an `InaccessibleObjectException` that
-  looks nothing like a theming problem.
+  looks nothing like a theming problem. `-Pharness.windowed=true` adds it.
+- JIDE's modal *"Unauthorized usage of JIDE products"* dialog — which used to
+  hang a windowed Gradle worker forever, on the user's screen rather than in
+  any log — no longer appears. `DesignerLookAndFeel.installStock()` runs
+  `IgnitionLookAndFeel.init()` since [#102][102], and that is where the
+  Designer itself calls `Lm.verifyLicense`. The whole harness runs windowed
+  inside the worker.
+- `apple.awt.UIElement=true` keeps a macOS run out of the Dock. The frames
+  are never shown; the toolkit registers as an application regardless.
 
 **The harness can pretend to be Windows.** [#81][81] only happened on Windows,
 and for a reason no macOS or Linux run could see: JIDE does not recognise
@@ -274,8 +296,16 @@ worth knowing before you trust a pass:
 It can also drive **components**, which is easy to forget given it has no
 windows. 17 of 19 common Swing types build headlessly (`JSlider` and
 `JSplitPane` are the two that throw), so a component tree can be built, put
-through a full cycle and handed to `updateComponentTreeUI`. Windows are the hard
-limit, not components.
+through a full cycle and handed to `updateComponentTreeUI`. Windows were the
+hard limit, and only because of the forced headless flag — the windowed mode
+above lifts it. Its first run found two restore bugs the per-container walks
+had never seen, both in the order of the light restore: the renderer wrappers
+were still on during the light tree update, so `SynthTableUI`/Synthetica
+never reinstalled their own table renderer (every other row dark, on
+FlatLaf's delegate) and `BasicTreeUI` never exchanged the tree renderer it
+had created (no icons, since our `setCellRenderer` had cleared its
+`createdRenderer` flag). `unwrap()` on both wrappers now runs before that
+update; the mutation sweep under the pixel test catches either half dropped.
 
 Two notes if you extend it:
 
