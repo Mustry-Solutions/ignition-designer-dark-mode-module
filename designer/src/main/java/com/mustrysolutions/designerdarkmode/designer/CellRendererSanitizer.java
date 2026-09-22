@@ -151,6 +151,42 @@ public class CellRendererSanitizer {
     }
 
     /**
+     * The same record, taken as a renderer is wrapped rather than at the
+     * switch to dark.
+     *
+     * <p>{@link #captureStockColors()} is a phase of that switch and sees only
+     * the windows open then. A table that arrives later — a query result, a
+     * Tag Editor — reaches this class through the component watcher instead,
+     * and its renderers were in no record at all. That cost nothing while the
+     * wrappers stayed on across the light tree update, because
+     * {@code JTable.updateUI()} only reaches a cell renderer that is a {@code
+     * Component} and a {@link SanitizingTableRenderer} is not one. Since the
+     * unwrap moved AHEAD of that update (#42), the original is exposed to it,
+     * and {@code DefaultTableCellRenderer.updateUI()} nulls both colours — so
+     * a renderer that colours itself in its constructor and is never rebuilt
+     * came out of the restore with no colours at all.
+     *
+     * <p>Where a colour has already been sanitized, the pre-sanitize value is
+     * recorded rather than ours: {@link #mutatedBackgrounds} holds it for a
+     * renderer instance shared with a table that was wrapped and painted
+     * earlier. Recording what the component holds NOW would pin dark-era
+     * colours into light mode, since this record is applied last of all.
+     */
+    private void rememberColorsAtWrapTime(Object renderer) {
+        if (!(renderer instanceof Component)) {
+            return;
+        }
+        Map<Component, Color[]> colors = new java.util.LinkedHashMap<>();
+        snapshotColors((Component) renderer, colors);
+        colors.forEach((component, pair) -> stockRendererColors.putIfAbsent(component, new Color[] {
+            mutatedBackgrounds.containsKey(component)
+                ? mutatedBackgrounds.get(component) : pair[0],
+            mutatedForegrounds.containsKey(component)
+                ? mutatedForegrounds.get(component) : pair[1],
+        }));
+    }
+
+    /**
      * Refresh a renderer's stale UI delegate without losing its colours.
      *
      * <p>The refresh is an {@code updateUI()}, and {@code updateUI()} on a
@@ -380,6 +416,7 @@ public class CellRendererSanitizer {
             TableCellRenderer renderer = column.getCellRenderer();
             if (renderer != null && !(renderer instanceof SanitizingTableRenderer)) {
                 originals[i] = renderer;
+                rememberColorsAtWrapTime(renderer);
                 column.setCellRenderer(new SanitizingTableRenderer(renderer));
             }
         }
@@ -391,6 +428,7 @@ public class CellRendererSanitizer {
             TableCellRenderer renderer = table.getDefaultRenderer(valueClass);
             if (renderer != null && !(renderer instanceof SanitizingTableRenderer)) {
                 defaults.put(valueClass, renderer);
+                rememberColorsAtWrapTime(renderer);
                 table.setDefaultRenderer(valueClass, new SanitizingTableRenderer(renderer));
             }
         }
@@ -405,6 +443,7 @@ public class CellRendererSanitizer {
             return;
         }
         wrappedHeaders.put(header, renderer);
+        rememberColorsAtWrapTime(renderer);
         header.setDefaultRenderer(new SanitizingTableRenderer(renderer));
         header.repaint();
     }
@@ -423,6 +462,7 @@ public class CellRendererSanitizer {
             return;
         }
         wrappedLists.put(list, renderer);
+        rememberColorsAtWrapTime(renderer);
         list.setCellRenderer(new SanitizingListRenderer(renderer));
         list.repaint();
     }
@@ -505,8 +545,25 @@ public class CellRendererSanitizer {
         }
     }
 
-    /** Restore every original renderer. */
-    public void uninstall() {
+    /**
+     * Put every wrapped renderer back, and nothing else.
+     *
+     * <p>Runs BEFORE the light restore's tree update, separately from
+     * {@link #uninstall()} — see {@code TreeIconRecolorer.unwrap()} for the
+     * mechanism, which is the same for tables and lists (#42).
+     * {@code SynthTableUI} replaces a {@code UIResource} default renderer with
+     * its own, and Synthetica's {@code StyleFactory} then installs
+     * {@code SyntheticaDefaultTableCellRenderer} over THAT — on the condition
+     * that the current renderer's class name contains
+     * {@code $SynthTableCellRenderer}. A {@link SanitizingTableRenderer} is
+     * neither, so with the wrapper still on during the tree update the light
+     * look and feel skips the table, and the uninstall afterwards restores
+     * the renderer the wrapper held: the plain {@code
+     * DefaultTableCellRenderer.UIResource} FlatLaf left there, on FlatLaf's
+     * delegate, with FlatLaf's dark background. Under Synthetica that paints
+     * every other row dark. The same goes for the list renderer.
+     */
+    public void unwrap() {
         wrappedColumns.forEach((table, originals) -> {
             int columnCount = Math.min(originals.length, table.getColumnModel().getColumnCount());
             for (int i = 0; i < columnCount; i++) {
@@ -540,6 +597,11 @@ public class CellRendererSanitizer {
         wrappedGroupRenderers.forEach(this::restoreGroupRenderer);
         wrappedGroupRenderers.clear();
         skippedGroupLists.clear();
+    }
+
+    /** Restore every original renderer, then its colours and delegate. */
+    public void uninstall() {
+        unwrap();
         // The panes themselves are discarded when updateComponentTreeUI
         // rebuilds the table UIs; just forget them so a later dark install
         // re-intercepts the fresh ones.
@@ -621,6 +683,7 @@ public class CellRendererSanitizer {
             return;
         }
         try {
+            rememberColorsAtWrapTime(renderer);
             setter.invoke(list, new SanitizingListRenderer(renderer));
             wrappedGroupRenderers.put(list, renderer);
             list.repaint();

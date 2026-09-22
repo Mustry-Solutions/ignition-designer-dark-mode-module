@@ -123,15 +123,51 @@ val harnessJvmArgs = listOf(
     "--add-opens", "java.desktop/java.awt=ALL-UNNAMED",
 )
 
+/*
+ * The windowed mode (#42).
+ *
+ * Headless by default: hermetic, and everything the harness asserted for its
+ * first year lives in UIManager or in the module's own state. But
+ * `java.awt.headless=true` is what empties `Window.getWindows()`, and every
+ * pass in the module that walks windows — the white-background swaps, the
+ * cached-painter repoint, the JInternalFrame neutralisation — ran and found
+ * nothing. With a display present a JFrame can be built, packed and driven
+ * without ever being shown, and those passes become assertable.
+ *
+ *     ./gradlew :designer:lafHarness -Pharness.windowed=true
+ *
+ * CI passes it on every row (xvfb-run on Linux). The tests that need a
+ * window live in WindowedCycleTest and skip themselves headless — unless
+ * this property was given, in which case a headless JVM is a broken runner
+ * and they fail instead. JIDE's unlicensed-use dialog, which used to make a
+ * windowed Gradle worker hang, no longer applies: DesignerLookAndFeel runs
+ * IgnitionLookAndFeel.init(), which is where the Designer licenses JIDE.
+ */
+val harnessWindowed = (project.findProperty("harness.windowed") as String?).toBoolean()
+
 /** Everything a headless run against the real look and feels needs. */
 fun Test.runsHeadlessAgainstTheRealLookAndFeels(logFile: String) {
     useJUnitPlatform()
     jvmArgs(harnessJvmArgs)
 
-    // No display, and none needed: everything asserted here lives in UIManager
-    // and in the module's own state. Window.getWindows() is simply empty, so
-    // the component walks run and find nothing.
-    systemProperty("java.awt.headless", "true")
+    if (harnessWindowed) {
+        systemProperty("java.awt.headless", "false")
+        // Tell the tests the display is required, not optional.
+        systemProperty("designerdarkmode.harness.windowed", "true")
+        // No Dock icon, no focus theft: the frames are never shown, but the
+        // AWT toolkit registers as an application on macOS regardless.
+        systemProperty("apple.awt.UIElement", "true")
+        // Synthetica's LabelPainter reflects into DefaultTreeCellRenderer
+        // .selected while painting a tree row. Headlessly no row is ever
+        // painted; with a display the render dies with an
+        // InaccessibleObjectException that looks nothing like theming.
+        jvmArgs("--add-opens", "java.desktop/javax.swing.tree=ALL-UNNAMED")
+    } else {
+        // No display, and none needed: everything asserted here lives in
+        // UIManager and in the module's own state. Window.getWindows() is
+        // simply empty, so the component walks run and find nothing.
+        systemProperty("java.awt.headless", "true")
+    }
 
     // The same guard ThemeManager.startup sets before FlatLaf ever loads.
     systemProperty("flatlaf.uiScale.enabled", "false")
@@ -151,7 +187,8 @@ fun Test.runsHeadlessAgainstTheRealLookAndFeels(logFile: String) {
 
 val lafHarnessTask = tasks.register<Test>("lafHarness") {
     group = "verification"
-    description = "Drives the theme switch against the real Designer look and feels, headlessly."
+    description = "Drives the theme switch against the real Designer look and feels, " +
+        (if (harnessWindowed) "against real windows." else "headlessly.")
 
     testClassesDirs = lafHarness.output.classesDirs
     classpath = lafHarness.runtimeClasspath

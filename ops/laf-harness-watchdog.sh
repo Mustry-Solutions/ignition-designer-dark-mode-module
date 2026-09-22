@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Run the headless look-and-feel harness under a watchdog.
+# Run the look-and-feel harness under a watchdog (pass -Pharness.windowed=true
+# for the windowed mode, #42).
 #
 # Since #85 the harness hangs in about half of CI runs, somewhere inside
 # PropertyKeyFieldTest, and cannot be reproduced locally. A hang used to sit

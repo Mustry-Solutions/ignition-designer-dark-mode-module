@@ -71,13 +71,25 @@ pass is logged (with a stack trace, to the debug log) without stranding the rest
    .captureStockColors()`, before the tree update, because
    `JTableHeader.updateUI()` nulls a cell renderer's colours and a renderer that
    colours itself in its constructor never gets them back.
-8. **`updateComponentTreeUI`** on every window.
-9. **macOS title bars** — set/clear the `apple.awt.windowAppearance` client
+8. **Renderer unwrap** (light only) — `TreeIconRecolorer.unwrap()` and
+   `CellRendererSanitizer.unwrap()` hand every wrapped tree, table and list
+   its own renderer back *before* the tree update, and a tree whose renderer
+   was the look and feel's own gets `null` instead, so `BasicTreeUI` treats
+   it as its own again. A look and feel only exchanges renderers it
+   recognises — `SynthTableUI`/Synthetica replace a `UIResource` table
+   renderer, `BasicTreeUI` drops the tree renderer it created — and our
+   wrappers are neither, so with them still on during the update every
+   default-renderered tree came back without icons and every table on
+   FlatLaf's delegate, alternate rows dark (#42, found by the windowed
+   harness). The colours and delegates the wrappers tracked are still
+   restored afterwards, in step 11.
+9. **`updateComponentTreeUI`** on every window.
+10. **macOS title bars** — set/clear the `apple.awt.windowAppearance` client
    property so the native title bar follows the theme. A no-op elsewhere: on
    Windows and Linux the native title bar and frame stay light, by decision —
    FlatLaf's own window decorations on Ignition's frames would be a larger
    and riskier change than the gap justifies.
-10. **The passes** (dark only): tree icons, button/label icons, cell-renderer
+11. **The passes** (dark only): tree icons, button/label icons, cell-renderer
     sanitizer, collapsible title panes, white-token background and border swaps,
     script editors, **JIDE code editors**, **diagnostics chart axes**, console
     output styles (including the Output Console's per-run colours), block
@@ -85,12 +97,12 @@ pass is logged (with a stack trace, to the debug log) without stranding the rest
     refresh in secondary windows. On light, the corresponding restores — plus a
     **dark-leftover pass** that re-runs `updateUI()` child-first on anything
     still wearing a dark look-and-feel colour.
-11. **Component watchers.** The dark watcher is installed on dark and removed on
-    light. A much smaller **light watcher** takes its place on the light side,
+12. **Component watchers.** The dark watcher is installed on dark and removed on
+    light (before step 8, so nothing re-wraps). A much smaller **light watcher** takes its place on the light side,
     re-running the dark-leftover pass when a subtree is attached — a dock
     detached during the restore keeps its dark state, and re-attaching it
     recreates the parent-first copy that leaves JIDE wrappers dark.
-12. **Serializer clean copies** — `SerializerCleanCopies.refresh()`, last in
+13. **Serializer clean copies** — `SerializerCleanCopies.refresh()`, last in
     both directions, once every default is where the next save will find it:
     the platform serializer's clean-copy cache was built under the look and
     feel that just left (see [SerializerCleanCopies](#serializercleancopies)).

@@ -10,6 +10,65 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A light restore no longer strips default-renderered trees of their icons
+  or leaves plain tables painting every other row dark**
+  ([#42](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/42)).
+  The renderer wrappers dark mode installs were still in place during the
+  light tree update, and a look and feel only exchanges renderers it
+  recognises: `SynthTableUI`/Synthetica replace a `UIResource` table
+  renderer, `BasicTreeUI` drops the tree renderer it created — and any
+  `setCellRenderer` call, ours included, clears its `createdRenderer` flag.
+  So the restore handed every such tree FlatLaf's plain
+  `DefaultTreeCellRenderer` (no icons under Synthetica, smaller rows) and
+  every such table the `DefaultTableCellRenderer.UIResource` FlatLaf had
+  left there, still on FlatLaf's delegate with FlatLaf's dark background.
+  Both wrappers are now unwrapped before the tree update, and a tree whose
+  renderer was the look and feel's own gets `null` back so its UI does the
+  exchange exactly as at startup. Found by the new windowed harness on its
+  first render; its pixel test now pins a light theme identical after a
+  cycle, and a mutation sweep shows either half of the fix being dropped
+  fails it.
+
+- **Two follow-on cases of the same unwrap, found reviewing it**
+  ([#42](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/42)).
+  A tree wrapped while it still had the look and feel's renderer and given
+  its own one later — a view that builds its renderer when its model arrives
+  — kept the first wrap's mark for the whole dark session, so the restore
+  handed it `null` and its renderer was gone; the mark is now re-assigned on
+  every wrap. And a table that entered the UI AFTER the switch to dark was in
+  no colour record, because `captureStockColors` is a phase of that switch:
+  with the unwrap now ahead of the tree update, `JTable.updateUI()` reaches
+  such a renderer and nulls both its colours, so one that colours itself in
+  its constructor came out of the restore with none. Those colours are now
+  recorded as the renderer is wrapped.
+
+### Added
+
+- **The look-and-feel harness has a windowed mode**
+  ([#42](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/42)).
+  `./gradlew :designer:lafHarness -Pharness.windowed=true` drops the
+  headless flag, adds the one JDK opening a light-theme render needs
+  (`javax.swing.tree`, for Synthetica's `LabelPainter`) and keeps macOS out
+  of the Dock. `WindowedCycleTest` builds a packed, never-shown `JFrame` of
+  Designer-like shapes and drives `apply(true)`/`apply(false)` over it the
+  way a Designer does — the first time the passes that walk
+  `Window.getWindows()` have run under test at all. It pins: a swapped
+  white or light-neutral background comes back as the same instance; every
+  cached JIDE `ThemePainter` field is `BasicPainter` under dark and
+  Synthetica's after the restore, including on a component that never
+  re-reads the map; a `JInternalFrame` whose content pane throws on a null
+  background survives the tree update with its layout (the Vision crash in
+  plain Swing); and the light theme renders pixel-identical after a cycle,
+  against a baseline of one plain `updateComponentTreeUI`. Headless, the
+  class skips itself; with the property given and no display it fails, so a
+  runner that loses its display shows as red. CI runs the harness windowed
+  on all three platforms, Linux under Xvfb. The old "not from a Gradle test
+  worker" trap — JIDE's unlicensed-use dialog hanging the worker — is gone:
+  the harness runs `IgnitionLookAndFeel.init()` since #102, which is where
+  the Designer licenses JIDE.
+
 ### Changed
 
 - **`flatlaf.uiScale.enabled=false` is documented as required on every OS,

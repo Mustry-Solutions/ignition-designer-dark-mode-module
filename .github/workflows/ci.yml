@@ -74,7 +74,13 @@ jobs:
     # not drag it in by accident. It still has to run somewhere, or it rots —
     # and it is the only check here that exercises the switch sequence against
     # the real Synthetica/JIDE/FlatLaf interaction rather than against stubs.
-    # Headless by construction; no display is set up for it on purpose.
+    #
+    # Windowed on every row (#42): the passes that walk Window.getWindows()
+    # are only reachable with a display, so Linux gets one from Xvfb and the
+    # macOS and Windows runners use their own. The window-level tests fail
+    # rather than skip when the property is given and the JVM is still
+    # headless, so a runner that loses its display shows up as red, not as a
+    # quietly smaller suite.
     #
     # On all three operating systems, because the module has only ever been
     # watched on macOS and the things that differ per platform — which JDK
@@ -112,6 +118,12 @@ jobs:
           key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*') }}
           restore-keys: gradle-${{ runner.os }}-
 
+      - name: Install Xvfb
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q xvfb
+
       # Twice, on purpose (#53). The module reaches Ignition and JIDE internals
       # by NAME — classes, fields, methods that no compiler checks — so it has
       # to be exercised against both ends of what it claims to support:
@@ -128,22 +140,28 @@ jobs:
       # missing (Git Bash on Windows) the watchdog still fails the step, just
       # without a jstack — JUnit's own per-test timeout dump, which runs
       # inside the test JVM, covers that case on every platform.
-      - name: Headless look-and-feel harness (current Ignition)
-        run: ops/laf-harness-watchdog.sh
+      - name: Windowed look-and-feel harness (current Ignition)
+        # eval, so the wrapper's quoted screen argument survives as one word.
+        run: eval "$DISPLAY_WRAPPER ops/laf-harness-watchdog.sh -Pharness.windowed=true"
         env:
+          # xvfb-run -a picks a free display number; the screen only has to
+          # exist, nothing is ever shown on it. 24-bit, or Java2D is handed
+          # an 8-bit visual and renders through a palette.
+          DISPLAY_WRAPPER: ${{ runner.os == 'Linux' && 'xvfb-run -a -s "-screen 0 1280x1024x24"' || '' }}
           HARNESS_DEADLINE_SECONDS: "900"
           ORG_GRADLE_PROJECT_org.gradle.java.installations.auto-download: "false"
 
-      - name: Headless look-and-feel harness (support floor)
-        run: ops/laf-harness-watchdog.sh -Pharness.sdk=8.3.0
+      - name: Windowed look-and-feel harness (support floor)
+        run: eval "$DISPLAY_WRAPPER ops/laf-harness-watchdog.sh -Pharness.windowed=true -Pharness.sdk=8.3.0"
         env:
+          DISPLAY_WRAPPER: ${{ runner.os == 'Linux' && 'xvfb-run -a -s "-screen 0 1280x1024x24"' || '' }}
           HARNESS_DEADLINE_SECONDS: "900"
           ORG_GRADLE_PROJECT_org.gradle.java.installations.auto-download: "false"
 
       # Thread dumps from the watchdog, JUnit's per-test results (full stack
-      # traces, and its own timeout dump in <system-out>), and the module's
+      # traces, and its own timeout dump in <system-out>), the module's
       # debug log — whose environment block is what a failing platform is
-      # read against.
+      # read against — and, when the pixel test fails, its three renders.
       - name: Upload harness diagnostics
         if: always()
         uses: actions/upload-artifact@v7
@@ -154,3 +172,4 @@ jobs:
             build/laf-harness-threads-*.txt
             designer/build/test-results/lafHarness/
             designer/build/laf-harness-debug.log
+            designer/build/laf-harness-renders/
