@@ -58,6 +58,12 @@ public class TreeIconRecolorer {
     // Weak keys: the watcher keeps re-running install() for the whole session,
     // and trees from closed views must not be pinned in memory.
     private final Map<JTree, TreeCellRenderer> wrappedTrees = new WeakHashMap<>();
+    /**
+     * Trees whose renderer, at wrap time, was the look and feel's own — see
+     * {@link #unwrap()} for why those get {@code null} back, not the instance.
+     */
+    private final Set<JTree> lafCreatedRenderers =
+        Collections.newSetFromMap(new WeakHashMap<>());
     private final Map<Icon, Icon> darkVariants = new IdentityHashMap<>();
     private final Set<Icon> variantIcons =
         Collections.newSetFromMap(new IdentityHashMap<>());
@@ -124,6 +130,9 @@ public class TreeIconRecolorer {
                 continue;
             }
             wrappedTrees.put(tree, current);
+            if (rendererWasCreatedByTheLookAndFeel(tree)) {
+                lafCreatedRenderers.add(tree);
+            }
             try {
                 tree.setCellRenderer(new RecoloringRenderer(current));
             } catch (Throwable t) {
@@ -149,15 +158,75 @@ public class TreeIconRecolorer {
         }
     }
 
-    /** Undo every wrapped renderer and cached renderer color. */
-    public void uninstall() {
+    /**
+     * Put every wrapped tree's own renderer back, and nothing else.
+     *
+     * <p>Runs BEFORE the light restore's tree update, separately from
+     * {@link #uninstall()}, and the order is the point (#42). A tree's
+     * renderer is exchanged on a look-and-feel change only by
+     * {@code BasicTreeUI}: on uninstall it drops the renderer it CREATED
+     * (its {@code createdRenderer} flag), and on install it creates a new
+     * one for a tree that has none — {@code SynthTreeUI}'s default, which
+     * Synthetica's {@code StyleFactory} then swaps for Ignition's
+     * {@code com.inductiveautomation.plaf.TreeCellRenderer}: icons, row
+     * height, the lot. That flag is cleared by any {@code setCellRenderer}
+     * call, ours included. So with the wrapper still on during the tree
+     * update, FlatLaf's UI kept the renderer it had created as if the user
+     * had set it, Synthetica's UI found a tree that already had one, and the
+     * uninstall afterwards handed the tree the plain
+     * {@code DefaultTreeCellRenderer} FlatLaf had left there — no icons
+     * under Synthetica. Every default-renderered tree in the Designer came
+     * back from a dark cycle that way.
+     *
+     * <p>Hence: a tree whose renderer was the look and feel's own when it
+     * was wrapped gets {@code null} back rather than the instance. Its UI
+     * then recreates its default and sets the flag again, and the next
+     * exchange runs exactly as at startup — the tree update that follows
+     * this call, since it runs before that update alongside the table
+     * unwrap (for which the order itself is what matters). A renderer
+     * somebody set is handed back as it was. A mutation sweep under
+     * WindowedCycleTest's pixel test catches either half being dropped.
+     */
+    public void unwrap() {
         wrappedTrees.forEach((tree, original) -> {
             if (tree.getCellRenderer() instanceof RecoloringRenderer) {
-                tree.setCellRenderer(original);
+                tree.setCellRenderer(lafCreatedRenderers.contains(tree) ? null : original);
                 tree.repaint();
             }
         });
         wrappedTrees.clear();
+        lafCreatedRenderers.clear();
+    }
+
+    /** Logged once: the flag is protected, and a JVM that keeps it closed gets the old behaviour. */
+    private boolean createdRendererUnreadable;
+
+    /**
+     * Whether the tree's current renderer is one its UI delegate created, as
+     * opposed to one somebody set — {@code BasicTreeUI.createdRenderer}.
+     */
+    private boolean rendererWasCreatedByTheLookAndFeel(JTree tree) {
+        if (!(tree.getUI() instanceof javax.swing.plaf.basic.BasicTreeUI)) {
+            return false;
+        }
+        try {
+            java.lang.reflect.Field flag =
+                javax.swing.plaf.basic.BasicTreeUI.class.getDeclaredField("createdRenderer");
+            flag.setAccessible(true);
+            return flag.getBoolean(tree.getUI());
+        } catch (Throwable t) {
+            if (!createdRendererUnreadable) {
+                createdRendererUnreadable = true;
+                DebugLog.log("BasicTreeUI.createdRenderer is not readable; trees with a "
+                    + "look-and-feel renderer will keep FlatLaf's after a restore.", t);
+            }
+            return false;
+        }
+    }
+
+    /** Undo every wrapped renderer and cached renderer color. */
+    public void uninstall() {
+        unwrap();
         darkVariants.clear();
         variantIcons.clear();
         // UIManager now holds the light theme's values again; push them back

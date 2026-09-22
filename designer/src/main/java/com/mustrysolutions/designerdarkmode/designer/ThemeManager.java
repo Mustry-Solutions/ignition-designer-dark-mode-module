@@ -610,6 +610,22 @@ public class ThemeManager {
             // the only chance to record them is now.
             safely("captureRenderers", cellRenderers::captureStockColors);
         }
+        if (!dark) {
+            uninstallComponentWatcher();
+            // Before the tree update, not after it with the rest of the
+            // uninstalls: a look and feel installs its own cell renderer only
+            // over a UIResource one, and our wrappers are not. With them
+            // still on, the light tree update left every default-renderered
+            // tree and table on the renderer FlatLaf had put there — no tree
+            // icons, every other table row dark — for the rest of the light
+            // session (#42; the mechanism is on the unwrap methods). The
+            // colours and delegates those wrappers tracked are still restored
+            // afterwards, by the uninstalls below.
+            safely("unwrapRenderers", () -> {
+                treeIcons.unwrap();
+                cellRenderers.unwrap();
+            });
+        }
         safely("updateComponentTrees", () -> {
             java.util.Set<String> failed = new java.util.LinkedHashSet<>();
             int failures = 0;
@@ -670,7 +686,6 @@ public class ThemeManager {
                 safely("lightDefaults", this::debugDumpLightDefaults);
             }
         } else {
-            uninstallComponentWatcher();
             // After the light theme is back, so restored colors are light.
             safely("treeIcons", treeIcons::uninstall);
             safely("cellRenderers", cellRenderers::uninstall);
