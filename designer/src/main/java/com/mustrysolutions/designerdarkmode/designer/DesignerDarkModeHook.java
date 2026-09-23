@@ -2,6 +2,7 @@ package com.mustrysolutions.designerdarkmode.designer;
 
 import java.awt.event.ItemEvent;
 
+import com.inductiveautomation.ignition.client.util.action.BaseAction;
 import com.inductiveautomation.ignition.client.util.action.StateChangeAction;
 import com.inductiveautomation.ignition.common.BundleUtil;
 import com.inductiveautomation.ignition.common.licensing.LicenseState;
@@ -22,6 +23,8 @@ public class DesignerDarkModeHook extends AbstractDesignerModuleHook {
 
     private final ThemeManager themes = new ThemeManager();
 
+    private DesignerContext context;
+
     /**
      * The Tools menu action, kept so the checkmark can be corrected once a
      * switch has actually happened (#15). Rebuilding the menu replaces it;
@@ -40,6 +43,7 @@ public class DesignerDarkModeHook extends AbstractDesignerModuleHook {
 
     @Override
     public void startup(DesignerContext context, LicenseState activationState) {
+        this.context = context;
         BundleUtil.get().addBundle(BUNDLE_PREFIX, getClass(), BUNDLE_PREFIX);
         themes.setThemeStateListener(new ThemeManager.ThemeStateListener() {
             @Override
@@ -109,6 +113,8 @@ public class DesignerDarkModeHook extends AbstractDesignerModuleHook {
         JMenuMerge tools =
             new JMenuMerge(WellKnownMenuConstants.TOOLS_MENU_NAME, "designerdarkmode.Menu.Tools");
         tools.addCheckBox(darkMode);
+        tools.add(BaseAction.create("designerdarkmode.Action.About", null,
+            () -> AboutDialog.show(context != null ? context.getFrame() : null)));
         // The Designer registers its built-in Tools menu under TOOLS_MENU_LOCATION,
         // and the merge matcher compares that group id along with the menu name —
         // any other group creates a duplicate top-level "Tools" menu.

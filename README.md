@@ -224,6 +224,7 @@ designer/                   Everything else: Designer-side code
     TreeUpdateDiagnostic     Explains a failed updateComponentTreeUI
     DebugLog                 Append-only debug log
     MoonIcon                 The menu item's icon
+    AboutDialog              Tools -> About Designer Dark Mode
   src/main/resources/.../    Bundle strings (menu/action labels)
   src/test/java/.../         Unit tests: colour predicates, snapshot/restore
   src/lafHarness/java/.../   Headless harness against the real Synthetica/JIDE/FlatLaf
