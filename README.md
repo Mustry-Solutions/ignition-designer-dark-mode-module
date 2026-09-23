@@ -9,6 +9,10 @@ most-requested Designer idea on Inductive Automation's ideas portal.
 install the `.modl` on your gateway, relaunch the Designer, and turn it on with
 **Tools → Dark Mode**. Full steps in [Install](#install).
 
+Made by [Mustry Solutions](https://mustrysolutions.com), a Belgian IT/OT
+consultancy that builds Ignition systems and modules. See
+[Built by Mustry Solutions](#built-by-mustry-solutions).
+
 > Status: young but usable. Designer scope only; targets Ignition **8.3+**.
 > See [Known limitations](#known-limitations) before installing.
 
@@ -270,6 +274,38 @@ remove.
 That script's careful catalogue of where the Designer leaks light informed this
 project's testing, and is gratefully acknowledged.
 
+## Built by Mustry Solutions
+
+Designer Dark Mode is made and maintained by
+[Mustry Solutions](https://mustrysolutions.com), an IT/OT consultancy in
+Belgium. We design and build Ignition systems for manufacturers, and we write
+Ignition modules, both as products and to order.
+
+Our commercial modules for Ignition 8.3. Each one runs in full under
+Ignition's standard module trial, so you can try it before you buy:
+
+- **[TimescaleDB](https://mustrysolutions.com/ignition-modules/timescaledb)**:
+  a tag historian that stores and queries history in TimescaleDB.
+- **[AMQP](https://mustrysolutions.com/ignition-modules/amqp)**: RabbitMQ
+  connectivity, with broker connections, an Event Stream source and handler,
+  and `system.amqp` scripting.
+- **[Observability](https://mustrysolutions.com/ignition-modules/observability)**:
+  gateway metrics and logs exported over OpenTelemetry and Prometheus, with a
+  Grafana dashboard pack.
+- **[Secrets](https://mustrysolutions.com/ignition-modules/secrets)**: gateway
+  secrets resolved from HashiCorp Vault, Azure Key Vault, AWS Secrets Manager
+  and Google Secret Manager.
+
+Also free and open source:
+**[Perspective Components](https://mustrysolutions.com/ignition-modules/perspective-components)**,
+fourteen components that fill gaps in Perspective, including a scheduler, an
+editable data grid and user and roster management.
+
+If you need a module that does not exist yet, help with an Ignition project, or
+a review of an existing architecture,
+[get in touch](https://mustrysolutions.com/contact-us) or write to
+[info@mustrysolutions.com](mailto:info@mustrysolutions.com).
+
 ## Contributing
 
 Bug reports and pull requests are welcome — see
@@ -290,5 +326,7 @@ endorsed, supported, or certified by Inductive Automation, LLC. "Ignition",
 "Perspective" and "Vision" are trademarks of Inductive Automation, LLC, used
 here only to identify the software this module interoperates with.
 
-There is no commercial support contract. Please raise questions and bugs as
+Please raise questions and bugs about this module as
 [GitHub issues](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues).
+For paid work beyond it, see
+[Built by Mustry Solutions](#built-by-mustry-solutions).

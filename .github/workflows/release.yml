@@ -141,6 +141,14 @@ jobs:
             echo "::error::CHANGELOG.md has no '## [${{ steps.ver.outputs.version }}]' section. Add one before tagging."
             exit 1
           fi
+          # Every release page carries the same footer: the Download link in
+          # the README lands here, so this is where a reader learns who made it.
+          cat >> "$RUNNER_TEMP/notes.md" <<'FOOTER'
+
+          ---
+
+          Designer Dark Mode is free and made by [Mustry Solutions](https://mustrysolutions.com), an IT/OT consultancy that builds Ignition systems and modules. We also sell [Ignition 8.3 modules](https://mustrysolutions.com/ignition-modules) (TimescaleDB, AMQP, Observability, Secrets) and build modules to order. [Get in touch](https://mustrysolutions.com/contact-us).
+          FOOTER
           echo "path=$RUNNER_TEMP/notes.md" >> "$GITHUB_OUTPUT"
 
       # Dry run (workflow_dispatch): keep the signed .modl as an artifact

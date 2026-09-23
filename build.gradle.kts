@@ -60,7 +60,7 @@ ignitionModule {
      */
     moduleVersion.set("${project.version}")
 
-    moduleDescription.set("A dark theme for the Ignition Designer, toggled from Tools -> Dark Mode.")
+    moduleDescription.set("A dark theme for the Ignition Designer, toggled from Tools -> Dark Mode. Free, by Mustry Solutions (mustrysolutions.com).")
 
     /*
      * Minimum version of Ignition required for the module to function correctly.  This typically won't change over
