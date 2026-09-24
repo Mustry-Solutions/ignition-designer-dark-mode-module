@@ -304,7 +304,7 @@ editable data grid and user and roster management.
 If you need a module that does not exist yet, help with an Ignition project, or
 a review of an existing architecture,
 [get in touch](https://mustrysolutions.com/contact-us) or write to
-[info@mustrysolutions.com](mailto:info@mustrysolutions.com).
+[hello@mustrysolutions.com](mailto:hello@mustrysolutions.com).
 
 ## Contributing
 
