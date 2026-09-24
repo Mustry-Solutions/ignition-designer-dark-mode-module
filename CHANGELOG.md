@@ -10,6 +10,12 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ## [Unreleased]
 
+### Changed
+
+- The module's description in **Config → Modules** and the license shown at
+  install now say who makes the module and where to find Mustry Solutions'
+  other Ignition modules. Release pages get the same short footer.
+
 ### Fixed
 
 - **A light restore no longer strips default-renderered trees of their icons

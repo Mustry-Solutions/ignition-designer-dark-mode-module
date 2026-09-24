@@ -113,6 +113,26 @@ except Exception:
 ' 2>/dev/null || true
 }
 
+# The license hash the gateway's registry holds for OUR module, or empty.
+registry_license_hash() {
+  docker exec "${CONTAINER_NAME}" cat /usr/local/bin/ignition/data/modules.json 2>/dev/null \
+    | MODULE_ID="${MODULE_ID}" python3 -c '
+import json, os, sys
+try:
+    print(json.load(sys.stdin).get(os.environ["MODULE_ID"], {}).get("licenseAgreementHash", ""))
+except Exception:
+    print("")
+' 2>/dev/null || true
+}
+
+# CRC32 of the staged .modl's license.html, the value the registry must hold.
+staged_license_crc() {
+  local modl
+  modl="$(find "${MODULES_DIR}" -maxdepth 1 -name '*.modl' | head -1)"
+  [[ -n "${modl}" ]] || return 0
+  python3 -c "import zipfile,zlib,sys; print(zlib.crc32(zipfile.ZipFile(sys.argv[1]).read('license.html')))" "${modl}"
+}
+
 # The fingerprint of the dev certificate the staged build is signed with.
 dev_cert_fingerprint() {
   openssl x509 -in "${CERT_FILE}" -noout -fingerprint -sha1 \
@@ -126,7 +146,7 @@ verify_deployed() {
   staged="$(find "${MODULES_DIR}" -maxdepth 1 -name '*.modl' | head -1)"
   state="$(curl -fsS "${GATEWAY_URL}/StatusPing" 2>/dev/null || true)"
   if echo "${state}" | grep -q COMMISSIONING; then
-    err "Gateway is parked in COMMISSIONING: it does not trust the staged module's certificate."
+    err "Gateway is parked in COMMISSIONING: it has not accepted the staged module's certificate or license."
     err "Compare 'ops/status.sh' fingerprints; ops/setup.sh re-seeds acceptance."
     return 1
   fi
