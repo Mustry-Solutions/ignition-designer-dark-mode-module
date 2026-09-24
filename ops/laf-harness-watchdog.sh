@@ -4,7 +4,7 @@
 #
 # Since #85 the harness hangs in about half of CI runs, somewhere inside
 # PropertyKeyFieldTest, and cannot be reproduced locally. A hang used to sit
-# there until the job's 15-minute timeout cancelled it — leaving no evidence
+# there until the job's 25-minute timeout cancelled it — leaving no evidence
 # at all. This wrapper gives up much sooner and, before killing anything,
 # thread-dumps every JVM Gradle started (the build itself and the test
 # executor) so the hung test and the threads it is waiting on end up in the

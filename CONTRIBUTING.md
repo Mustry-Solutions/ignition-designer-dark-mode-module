@@ -49,11 +49,12 @@ already fixed.
 ## Diagnosing a "still light" component
 
 This is the most common kind of contribution. The module ships a component
-inspector: with dark mode on, press **Cmd/Ctrl+Shift+I** (or `+F12`) with the
-mouse over the offending area, and the component chain — class, bounds, colors,
+inspector: press **Cmd/Ctrl+Shift+I** (or `+F12`) with the mouse over the
+offending area, and the component chain — class, bounds, colors,
 opacity, borders and UI delegate per level, plus a scroll pane's parts — is
 dumped to
-`~/.ignition/designer-dark-mode.log`. Full walkthrough in
+`~/.ignition/designer-dark-mode.log`. It works in either theme, so dump the
+same spot dark and light and compare. Full walkthrough in
 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#the-inspector--diagnosing-a-still-light-component).
 
 ## Pull request flow
@@ -67,8 +68,12 @@ dumped to
    If you touched the switch sequence itself, also run `./gradlew
    :designer:lafHarness` — it drives that sequence against the real Synthetica,
    JIDE and FlatLaf jars headlessly, and catches the kind of `UIManager` damage
-   that is invisible on screen. See
-   [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#the-headless-look-and-feel-harness).
+   that is invisible on screen. If you touched a pass that walks windows, the
+   restore, or a renderer, run it again with `-Pharness.windowed=true`: that
+   drives the switch over real frames and compares the light theme's pixels
+   before and after a cycle, which is how the 0.5.0 restore bugs were found.
+   CI runs the windowed mode on every platform. See
+   [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#the-look-and-feel-harness).
 3. **Verify the light restore, not just the dark result.** Toggling dark mode
    off must return the Designer exactly to stock. A change that only looks
    right in dark mode is half a change — restores iterate tracked component
@@ -76,7 +81,7 @@ dumped to
    without registering it for restore.
 4. Open a PR. The **Build & test** check must pass — it is a required status
    check on `main`, so a red build cannot be merged.
-5. A maintainer squash-merges. `main` is always releasable.
+5. A maintainer merges it. `main` is always releasable.
 
 ## Conventions
 
@@ -113,6 +118,20 @@ dumped to
 ## Releasing
 
 Maintainers only. A release is a `vX.Y.Z` tag; pushing it builds, signs and
-publishes the `.modl` via `.github/workflows/release.yml`. Tags must be plain
-`x.y.z` — Ignition's module version parser is numeric-only and rejects a
-prerelease suffix at install time.
+publishes the `.modl` via `.github/workflows/release.yml`. In order:
+
+1. **Changelog PR.** Rename `## [Unreleased]` in `CHANGELOG.md` to
+   `## [x.y.z] - YYYY-MM-DD` and open a fresh, empty `## [Unreleased]` above it.
+   The release notes *are* that section: the workflow copies it verbatim (plus
+   a fixed footer) and **fails the release** if no `## [x.y.z]` heading
+   matches the tag.
+2. **Merge it**, and let the **Build & test** check go green on `main`.
+3. **Tag the merge commit** with an annotated `vX.Y.Z` tag and push the tag.
+   The version after the `v` must be plain `x.y.z` — Ignition's module version
+   parser is numeric-only and rejects a prerelease suffix at install time, and
+   the workflow refuses one. The tag also sets the module version
+   (`-PreleaseVersion`); the workflow checks `module.xml` carries it.
+
+To test the signing secrets without publishing, run the workflow by hand
+(**Actions → Release → Run workflow**) with `dry_run` left on: it builds and
+signs, and uploads the `.modl` as a workflow artifact instead of releasing it.

@@ -478,9 +478,10 @@ class VisionCorruptionSweepTest {
             .replaceAll("\\s*<c-c m=\"setFormattedDate\" s=\"1;str\"><str>[^<]*</str></c-c>", "")
             // Likewise every date-valued setter (a spinner's setDateValue, a
             // date range's setStartDate…): "now" at construction, written or
-            // not by the clock.
-            .replaceAll("\\s*<c-c m=\"set[A-Za-z]*\" s=\"1;date\"><date>\\d+</date></c-c>", "")
-            .replaceAll("<date>\\d+</date>", "<date/>")
+            // not by the clock. After normalise(), so a millisecond date is
+            // already "T" here; matching only digits made this a no-op.
+            .replaceAll("\\s*<c-c m=\"set[A-Za-z]*\" s=\"1;date\"><date>(\\d+|T)</date></c-c>", "")
+            .replaceAll("<date>(\\d+|T)</date>", "<date/>")
             .replaceAll("<int>\\d+</int>", "<int/>")
             .replaceAll("<dbl>[\\d.\\-E]+</dbl>", "<dbl/>");
     }

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Inspect every saved Vision window and template in the dev gateway's project
-# for FlatLaf leakage — the corruption docs/ARCHITECTURE.md#visiongate describes.
+# for FlatLaf leakage — the corruption docs/ARCHITECTURE.md#vision describes.
 #
 # A clean resource names no com.formdev class and carries no setFont/setForeground
 # call you did not make yourself. Any com.formdev hit means a Vision client

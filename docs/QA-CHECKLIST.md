@@ -102,7 +102,7 @@ point of the first run.
 | Menus and menu popups | Top of the main frame | `pass` | `2026-08-31` | File / Project / Tools / Help popups |
 | macOS system menu bar | Top of the screen | `skip` | `2026-08-31` | Drawn by the OS and following the system appearance — not reachable from a Swing look and feel. Neither is the search field inside the Help menu |
 | In-window menu bar (Windows, Linux) | Top of the main frame | — | — | The opposite case: off macOS the menu bar is a Swing `JMenuBar`, so the swap DOES theme it — and it has never been looked at, because on macOS it does not exist. Menu titles, hover, mnemonics and the accelerator text in the popups |
-| Native title bar and window frame (Windows, Linux) | Around every window | `skip` | — | Stays light by decision (see [ARCHITECTURE](ARCHITECTURE.md#the-switch-step-by-step), step 9): the `apple.awt.windowAppearance` property is macOS-only, and FlatLaf window decorations on Ignition's frames would be a larger change than the gap justifies. Record it, do not file it |
+| Native title bar and window frame (Windows, Linux) | Around every window | `skip` | — | Stays light by decision (see [ARCHITECTURE](ARCHITECTURE.md#the-switch-step-by-step), step 10): the `apple.awt.windowAppearance` property is macOS-only, and FlatLaf window decorations on Ignition's frames would be a larger change than the gap justifies. Record it, do not file it |
 | Toolbars | Below the menu bar | `pass` | `2026-08-31` | incl. the Vision workspace's extra toolbars |
 | Dock title bars, grippers, split dividers | Any docked panel | `pass` | `2026-08-31` | |
 | Section headers / collapsible title panes | Left and right docks | `pass` | `2026-08-31` | `SESSION PROPS` |
@@ -131,10 +131,10 @@ point of the first run.
 | Project → Properties: Perspective Symbols | " | `pass` | `2026-08-31` | |
 | Project Export dialog (`CheckBoxTree`) | File → Export | `pass` | `2026-08-31` | tri-state checkboxes legible |
 | Project Import dialog (`CheckBoxTree`) | File → Import | — | — | |
-| Keyboard Layout | ~~Tools → Keyboard Layout~~ | `n/a` | `2026-08-31` | **No such item on 8.3.6.** The Tools menu is Console, Image Management, Script Console, Database Query Browser, Translation Manager, Symbol Factory, Dark Mode, Launch Perspective |
+| Keyboard Layout | ~~Tools → Keyboard Layout~~ | `n/a` | `2026-08-31` | **No such item on 8.3.6.** The Tools menu is Console, Image Management, Script Console, Database Query Browser, Translation Manager, Symbol Factory, Dark Mode, Launch Perspective — plus, since 0.5.0, About Designer Dark Mode… (§M) |
 | Diagnostics dialog | Help → Diagnostics | `fixed` | `2026-08-31` | Tip banner [#47](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/47) and chart axes [#50](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/50), both confirmed by eye |
 | Diagnostics performance charts | Help → Diagnostics → Performance | `fixed` | `2026-08-31` | Axis paints AND the chart's own background — [#50](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/50). The first fix did only the axes and the label margin stayed white |
-| About dialog | Help → About | — | — | |
+| About dialog | Help → About | — | — | Ignition's own; the module's is in §M |
 
 ## C. Tags
 
@@ -162,7 +162,7 @@ check an editor of each kind rather than assuming "the editors" are covered.
 | Surface | Where | Result | Last checked | Notes |
 |---|---|---|---|---|
 | Project Library editor | Project Browser → Scripting → Project Library | — | — | |
-| Project Library nav tree | Left of that editor | — | — | Source of a `JTree` popup in §K |
+| Project Library nav tree | Left of that editor | — | — | Source of a `JTree` popup in §L |
 | Script editor gutter, autocomplete popup | Type inside any script editor | `pass` | `2026-08-31` | `system.` + Ctrl+Space in the Script Console. The list and the attribute pane are dark; the enclosing `AutoCompletePopupWindow` window is still `#EEEEEE` explicit, which does not show at this size |
 | Script Console | Tools → Script Console | `pass` | `2026-08-31` | both panes |
 | Gateway Events editor | Project Browser → Scripting → Gateway Events | — | — | |
@@ -400,6 +400,9 @@ either theme — nothing else in this checklist would catch them.
 |---|---|---|---|---|
 | Dark Mode menu item, unchecked | Tools → Dark Mode, light theme | `pass` | `2026-08-31` | Moon icon and label legible |
 | Dark Mode menu item, checked | Tools → Dark Mode, dark theme | `pass` | `2026-08-31` | Checkmark visible against the dark popup |
+| About dialog, light | Tools → About Designer Dark Mode…, light theme | — | — | Shows a real version, not `development build` or `${version}`; links legible |
+| About dialog, dark | Tools → About Designer Dark Mode…, dark theme | — | — | Dialog dark, text legible, links at least 4.5:1 against the background — `AboutDialogTest` pins that in the windowed harness; by eye, compute it from screenshot pixels rather than judging it |
+| About dialog links | Click each link | — | — | Other modules → mustrysolutions.com/ignition-modules, Work with us → /contact-us, Report a problem → this repo's issues |
 | "Applying dark mode…" status message | Status bar, during a switch | — | — | Shown by `DesignerStatus` while the switch runs |
 | Degraded-switch status message | Status bar, after a partial failure | — | — | The `N of M steps failing` line. Hard to trigger on purpose; check it is legible if you ever see it |
 | First launch, before the theme applies | Startup, with dark mode saved | `skip` | `2026-08-31` | The theme is applied only once the UI is ready, so the Designer is briefly stock-themed at launch. That is by design — applying earlier kills the launch |
@@ -600,19 +603,24 @@ a renderer built under dark was never re-synced. Both are pinned in
 
 ### Note on the 2026-08-31 run
 
+*Historical: what that run could and could not show. §L has since been
+re-verified from inside the JVM (2026-09-01), and the dev project now has a
+saved view.*
+
 Driven with computer use rather than by hand, which changes what the run is
 worth in two directions:
 
 - **§L (popups) was not re-verified.** Synthetic right-clicks did not reach the
   Designer at all — no popup opened and none was logged — so every §L result
-  below still dates from 2026-08-29. A popup sweep needs a human hand.
+  in [§L](#l-popup-sweep) still dated from 2026-08-29. A popup sweep needs a
+  human hand.
 - **Judge colour zoomed, never on a scaled screenshot.** Two surfaces (the
   autocomplete popup, the whole Project Properties dialog) read as *light* on a
   full-screen capture scaled from 3456px and turned out to be perfectly dark
   when zoomed. Both would have been false bug reports.
 
-The Perspective view editor, binding editors and style editor are still
-unchecked in substance: the dev project has no views.
+The Perspective view editor, binding editors and style editor were still
+unchecked in substance: the dev project had no views then.
 
 ### Compare against a relaunched Designer before calling something a bug
 
@@ -740,8 +748,9 @@ toggle**, including with the property editor re-attached under dark — so on th
 path the filter is restored by the tracked white-swap, and that pass is
 belt-and-braces rather than the thing doing the work.
 
-> **Open defect, found by the 2026-08-29 run.** With a Vision window open, the
-> light restore's phase-6 `updateComponentTreeUI` throws
+> **Fixed; found by the 2026-08-29 run.** With a Vision window open, the
+> light restore's tree update (step 9 in
+> [ARCHITECTURE](ARCHITECTURE.md#the-switch-step-by-step)) used to throw
 > `NullPointerException: Cannot invoke "java.awt.Color.getAlpha()" because
 > "newColor" is null` and abandons the walk for the entire main frame.
 >
@@ -772,11 +781,15 @@ belt-and-braces rather than the thing doing the work.
 > Designer, completed clean — consistent with no Vision *window* being open at
 > the time, only the Vision workspace.
 >
-> The harm is the abort, not the null: one throwing component stranded the rest
-> of the main frame's tree. **Contained** — the phase-6 walk is now per
-> component, so a throw costs only that component while its siblings and its
-> own subtree are still walked. The NPE itself is Ignition's and still fires;
-> what it no longer does is take the frame with it.
+> **Prevented, in two layers.** The throw itself no longer happens: before each
+> `updateUI()` the walk swaps the content pane's background for the same colour
+> as a plain `Color`, so IA's `instanceof UIResource` block skips itself, and
+> puts a `UIResource` back afterwards
+> (`ThemeManager.neutraliseInternalFrameBackground`). Merely catching the throw
+> was tried first and was worse: the frame never got its layout, and every later
+> `getMinimumSize()` threw instead. Independently, the tree update is now per
+> component, so anything else that throws out of `updateUI()` costs only that
+> component and not the rest of the main frame's tree.
 
 ## What is still unchecked, and why
 
@@ -785,7 +798,7 @@ these is a real gap, not a pass.
 
 | Surface | Why it is unchecked | What it needs |
 |---|---|---|
-| §L right-click popups, the remaining 5 sources | Three verified 2026-09-01 by dispatching the trigger from inside the JVM (both trees, the Perspective canvas). The rest need their surface open first: the Vision canvas needs a window, the property-row and binding-picker menus need a component on a view, and a text field's cut/copy/paste menu did not open from a synthetic trigger on the fields available | Either the Script Console technique in [§L](#right-click-cannot-be-automated-from-outside--but-it-can-from-inside), or ~10 minutes by hand |
+| §L right-click popups: 5 sources not re-checked since 2026-08-29 | Every §L row passed on 2026-08-29; only three have been re-verified since, on 2026-09-01 by dispatching the trigger from inside the JVM (both trees, the Perspective canvas). The rest need their surface open first: the Vision canvas needs a window, the property-row and binding-picker menus need a component on a view, and a text field's cut/copy/paste menu did not open from a synthetic trigger on the fields available | Either the Script Console technique in [§L](#right-click-cannot-be-automated-from-outside--but-it-can-from-inside), or ~10 minutes by hand |
 | §E binding editor, component scope picker, style editor | **The view is no longer the blocker** — a saved view (`qa-dark-mode`) exists in the dev project, so the editor opens. What is still missing is a component dropped on that view: it needs a palette drag the automation cannot do, and the Perspective palette was not docked in the layout used | A component dropped on the view, by hand |
 | §H Reporting, Preview and Schedule tabs | The dev project now HAS a report (`qa-report`, saved 2026-09-01), and Report Overview, Data and Design were swept on it in both modes — that sweep is what found #59. Preview and Schedule were not opened | Open the last two tabs on `qa-report` |
 | §F border chooser, Layout, Size and Position | Need a Vision window with a component selected | A Vision window, by hand |

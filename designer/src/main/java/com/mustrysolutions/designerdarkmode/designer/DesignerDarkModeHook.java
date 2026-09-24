@@ -98,9 +98,11 @@ public class DesignerDarkModeHook extends AbstractDesignerModuleHook {
         // from setSelected, and this method is not only called at startup.
         // The Designer rebuilds module menus during its own teardown
         // (LoadedModule.shutdown calls getModuleMenu before hook.shutdown) and
-        // when another project is opened, and a "dark" preference kept
-        // through a Vision-blocked launch would otherwise read as a click:
-        // the Vision refusal dialog on the way out, and the preference lost.
+        // when another project is opened. Unguarded, ticking the fresh
+        // checkbox for a "dark" preference would read as a click: a full
+        // theme switch on every rebuild, including one on the way out. (Until
+        // 0.4.0 it also raised the Vision refusal dialog there and lost the
+        // preference.)
         syncing = true;
         try {
             darkMode.setSelected(themes.isDarkModeEnabled());

@@ -37,12 +37,28 @@ orchestrator; the other classes are the fronts.
 ## The switch, step by step
 
 `ThemeManager.apply(dark)` runs these phases. Phase 1 is essential; if it fails
-the switch aborts. Phases 2+ are each wrapped in `safely(...)` so one failing
+the switch aborts. Everything else is wrapped in `safely(...)` so one failing
 pass is logged (with a stack trace, to the debug log) without stranding the rest.
+Steps marked *dark only* or *light only* are skipped in the other direction.
 
-1. **Look and feel swap.** Dark: first a copy of the DEVELOPER defaults —
+0. **Drop our overrides** (light only, and *before* the swap) —
+   `applyMenuDefaults(false)` and `applyJideDarkOverrides(false)` clear the
+   `UIManager` keys step 6 put on the dark switch, while FlatLaf is still
+   installed and still serving the same values, so nothing repaints in
+   between. The order is the fix for #23 and must not move: clearing a key
+   with `UIManager.put(key, null)` does not revert it, it *deletes* it from
+   the developer defaults, which is where most standard Swing colours live in
+   a stock Designer. Cleared after the restore, it deleted the values the
+   restore had just put back — a null `TextField.background`, so every text
+   field fell through to its parent's background and every Perspective
+   property name went amber. If the swap in step 1 then fails, the cleared
+   keys are put back so the Designer stays coherently dark.
+1. **Look and feel swap.** Dark: first the snapshots the light switch will
+   need — JIDE's painter map (see step 5), a copy of the DEVELOPER defaults,
    Ignition's own `UIManager.put`s, which Synthetica's uninstall is about to
-   clear (see [DeveloperDefaults](#developerdefaults)) — then
+   clear (see [DeveloperDefaults](#developerdefaults)), and the stock colours
+   by key for [LookAndFeelColors](#lookandfeelcolors) and
+   [VisionConstructionColors](#visionconstructioncolors) — then
    `UIManager.setLookAndFeel(new FlatDarkLaf())`,
    then `keepStockFont(...)` puts the `Label.font` read just before the swap
    as FlatLaf's `defaultFont`, so the switch is colour-only (see
@@ -53,9 +69,10 @@ pass is logged (with a stack trace, to the debug log) without stranding the rest
    component of each text kind and updates it, because the first
    formatted-text-field style Synthetica serves after a reinstall is stale
    (#92, part 3; see [Vision](#vision)).
-2. **Synthetica singleton** — `keepSyntheticaAlive()`, first of the `safely(...)`
-   passes on the dark switch, because nothing else may call into Synthetica
-   until it is back.
+2. **Synthetica singleton** (dark only) — `keepSyntheticaAlive()`, first of
+   the `safely(...)` passes on the dark switch, because nothing else may call
+   into Synthetica until it is back. Then `snapshotMenuDefaults()` records
+   FlatLaf's defaults, which step 6 re-puts and step 0 later clears.
 3. **Color tokens** — `IaColorTokens.install()` (dark) / `.uninstall()` (light).
 4. **JIDE extension** — `installJideExtension(dark)`. FlatLaf isn't a look and
    feel JIDE recognizes, so under dark it must be told the VSNET style
@@ -64,9 +81,13 @@ pass is logged (with a stack trace, to the debug log) without stranding the rest
    what JIDE has just re-put (`DeveloperDefaults.restore`).
 5. **Theme painters** — `overrideThemePainters(dark)` repoints JIDE's painter
    map (see below).
-6. **Default re-assert** — `applyMenuDefaults(dark)` re-puts *all* FlatLaf
-   defaults on top (the JIDE extension clobbers standard Swing keys), then
-   `applyJideDarkOverrides(dark)` sets the JIDE-specific keys.
+6. **Default re-assert** (dark only) — `applyMenuDefaults(true)` re-puts *all*
+   FlatLaf defaults on top (the JIDE extension clobbers standard Swing keys),
+   then `applyJideDarkOverrides(true)` sets the JIDE-specific keys. The light
+   direction clears both in step 0 instead. Then, with every default final,
+   the dark colours are joined to the stock ones by key
+   (`LookAndFeelColors.captureDark`, `VisionConstructionColors.captureDark`)
+   and `VisionConstructionBorders` is reset; light clears all three.
 7. **Renderer colour capture** (dark only) — `CellRendererSanitizer
    .captureStockColors()`, before the tree update, because
    `JTableHeader.updateUI()` nulls a cell renderer's colours and a renderer that
@@ -83,7 +104,15 @@ pass is logged (with a stack trace, to the debug log) without stranding the rest
    FlatLaf's delegate, alternate rows dark (#42, found by the windowed
    harness). The colours and delegates the wrappers tracked are still
    restored afterwards, in step 11.
-9. **`updateComponentTreeUI`** on every window.
+9. **Tree update** on every window. Not Swing's `updateComponentTreeUI`, which
+   is an unguarded recursion that abandons the rest of the tree at the first
+   throw, but a per-component walk: a component whose `updateUI()` throws
+   costs only itself, and its siblings and subtree are still updated.
+   Under dark, each Vision component's look-and-feel border is aligned with a
+   fresh instance's as it goes ([VisionConstructionBorders](#visionconstructionborders)).
+   A window-level failure is reported by `TreeUpdateDiagnostic`. Straight
+   after, cached popup menus — detached from any window, so the walk misses
+   them — are refreshed too.
 10. **macOS title bars** — set/clear the `apple.awt.windowAppearance` client
    property so the native title bar follows the theme. A no-op elsewhere: on
    Windows and Linux the native title bar and frame stay light, by decision —
@@ -93,12 +122,14 @@ pass is logged (with a stack trace, to the debug log) without stranding the rest
     sanitizer, collapsible title panes, white-token background and border swaps,
     script editors, **JIDE code editors**, **diagnostics chart axes**, console
     output styles (including the Output Console's per-run colours), block
-    workspaces, status-bar legibility, cached JIDE painters, stale-delegate
-    refresh in secondary windows. On light, the corresponding restores — plus a
+    workspaces, status-bar legibility, cached JIDE painters. On light, the
+    corresponding restores — plus a
     **dark-leftover pass** that re-runs `updateUI()` child-first on anything
     still wearing a dark look-and-feel colour.
 12. **Component watchers.** The dark watcher is installed on dark and removed on
-    light (before step 8, so nothing re-wraps). A much smaller **light watcher** takes its place on the light side,
+    light (before step 8, so nothing re-wraps). Its debounced rescan re-runs
+    the dark passes on whatever was added, and refreshes stale delegates in
+    secondary windows. A much smaller **light watcher** takes its place on the light side,
     re-running the dark-leftover pass when a subtree is attached — a dock
     detached during the restore keeps its dark state, and re-attaching it
     recreates the parent-first copy that leaves JIDE wrappers dark.
@@ -114,6 +145,21 @@ what the light watcher is for: state the restore could not reach because the
 subtree was not attached at all.
 
 ## The components
+
+### DesignerDarkModeHook
+The Designer-scope entry point. On startup it hands the Designer context to
+`ThemeManager`, which applies the saved theme once the UI is ready. It adds
+two items to the Designer's own **Tools** menu (merged under
+`TOOLS_MENU_LOCATION`, since any other group creates a second top-level
+Tools menu): **Dark Mode**, a checkbox with [MoonIcon](#moonicon), and
+**About Designer Dark Mode…** ([AboutDialog](#aboutdialog)). The checkbox
+shows the theme actually in effect, not the one last clicked: it is disabled
+while a switch runs, and corrected afterwards if the switch failed (#15).
+Because `StateChangeAction.setSelected` fires the action's own listener,
+every correction runs under a `syncing` guard so it is not read as a click.
+`configureSerializer`, called on every save, registers
+[TokenColorDelegate](#tokencolordelegate) and
+[LookAndFeelBorders](#lookandfeelborders).
 
 ### ThemeManager
 The orchestrator. Owns the preference (`java.util.prefs`, node
@@ -306,10 +352,11 @@ And one the gate had hidden: **Synthetica's uninstall clears the developer
 defaults**, which left the Vision Property Editor blank after every switch
 back ([DeveloperDefaults](#developerdefaults)).
 
-**The corruption sweep.** The three fixes were proven on a three-component
+**The corruption sweep.** The first three fixes were proven on a three-component
 window. `VisionCorruptionSweepTest` in the Vision probe takes the same
-standard to the whole palette: every one of Vision's 61 palette components
-(55 build headlessly; the rest need a client context), built from the
+standard to the whole palette: every one of Vision's 60 palette components
+(57 build headlessly — see below for the three that do not; measured on
+2026-09-24 against Vision 12.3.8), built from the
 palette and saved under dark, born under stock and cycled twice with the
 window open, with hand-set values, nested three deep with a template, and
 as a full `FPMIWindow`, must serialize to the same bytes a stock Designer
@@ -393,8 +440,9 @@ class name in any save — the client's own criterion, and the one
 two client statics some constructors read (a gateway connection, a
 localization manager; `VisionClientStubs`), which brings both Comments
 Panels and the Spinner into the sweep. Still unbuildable headless: the Easy
-Chart (a `DropTarget`), the Slider under Synthetica, and the Date Time
-Selector under a stock tree update — all `HeadlessException` territory.
+Chart (a `DropTarget`) and the Slider under Synthetica, both
+`HeadlessException`, and the Date Time Selector under a stock tree update,
+where Synthetica serves no style for it headless.
 
 What the sweep accepts as residue, each documented: the stock token value
 written where a stock Designer writes nothing (see
@@ -424,7 +472,7 @@ is not what a Vision client, always light, will show. The colour passes
 already leave the canvas alone; the look and feel underneath it cannot be.
 That is the same trade the Exchange script avoids by never swapping the look
 and feel, and it is documented in the README as a limitation. Nothing is
-written into the window by it: the three fixes above are what the saves
+written into the window by it: the four fixes above are what the saves
 depend on, and `ops/vision-check.sh` reads every saved window and template
 back to prove it.
 
@@ -432,7 +480,7 @@ back to prove it.
 three call sites in `ThemeManager` (refuse in `beginSwitch` and at startup,
 drop out synchronously from a `WorkspaceManager` navigation listener, catch a
 window attached under dark in the component watcher) and its own §N in the
-QA checklist, and was removed once the probe showed the three fixes held on
+QA checklist, and was removed once the probe showed the first three fixes held on
 the real classes and a live sitting had run the gate rows clean. The write-up
 of the reproduction that led to it — the headless probe against the real
 `vision-client`/`vision-designer` jars, the `SynthBorder` special case in
@@ -441,7 +489,7 @@ a FlatLaf border with a Synthetica one — is in the 0.3.0 changelog entry and
 the project notes.
 
 ### SerializerCleanCopies
-The first of the three #92 pieces: the platform serializer's clean-copy cache
+The first of the four #92 pieces: the platform serializer's clean-copy cache
 is replaced with an empty one as the last phase of every switch, in both
 directions. `XMLSerializer.cleanMap` is a private static `HashMap`, looked up
 with `get` and seeded with `Class.newInstance()` on a miss, so an empty map
@@ -608,11 +656,51 @@ debug flag on. Diagnostic only; every step is guarded.
 ### DebugLog
 Best-effort append-only log at `~/.ignition/designer-dark-mode.log`. The
 Designer keeps its own logs in memory only; this file is the dev-loop's eyes.
-**Timestamps are UTC.** Two levels: `log` always writes (switches, failures),
-`detail` only under `-Ddesignerdarkmode.debug=true` (counts, per-event traces,
-the dumps). The writer is opened once and held for the session — the detail
-lines are unbounded, and each used to cost an open/write/close on the event
-dispatch thread.
+**Timestamps are UTC**, marked with a trailing `Z`. Two levels: `log` always
+writes (switches, failures), `detail` only under
+`-Ddesignerdarkmode.debug=true` (counts, per-event traces, the dumps). The
+writer is opened once and held for the session — the detail lines are
+unbounded, and each used to cost an open/write/close on the event dispatch
+thread.
+
+### TreeUpdateDiagnostic
+Runs only when the tree update (step 9) fails on a whole window, and says
+what the stack trace cannot: which components have no font, background or
+foreground (with their ancestor chain, since a getter returns null only when
+the whole chain is unset), which `UIManager` keys resolve to null right now,
+and which components are still on a delegate from the wrong look and feel —
+the part of the tree the failed update never reached (#12). Reports at most
+twelve of each, with the full counts. Never throws: it runs inside a
+`catch` during a switch that has already gone wrong.
+
+### ClassNames
+Type tests by class *name* — `extendsNamed`, `implementsNamed` — for the
+Designer and Vision classes the module must not import: JIDE docking frames,
+the block workspace, the code editor, Vision's containers. Importing them
+would stop the module loading on a Designer without that piece; naming them
+confines the failure to the one pass that needs them. The names are pinned
+against the real jars by `ReflectiveSurfaceTest` in the harness.
+
+### AboutDialog
+**Tools → About Designer Dark Mode…**: the version, who makes the module, and
+links to its other modules, to contact, and to this repository's issues. The
+version comes from `designerdarkmode-build.properties`, stamped by
+`processResources`; run from source it reads `development build`. Built from
+plain Swing on every open, so it follows whichever theme is installed. The
+link colour starts from the theme's `Component.linkColor` and is moved toward
+white or black until it reads at 4.5:1 against `Panel.background` — FlatLaf
+Dark's own link blue is 3.8:1. `AboutDialogTest` holds both themes to that.
+
+### MoonIcon
+The Dark Mode menu item's crescent, drawn as a vector shape in
+`MenuItem.foreground`, so it stays legible in both themes without a bitmap
+per theme.
+
+### DesignerDarkModeGatewayHook
+The module's only gateway-scope code, and it does one thing: returns `true`
+from `isFreeModule()`. The 8.3 gateway ignores `<freeModule>` in
+`module.xml`; it asks the gateway hook instead, and a module without one is
+listed as *Trial* under **Config → Modules** (#114). It registers nothing.
 
 ## Gotchas and hard-won facts
 
@@ -629,12 +717,11 @@ dispatch thread.
   (`IgnitionDesigner$LoadedModule.shutdown()` does so twice before
   `hook.shutdown()`, from both exit and opening another project). A
   `StateChangeAction` fires `itemStateChanged` from `setSelected`, so seeding
-  the Tools menu checkbox from the preference used to read as a click at that
-  moment — harmless while the preference always matched the screen, a refusal
-  dialog on the way out plus a wiped preference once a Vision-blocked launch
-  could keep "dark" saved with a light Designer. The hook seeds under its
-  `syncing` guard, and `ThemeManager.setDark` ignores requests after
-  `shutdown()`.
+  the Tools menu checkbox from a "dark" preference reads as a click at that
+  moment and would start a full theme switch on the way out. (While
+  `VisionGate` existed, until 0.4.0, it also raised the Vision refusal dialog
+  there and wiped the preference.) The hook seeds under its `syncing` guard,
+  and `ThemeManager.setDark` ignores requests after `shutdown()`.
 - **"Inside Vision" is the canvas, not the package.** The passes that lift
   dark text and refresh dark leftovers must not touch Vision's user content,
   and the first cut keyed that on any ancestor from a `factorypmi` package.
@@ -728,8 +815,8 @@ dispatch thread.
   `InaccessibleObjectException` case — the one failure the user can fix —
   and the degraded status line carries the argument and where it goes in
   the launcher, ahead of the log pointer. Verified by running the harness
-  with that opening removed: 1 of 23 phases fails, everything else
-  completes.
+  with that opening removed (2026-09-15): one phase failed and every other
+  completed — 1 of 23 then; a dark switch runs 25 phases now.
 - **`flatlaf.uiScale.enabled=false` is required on every OS, and is not a
   HiDPI tax.** FlatLaf has two modes: *system* scaling (the JDK HiDPI
   transform, Java 9+, all platforms) and *user* scaling (a font-derived

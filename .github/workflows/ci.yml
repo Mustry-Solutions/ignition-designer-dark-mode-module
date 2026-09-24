@@ -50,10 +50,13 @@ jobs:
         env:
           ORG_GRADLE_PROJECT_org.gradle.java.installations.auto-download: "false"
 
-      # Cheap guard on the two things most likely to regress silently in
-      # module.xml: the EULA reference and the free-module flag. Both are set
-      # in build.gradle.kts and neither has a test that would catch a
-      # accidental removal.
+      # Cheap guard on what is most likely to regress silently in module.xml:
+      # the EULA reference and what makes the gateway list the module as Free.
+      # That is the gateway-scope hook and its jar, not <freeModule>: the 8.3
+      # gateway ignores the element and asks the G hook's isFreeModule()
+      # instead (#114), so a build that lost the hook would show "Trial"
+      # again. The element is still checked, since build.gradle.kts sets it.
+      # None of this has a test that would catch an accidental removal.
       - name: Check module.xml wiring
         run: |
           modl="$(find build -maxdepth 1 -name '*.unsigned.modl' | head -1)"
@@ -64,6 +67,10 @@ jobs:
             || { echo "::error::module.xml is missing the <license> element"; exit 1; }
           echo "$xml" | grep -q '<freeModule>true</freeModule>' \
             || { echo "::error::module.xml no longer declares freeModule=true"; exit 1; }
+          echo "$xml" | grep -q '<hook scope="G">com.mustrysolutions.designerdarkmode.gateway.DesignerDarkModeGatewayHook</hook>' \
+            || { echo "::error::module.xml has no gateway hook; the gateway will list the module as Trial (#114)"; exit 1; }
+          echo "$xml" | grep -Eq '<jar scope="G">gateway-[^<]*\.jar</jar>' \
+            || { echo "::error::module.xml ships no gateway jar for the G hook"; exit 1; }
           unzip -l "$modl" | grep -q 'license.html' \
             || { echo "::error::license.html was not staged into the .modl"; exit 1; }
 

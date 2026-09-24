@@ -1,11 +1,12 @@
 # Development guide
 
-How to build, run, debug, and sign Designer Dark Mode.
+How to build, run, debug, sign and release Designer Dark Mode.
 
 ## Prerequisites
 
-- **JDK 17.** The Gradle toolchain pins Java 17; the build fails on other
-  versions. (Note: the Ignition Module Generator that scaffolded this project
+- **JDK 17.** The Gradle toolchain pins Java 17 and does not download one,
+  so the build fails unless a JDK 17 is installed. Gradle itself may run on
+  another JDK; it finds the 17 through the toolchain. (Note: the Ignition Module Generator that scaffolded this project
   needs a specific JDK too — the `v0.5.0` generator tag works on JDK 17.)
 - **Docker** — only if you want the local dev gateway under `ops/`.
 - Network access to `https://nexus.inductiveautomation.com/repository/public`,
@@ -111,9 +112,9 @@ given, in which case a headless JVM is a broken runner and it fails). CI runs
 it on all three platforms, Linux under Xvfb. A Designer and a pair of eyes
 still settle "does this look right".
 
-**One test does read pixels.** `TagBrowserHeaderBandTest` builds the real
-`SimpleTreeTable` by hand, drives the dark passes over it, and paints it into a
-`BufferedImage`. That is not a screenshot test — there is no reference image, so
+**Some tests read pixels.** The first was `TagBrowserHeaderBandTest`: it builds
+the real `SimpleTreeTable` by hand, drives the dark passes over it, and paints
+it into a `BufferedImage`. That is not a screenshot test — there is no reference image, so
 it cannot fail on a font or a one-pixel shift. It asserts a single property: no
 long run of light pixels in a dark panel.
 
@@ -215,6 +216,16 @@ module keys on. CI never sees it; run it before touching anything under
 `VisionWindows`, `SerializerCleanCopies`, `TokenColorDelegate` or the restore's
 style primer. Its two restore scenarios were the reproduction of the last
 piece of [#92][92], the fonts after a light restore, and now pin the fix.
+
+`VisionCorruptionSweepTest` takes the same test to the whole palette: every
+kind that builds headlessly (57 of 60 on Vision 12.3.8), saved from a stock
+Designer and from a dark one — built under dark, born under stock and
+cycled, nested in a template — must write the same bytes, net of a short
+list of documented residue, carry no FlatLaf class name, and load back. It
+prints `Sweep: built N of M` with the kinds it could not build. Run it too
+before touching `LookAndFeelBorders`, `LookAndFeelColors` or the
+`VisionConstruction*` classes; see
+[ARCHITECTURE](ARCHITECTURE.md#vision) for what it found.
 
 **The harness's stock install is the Designer's own.** `DesignerLookAndFeel
 .installStock()` runs `IgnitionLookAndFeel.init()` — Synthetica through
@@ -350,10 +361,12 @@ nobody has `-Ddesignerdarkmode.debug=true` on at the moment a bug first appears.
 Look for `Tree-update diagnostic for` in the log. It answers the three questions
 the stack trace cannot:
 
-- **which components have no font at all**, with the ancestor path to each
-  (`getFont()` returns null only when the whole chain is unset, so the path is
-  the diagnostic, not the component);
-- **which `UIManager` font keys resolve to null** right then;
+- **which components have no font, background or foreground**, with the
+  ancestor path to each (a getter returns null only when the whole chain is
+  unset, so the path is the diagnostic, not the component). Which of the three
+  is fatal depends on whose delegate ran: the Vision crash this was built for
+  was a null background;
+- **which `UIManager` keys resolve to null** right then;
 - **how much of the tree still holds a wrong-look-and-feel delegate** — the
   subtree the aborted update never reached, which is the actual damage.
 
@@ -365,7 +378,7 @@ reports.
 ### The debug log
 
 `~/.ignition/designer-dark-mode.log` — append-only, written by `DebugLog`.
-**Timestamps are UTC** — add your local offset when correlating with the clock.
+**Timestamps are UTC** (marked with a trailing `Z`) — add your local offset when correlating with the clock.
 
 Two levels. `DebugLog.log` always writes, and is reserved for what a user or a
 maintainer reading a bug report needs: the theme switches and the failures
@@ -451,6 +464,10 @@ To produce a signed module, supply signing credentials via
 do this automatically against a throwaway self-signed certificate generated into
 `ops/signing/` (gitignored — **never commit keystores or certs**).
 
+Releases are signed by `.github/workflows/release.yml` with the real
+certificate held in repository secrets. The release procedure is in
+[CONTRIBUTING.md](../CONTRIBUTING.md#releasing).
+
 ## Project conventions
 
 - **All the work is Designer scope.** `:designer` holds every theming class;
@@ -465,6 +482,8 @@ do this automatically against a throwaway self-signed certificate generated into
   throwables. A theme fix that throws is worse than a component that stays light.
 - **Reversible.** Every dark-mode mutation must be undone on the light switch,
   and restores iterate tracked sets rather than the live hierarchy.
-- **User-facing strings** live in
+- **Menu and action names** live in
   `designer/src/main/resources/.../designerdarkmode.properties` (bundle prefix
-  `designerdarkmode`), not inline.
+  `designerdarkmode`), because the Designer's action and menu classes take
+  bundle keys, not text. Other user-facing text — status-bar messages, the
+  About dialog — is inline.
