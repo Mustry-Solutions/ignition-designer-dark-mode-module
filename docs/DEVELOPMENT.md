@@ -1,6 +1,6 @@
 # Development guide
 
-How to build, run, debug, and sign Designer Dark Mode.
+How to build, run, debug, sign and release Designer Dark Mode.
 
 ## Prerequisites
 
@@ -111,9 +111,9 @@ given, in which case a headless JVM is a broken runner and it fails). CI runs
 it on all three platforms, Linux under Xvfb. A Designer and a pair of eyes
 still settle "does this look right".
 
-**One test does read pixels.** `TagBrowserHeaderBandTest` builds the real
-`SimpleTreeTable` by hand, drives the dark passes over it, and paints it into a
-`BufferedImage`. That is not a screenshot test — there is no reference image, so
+**Some tests read pixels.** The first was `TagBrowserHeaderBandTest`: it builds
+the real `SimpleTreeTable` by hand, drives the dark passes over it, and paints
+it into a `BufferedImage`. That is not a screenshot test — there is no reference image, so
 it cannot fail on a font or a one-pixel shift. It asserts a single property: no
 long run of light pixels in a dark panel.
 
@@ -451,6 +451,10 @@ To produce a signed module, supply signing credentials via
 do this automatically against a throwaway self-signed certificate generated into
 `ops/signing/` (gitignored — **never commit keystores or certs**).
 
+Releases are signed by `.github/workflows/release.yml` with the real
+certificate held in repository secrets. The release procedure is in
+[CONTRIBUTING.md](../CONTRIBUTING.md#releasing).
+
 ## Project conventions
 
 - **All the work is Designer scope.** `:designer` holds every theming class;
@@ -465,6 +469,8 @@ do this automatically against a throwaway self-signed certificate generated into
   throwables. A theme fix that throws is worse than a component that stays light.
 - **Reversible.** Every dark-mode mutation must be undone on the light switch,
   and restores iterate tracked sets rather than the live hierarchy.
-- **User-facing strings** live in
+- **Menu and action names** live in
   `designer/src/main/resources/.../designerdarkmode.properties` (bundle prefix
-  `designerdarkmode`), not inline.
+  `designerdarkmode`), because the Designer's action and menu classes take
+  bundle keys, not text. Other user-facing text — status-bar messages, the
+  About dialog — is inline.

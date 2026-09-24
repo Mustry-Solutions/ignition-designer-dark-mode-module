@@ -68,7 +68,7 @@ dumped to
    :designer:lafHarness` — it drives that sequence against the real Synthetica,
    JIDE and FlatLaf jars headlessly, and catches the kind of `UIManager` damage
    that is invisible on screen. See
-   [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#the-headless-look-and-feel-harness).
+   [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#the-look-and-feel-harness).
 3. **Verify the light restore, not just the dark result.** Toggling dark mode
    off must return the Designer exactly to stock. A change that only looks
    right in dark mode is half a change — restores iterate tracked component

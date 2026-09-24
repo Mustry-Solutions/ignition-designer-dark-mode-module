@@ -34,6 +34,9 @@ it, a relaunch is also the sure way to clear any residue a toggle-off left
 behind. See [Where the setting is stored](#where-the-setting-is-stored) for
 what "remembered" means when you work against more than one gateway.
 
+**Tools → About Designer Dark Mode…** shows the installed version, with links
+to report a problem and to Mustry Solutions' other Ignition modules.
+
 Because Ignition's own UI hard-codes many light colors in ways a normal look and
 feel swap cannot reach, the module does substantial work under the hood to make
 the theme comprehensive. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) if you
@@ -214,25 +217,40 @@ gateway/                    One class: the hook that declares the module free (#
 designer/                   Everything else: Designer-side code
   build.gradle.kts          Designer deps (FlatLaf bundled via modlImplementation)
   src/main/java/.../designer/
-    DesignerDarkModeHook     Module entry point; registers the Tools menu item
-    ThemeManager             Orchestrates the whole theme switch
-    IaColorTokens            Reflectively restyles Ignition's hard-coded colors
-    TreeIconRecolorer        Dark-adapts tree icons and cell renderers
-    CellRendererSanitizer    Dark-adapts table/list cells and renderer delegates
-    ScriptEditorTheme        Dark-themes the Python editors (RSyntaxTextArea)
-    CodeEditorTheme          Dark-themes the SQL/expression editors (JIDE CodeEditor)
-    ConsoleTextTheme         Recolours the console output styles
-    DiagnosticsChartTheme    Dark-adapts the Diagnostics chart axes and background
-    BlockWorkspaceTheme      Dark-adapts alarm pipeline and SFC blocks
-    DesignerStatus           Reports switch progress and failures in the status bar
-    ComponentInspector       Debug tool: dumps the component under the cursor
-    TreeUpdateDiagnostic     Explains a failed updateComponentTreeUI
-    DebugLog                 Append-only debug log
-    MoonIcon                 The menu item's icon
-    AboutDialog              Tools -> About Designer Dark Mode
-  src/main/resources/.../    Bundle strings (menu/action labels)
+    DesignerDarkModeHook       Module entry point; the Tools menu items, serializer hooks
+    ThemeManager               Orchestrates the whole theme switch
+    IaColorTokens              Reflectively restyles Ignition's hard-coded colors
+    TreeIconRecolorer          Dark-adapts tree icons and cell renderers
+    CellRendererSanitizer      Dark-adapts table/list cells and renderer delegates
+    ScriptEditorTheme          Dark-themes the Python editors (RSyntaxTextArea)
+    CodeEditorTheme            Dark-themes the SQL/expression editors (JIDE CodeEditor)
+    ConsoleTextTheme           Recolours the console output styles
+    DiagnosticsChartTheme      Dark-adapts the Diagnostics chart axes and background
+    BlockWorkspaceTheme        Dark-adapts alarm pipeline and SFC blocks
+    DeveloperDefaults          Keeps Ignition's own UIManager defaults across the swap
+    SerializerCleanCopies      Vision saves: rebuilds the serializer's clean-copy cache
+    TokenColorDelegate         Vision saves: writes restyled tokens as their stock colour
+    LookAndFeelBorders         Vision saves: never writes a FlatLaf border
+    LookAndFeelColors          Vision saves: stock values for inherited Panel colours
+    VisionConstructionColors   Vision: stock colours in a Tree View's sample data
+    VisionConstructionBorders  Vision: aligns borders with a fresh instance's
+    VisionWindows              Recognises a Vision window or template by name
+    ExchangeScript             Disables the Exchange dark-mode script's checkbox
+    ClassNames                 Type tests by class name, for types it must not import
+    DesignerStatus             Reports switch progress and failures in the status bar
+    EnvironmentProbe           Logs host facts (OS, JRE, scaling) once per session
+    ComponentInspector         Debug tool: dumps the component under the cursor
+    TreeUpdateDiagnostic       Explains a failed tree update
+    DebugLog                   Append-only debug log
+    MoonIcon                   The Dark Mode menu item's icon
+    AboutDialog                Tools -> About Designer Dark Mode
+  src/main/resources/.../    Bundle strings (menu/action labels) and the build's
+                            version stamp, read by the About dialog
   src/test/java/.../         Unit tests: colour predicates, snapshot/restore
-  src/lafHarness/java/.../   Headless harness against the real Synthetica/JIDE/FlatLaf
+  src/lafHarness/java/.../   Harness against the real Synthetica/JIDE/FlatLaf
+                            (headless, or windowed with -Pharness.windowed=true)
+  src/visionProbe/java/.../  Vision probe: saves and sweeps against the real Vision
+                            jars (-Pvision.jars, see ops/vision-jars.sh)
 ops/                        Disposable Docker gateway for local testing
 docs/                       Architecture and development guides
 ```

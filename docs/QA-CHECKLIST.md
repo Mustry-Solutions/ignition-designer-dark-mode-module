@@ -131,10 +131,10 @@ point of the first run.
 | Project → Properties: Perspective Symbols | " | `pass` | `2026-08-31` | |
 | Project Export dialog (`CheckBoxTree`) | File → Export | `pass` | `2026-08-31` | tri-state checkboxes legible |
 | Project Import dialog (`CheckBoxTree`) | File → Import | — | — | |
-| Keyboard Layout | ~~Tools → Keyboard Layout~~ | `n/a` | `2026-08-31` | **No such item on 8.3.6.** The Tools menu is Console, Image Management, Script Console, Database Query Browser, Translation Manager, Symbol Factory, Dark Mode, Launch Perspective |
+| Keyboard Layout | ~~Tools → Keyboard Layout~~ | `n/a` | `2026-08-31` | **No such item on 8.3.6.** The Tools menu is Console, Image Management, Script Console, Database Query Browser, Translation Manager, Symbol Factory, Dark Mode, Launch Perspective — plus, since 0.5.0, About Designer Dark Mode… (§M) |
 | Diagnostics dialog | Help → Diagnostics | `fixed` | `2026-08-31` | Tip banner [#47](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/47) and chart axes [#50](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/50), both confirmed by eye |
 | Diagnostics performance charts | Help → Diagnostics → Performance | `fixed` | `2026-08-31` | Axis paints AND the chart's own background — [#50](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/50). The first fix did only the axes and the label margin stayed white |
-| About dialog | Help → About | — | — | |
+| About dialog | Help → About | — | — | Ignition's own; the module's is in §M |
 
 ## C. Tags
 
@@ -162,7 +162,7 @@ check an editor of each kind rather than assuming "the editors" are covered.
 | Surface | Where | Result | Last checked | Notes |
 |---|---|---|---|---|
 | Project Library editor | Project Browser → Scripting → Project Library | — | — | |
-| Project Library nav tree | Left of that editor | — | — | Source of a `JTree` popup in §K |
+| Project Library nav tree | Left of that editor | — | — | Source of a `JTree` popup in §L |
 | Script editor gutter, autocomplete popup | Type inside any script editor | `pass` | `2026-08-31` | `system.` + Ctrl+Space in the Script Console. The list and the attribute pane are dark; the enclosing `AutoCompletePopupWindow` window is still `#EEEEEE` explicit, which does not show at this size |
 | Script Console | Tools → Script Console | `pass` | `2026-08-31` | both panes |
 | Gateway Events editor | Project Browser → Scripting → Gateway Events | — | — | |
@@ -400,6 +400,9 @@ either theme — nothing else in this checklist would catch them.
 |---|---|---|---|---|
 | Dark Mode menu item, unchecked | Tools → Dark Mode, light theme | `pass` | `2026-08-31` | Moon icon and label legible |
 | Dark Mode menu item, checked | Tools → Dark Mode, dark theme | `pass` | `2026-08-31` | Checkmark visible against the dark popup |
+| About dialog, light | Tools → About Designer Dark Mode…, light theme | — | — | Shows a real version, not `development build` or `${version}`; links legible |
+| About dialog, dark | Tools → About Designer Dark Mode…, dark theme | — | — | Dialog dark, text legible, links at least 4.5:1 against the background — `AboutDialogTest` pins that in the windowed harness; by eye, compute it from screenshot pixels rather than judging it |
+| About dialog links | Click each link | — | — | Other modules → mustrysolutions.com/ignition-modules, Work with us → /contact-us, Report a problem → this repo's issues |
 | "Applying dark mode…" status message | Status bar, during a switch | — | — | Shown by `DesignerStatus` while the switch runs |
 | Degraded-switch status message | Status bar, after a partial failure | — | — | The `N of M steps failing` line. Hard to trigger on purpose; check it is legible if you ever see it |
 | First launch, before the theme applies | Startup, with dark mode saved | `skip` | `2026-08-31` | The theme is applied only once the UI is ready, so the Designer is briefly stock-themed at launch. That is by design — applying earlier kills the launch |

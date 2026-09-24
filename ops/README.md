@@ -12,6 +12,7 @@ auto-accepted EULA. Never point this at anything real.
 | `logs.sh` | Tail gateway logs. |
 | `teardown.sh` | Stop the gateway (`--purge` also wipes its data volume). |
 | `vision-check.sh [project]` | Scan the project's saved Vision windows and templates for FlatLaf leakage (the corruption the serializer fixes prevent; see QA checklist §N). |
+| `vision-jars.sh [version]` | Print the newest cached Vision jars (or the given version's) as a classpath for the Vision probe: `./gradlew :designer:visionProbe -Pvision.jars="$(ops/vision-jars.sh)"`. Needs a Designer that has opened a Vision project on this machine. |
 | `qa-renderer-probe.py` | Not a shell script — paste it into the Designer's **Script Console** (`OUTPATH='...'; execfile('ops/qa-renderer-probe.py')`) to dump every visible tree's and table's cell renderer to a file. Take one before a dark/light cycle and one after, and diff: a restore that loses a renderer shows up as a changed class name, which nothing else reports. See the QA checklist, "The renderer probe". |
 | `laf-harness-watchdog.sh [gradle args]` | Run `:designer:lafHarness` with a deadline; on a hang it thread-dumps every Gradle JVM into `build/laf-harness-threads-*.txt` and fails. CI uses this instead of calling Gradle directly, because the harness sometimes hangs and a cancelled job leaves no evidence. |
 

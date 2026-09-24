@@ -81,9 +81,9 @@ tasks.test {
  * and feel installed, and diffs `UIManager` before and after a toggle cycle.
  * No gateway, no Designer, no screenshots. Mostly it replaces the "which
  * defaults are wrong" half of the loop rather than the "does this look right"
- * half — but one test (#21) paints a real Ignition scroll pane into a
- * BufferedImage and reads the pixels, for a bug whose wrong colour never
- * reaches UIManager at all. See docs/DEVELOPMENT.md before writing another.
+ * half — but some tests paint real Ignition components into a BufferedImage
+ * and read the pixels, for bugs whose wrong colour never reaches UIManager at
+ * all (the first was #21). See docs/DEVELOPMENT.md before writing another.
  *
  * Kept out of `test` deliberately. It resolves the whole Designer dependency
  * tree at RUNTIME (the module itself only compiles against it), it needs the

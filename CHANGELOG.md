@@ -318,7 +318,7 @@ The Windows fixes are proven headlessly and not yet seen by eye on Windows.
   clean-copy cache at each switch, verified headlessly), but it leaves Vision
   baking the module's dark colour constants into freshly opened components,
   so dark mode inside Vision stays a follow-up
-  ([ARCHITECTURE.md](docs/ARCHITECTURE.md#visiongate)).
+  ([ARCHITECTURE.md](docs/ARCHITECTURE.md#vision)).
 
   So the module now stays out of Vision's way. `VisionGate` refuses **Tools →
   Dark Mode** while a Vision window or template is open or the Vision
@@ -1042,3 +1042,12 @@ First release.
   ([#21](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/21)).
 
 Cosmetic, and affects no behaviour.
+
+[Unreleased]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/compare/v0.4.2...v0.5.0
+[0.4.2]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/compare/v0.4.1...v0.4.2
+[0.4.1]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/compare/v0.4.0...v0.4.1
+[0.4.0]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/compare/v0.3.0...v0.4.0
+[0.3.0]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/compare/v0.2.0...v0.3.0
+[0.2.0]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/releases/tag/v0.1.0

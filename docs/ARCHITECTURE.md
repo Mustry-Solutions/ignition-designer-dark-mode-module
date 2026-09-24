@@ -146,6 +146,21 @@ subtree was not attached at all.
 
 ## The components
 
+### DesignerDarkModeHook
+The Designer-scope entry point. On startup it hands the Designer context to
+`ThemeManager`, which applies the saved theme once the UI is ready. It adds
+two items to the Designer's own **Tools** menu (merged under
+`TOOLS_MENU_LOCATION`, since any other group creates a second top-level
+Tools menu): **Dark Mode**, a checkbox with [MoonIcon](#moonicon), and
+**About Designer Dark Mode…** ([AboutDialog](#aboutdialog)). The checkbox
+shows the theme actually in effect, not the one last clicked: it is disabled
+while a switch runs, and corrected afterwards if the switch failed (#15).
+Because `StateChangeAction.setSelected` fires the action's own listener,
+every correction runs under a `syncing` guard so it is not read as a click.
+`configureSerializer`, called on every save, registers
+[TokenColorDelegate](#tokencolordelegate) and
+[LookAndFeelBorders](#lookandfeelborders).
+
 ### ThemeManager
 The orchestrator. Owns the preference (`java.util.prefs`, node
 `com/mustrysolutions/designerdarkmode/designer`, key `darkMode`), the `uiReady` gate, the
@@ -337,7 +352,7 @@ And one the gate had hidden: **Synthetica's uninstall clears the developer
 defaults**, which left the Vision Property Editor blank after every switch
 back ([DeveloperDefaults](#developerdefaults)).
 
-**The corruption sweep.** The three fixes were proven on a three-component
+**The corruption sweep.** The first three fixes were proven on a three-component
 window. `VisionCorruptionSweepTest` in the Vision probe takes the same
 standard to the whole palette: every one of Vision's 61 palette components
 (55 build headlessly; the rest need a client context), built from the
@@ -455,7 +470,7 @@ is not what a Vision client, always light, will show. The colour passes
 already leave the canvas alone; the look and feel underneath it cannot be.
 That is the same trade the Exchange script avoids by never swapping the look
 and feel, and it is documented in the README as a limitation. Nothing is
-written into the window by it: the three fixes above are what the saves
+written into the window by it: the four fixes above are what the saves
 depend on, and `ops/vision-check.sh` reads every saved window and template
 back to prove it.
 
@@ -463,7 +478,7 @@ back to prove it.
 three call sites in `ThemeManager` (refuse in `beginSwitch` and at startup,
 drop out synchronously from a `WorkspaceManager` navigation listener, catch a
 window attached under dark in the component watcher) and its own §N in the
-QA checklist, and was removed once the probe showed the three fixes held on
+QA checklist, and was removed once the probe showed the first three fixes held on
 the real classes and a live sitting had run the gate rows clean. The write-up
 of the reproduction that led to it — the headless probe against the real
 `vision-client`/`vision-designer` jars, the `SynthBorder` special case in
@@ -472,7 +487,7 @@ a FlatLaf border with a Synthetica one — is in the 0.3.0 changelog entry and
 the project notes.
 
 ### SerializerCleanCopies
-The first of the three #92 pieces: the platform serializer's clean-copy cache
+The first of the four #92 pieces: the platform serializer's clean-copy cache
 is replaced with an empty one as the last phase of every switch, in both
 directions. `XMLSerializer.cleanMap` is a private static `HashMap`, looked up
 with `get` and seeded with `Class.newInstance()` on a miss, so an empty map
@@ -639,11 +654,51 @@ debug flag on. Diagnostic only; every step is guarded.
 ### DebugLog
 Best-effort append-only log at `~/.ignition/designer-dark-mode.log`. The
 Designer keeps its own logs in memory only; this file is the dev-loop's eyes.
-**Timestamps are UTC**, marked with a trailing `Z`. Two levels: `log` always writes (switches, failures),
-`detail` only under `-Ddesignerdarkmode.debug=true` (counts, per-event traces,
-the dumps). The writer is opened once and held for the session — the detail
-lines are unbounded, and each used to cost an open/write/close on the event
-dispatch thread.
+**Timestamps are UTC**, marked with a trailing `Z`. Two levels: `log` always
+writes (switches, failures), `detail` only under
+`-Ddesignerdarkmode.debug=true` (counts, per-event traces, the dumps). The
+writer is opened once and held for the session — the detail lines are
+unbounded, and each used to cost an open/write/close on the event dispatch
+thread.
+
+### TreeUpdateDiagnostic
+Runs only when the tree update (step 9) fails on a whole window, and says
+what the stack trace cannot: which components have no font, background or
+foreground (with their ancestor chain, since a getter returns null only when
+the whole chain is unset), which `UIManager` keys resolve to null right now,
+and which components are still on a delegate from the wrong look and feel —
+the part of the tree the failed update never reached (#12). Reports at most
+twelve of each, with the full counts. Never throws: it runs inside a
+`catch` during a switch that has already gone wrong.
+
+### ClassNames
+Type tests by class *name* — `extendsNamed`, `implementsNamed` — for the
+Designer and Vision classes the module must not import: JIDE docking frames,
+the block workspace, the code editor, Vision's containers. Importing them
+would stop the module loading on a Designer without that piece; naming them
+confines the failure to the one pass that needs them. The names are pinned
+against the real jars by `ReflectiveSurfaceTest` in the harness.
+
+### AboutDialog
+**Tools → About Designer Dark Mode…**: the version, who makes the module, and
+links to its other modules, to contact, and to this repository's issues. The
+version comes from `designerdarkmode-build.properties`, stamped by
+`processResources`; run from source it reads `development build`. Built from
+plain Swing on every open, so it follows whichever theme is installed. The
+link colour starts from the theme's `Component.linkColor` and is moved toward
+white or black until it reads at 4.5:1 against `Panel.background` — FlatLaf
+Dark's own link blue is 3.8:1. `AboutDialogTest` holds both themes to that.
+
+### MoonIcon
+The Dark Mode menu item's crescent, drawn as a vector shape in
+`MenuItem.foreground`, so it stays legible in both themes without a bitmap
+per theme.
+
+### DesignerDarkModeGatewayHook
+The module's only gateway-scope code, and it does one thing: returns `true`
+from `isFreeModule()`. The 8.3 gateway ignores `<freeModule>` in
+`module.xml`; it asks the gateway hook instead, and a module without one is
+listed as *Trial* under **Config → Modules** (#114). It registers nothing.
 
 ## Gotchas and hard-won facts
 
