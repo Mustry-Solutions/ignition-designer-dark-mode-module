@@ -14,7 +14,8 @@ consultancy that builds Ignition systems and modules. See
 [Built by Mustry Solutions](#built-by-mustry-solutions).
 
 > Status: young but usable. Everything it does happens in the Designer (see
-> [Install](#install) for its one gateway-side hook); targets Ignition **8.3+**.
+> [Install](#install) for its one gateway-side hook); runs on Ignition **8.3**
+> and on **8.1.33 or newer**, from a separate file for each.
 > See [Known limitations](#known-limitations) before installing.
 
 ## What it does
@@ -122,8 +123,16 @@ not.
 
 You do not need to build anything.
 
-1. Download `designer-dark-mode.modl` from the
-   **[latest release](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/releases/latest)**.
+1. Download the file for your gateway from the
+   **[latest release](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/releases/latest)**:
+
+   | Gateway | File |
+   |---|---|
+   | Ignition **8.3** | `designer-dark-mode.modl` |
+   | Ignition **8.1.33** or newer | `designer-dark-mode-8.1.modl` |
+
+   A gateway refuses the other line's file at install, with a message that
+   names the version it requires.
 2. In the Gateway web UI, go to **Config → Modules**, choose **Install or
    Upgrade a Module**, and pick that file.
 3. The gateway will ask you to accept the module's certificate. It is signed by
@@ -131,8 +140,11 @@ You do not need to build anything.
    you are asked to trust it once, on first install.
 4. **Relaunch the Designer**, then turn it on with **Tools → Dark Mode**.
 
-Requires Ignition **8.3.0** or newer. Upgrading is the same flow — install the
-newer `.modl` over the old one and relaunch the Designer.
+Requires Ignition **8.3.0** or newer, or **8.1.33** or newer on 8.1. Older 8.1
+releases run the Designer on Java 11, and this module needs Java 17. Both files
+are built from the same code. Upgrading is the same flow — install the newer
+`.modl` over the old one and relaunch the Designer. When you move a gateway
+from 8.1 to 8.3, install the 8.3 file after the upgrade.
 
 Everything this module does happens inside the Designer. It adds no gateway
 service, no tags, and no scripting functions, and it changes nothing for
@@ -187,10 +199,12 @@ to Inductive Automation's Maven repository. Everything else — Gradle 9.7.1, th
 module plugin, FlatLaf — is resolved automatically.
 
 ```bash
-./gradlew build
+./gradlew build                       # Ignition 8.3
+./gradlew build -Pignition.line=8.1   # Ignition 8.1.33 and later
 ```
 
-The module lands at `build/designer-dark-mode.unsigned.modl`. Builds from source
+The module lands at `build/designer-dark-mode.unsigned.modl`, or
+`build/designer-dark-mode-8.1.unsigned.modl` for 8.1. Builds from source
 are unsigned unless you pass signing credentials (see
 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#signing)), and an 8.3 gateway will
 refuse to load an unsigned module unless you accept it during install.
@@ -272,8 +286,8 @@ Inductive Automation's Exchange already has a
 [Dark Mode for the Designer](https://inductiveautomation.com/exchange/2719/overview)
 by Justin Edwards — a well-polished Jython script, MIT licensed, that has been
 serving this need on Ignition 8.1 since 2024. Since version 1.3.0
-(3 September 2026) it runs on **8.3** as well. On 8.1 it is the only option;
-on 8.3 you have a choice.
+(3 September 2026) it runs on **8.3** as well. On both lines you have a
+choice (this module needs 8.1.33 or newer on 8.1).
 
 Designer Dark Mode differs in how it is delivered and how it themes. It is a
 module rather than a project-library script, so it installs once on the

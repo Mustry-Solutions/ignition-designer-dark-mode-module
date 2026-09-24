@@ -116,6 +116,23 @@ class ExchangeScriptTest {
     }
 
     @Test
+    @DisplayName("finds the script module through the project's getResource(ResourcePath), on either line")
+    void findsTheScriptModuleByReflection() {
+        // The resource classes live in a different package on 8.1 and 8.3, so
+        // hasScriptModule builds the path from getResource's own parameter
+        // type. The fake package stands in for both; the project class is
+        // package-private, so the method must be invoked through the public
+        // interface, and the resource-id overload must not be chosen.
+        String script = ExchangeScript.SCRIPT_LIBRARY_MODULE + "/" + ExchangeScript.SCRIPT_LIBRARY_TYPE
+            + "/" + ExchangeScript.SCRIPT_MODULE_PATH;
+        Object withScript = com.mustrysolutions.designerdarkmode.designer.fakeresource.Project.holding(script);
+        Object withoutScript = com.mustrysolutions.designerdarkmode.designer.fakeresource.Project.holding("ignition/script-python/other");
+
+        assertTrue(new ExchangeScript(() -> null, () -> withScript, notice -> { }).hasScriptModule());
+        assertFalse(new ExchangeScript(() -> null, () -> withoutScript, notice -> { }).hasScriptModule());
+    }
+
+    @Test
     @DisplayName("the messages name the script, the tag to remove and our own menu item")
     void messagesSayWhatToDo() {
         for (String message : new String[] {

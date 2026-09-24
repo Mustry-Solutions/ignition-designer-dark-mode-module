@@ -264,13 +264,26 @@ the class that reaches them.
 The version it runs against is a separate knob from the one the module compiles
 against, and the distinction matters:
 
-| | Version | Why |
-|---|---|---|
-| `sdk_version` | 8.3.0 | The support floor. Compiling against it is what stops a newer API creeping in, and it is what `module.xml` claims as the minimum. |
-| `harness_sdk_version` | 8.3.8 | What people actually run. `-Pharness.sdk=8.3.6` pins a specific gateway. |
+| | 8.3 line | 8.1 line (`-Pignition.line=8.1`) | Why |
+|---|---|---|---|
+| `sdk_version` | 8.3.0 | 8.1.33 | The support floor. Compiling against it is what stops a newer API creeping in, and it is what `module.xml` claims as the minimum. |
+| `harness_sdk_version` | 8.3.8 | 8.1.55 | What people actually run. `-Pharness.sdk=8.3.6` pins a specific gateway. |
 
-CI runs the harness at both. Testing only the floor is testing jars nobody has;
-testing only the latest would let the module drift off its own support claim.
+CI runs the harness at both, for each line. Testing only the floor is testing
+jars nobody has; testing only the latest would let the module drift off its own
+support claim.
+
+**Two lines, one tree.** The 8.1 line builds `designer-dark-mode-8.1.modl` from
+the same code. It is a separate file because the gateways check
+`requiredIgnitionVersion` differently: 8.3 refuses a module whose required
+major.minor is not 8.3, and 8.1 refuses one that requires more than itself. The
+code links against both lines' jars with nothing missing. Keep it that way:
+where an API differs between the lines (so far only a project's
+`getResource(ResourcePath)`, whose classes moved package), reach it by
+reflection, as `ExchangeScript` does, rather than branching the source. Two
+harness tests cover 8.3-only surfaces and are left out of the 8.1 compile
+(`designer/build.gradle.kts`); `ReflectiveSurfaceTest` lets an 8.3-only class
+be absent on 8.1 through its `EIGHT_THREE_ONLY` list, and nowhere else.
 
 **Validate a new invariant with a mutation.** A green test proves nothing until
 you have seen it go red for the right reason. Break the thing it claims to

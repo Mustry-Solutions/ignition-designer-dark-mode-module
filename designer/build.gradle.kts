@@ -97,6 +97,22 @@ val lafHarness: SourceSet by sourceSets.creating {
     runtimeClasspath += output + compileClasspath
 }
 
+/*
+ * The Ignition line the harness jars come from, which is not always the line
+ * being built: -Pharness.sdk picks the jars. Two harness tests are about
+ * surfaces 8.1 does not have, and cannot even compile against it — the Event
+ * Stream editor's flow cells (FlowCellSelectionTest) and the colour-tinted
+ * SvgIconUtil.getIcon overloads (TokenTintedButtonIconTest) — so they are left
+ * out there. Tests that only NAME an 8.3-only class read the line from the
+ * system property set below instead.
+ */
+val harnessLine = (rootProject.extra["harness_sdk_version"] as String).split('.').take(2).joinToString(".")
+if (harnessLine == "8.1") {
+    tasks.named<JavaCompile>("compileLafHarnessJava") {
+        exclude("**/FlowCellSelectionTest.java", "**/TokenTintedButtonIconTest.java")
+    }
+}
+
 dependencies {
     // Unlike `main`, the harness needs these at RUNTIME: the whole point is to
     // run against the real Synthetica/JIDE/ignition-laf jars rather than stubs.
@@ -180,6 +196,8 @@ fun Test.runsHeadlessAgainstTheRealLookAndFeels(logFile: String) {
         // simply empty, so the component walks run and find nothing.
         systemProperty("java.awt.headless", "true")
     }
+
+    systemProperty("designerdarkmode.harness.line", harnessLine)
 
     // The same guard ThemeManager.startup sets before FlatLaf ever loads.
     systemProperty("flatlaf.uiScale.enabled", "false")
