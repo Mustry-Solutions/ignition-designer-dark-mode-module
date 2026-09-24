@@ -26,6 +26,7 @@ Newest first.
 
 | Date | OS | Ignition | Vision | Module | Scope covered |
 |---|---|---|---|---|---|
+| 2026-09-24 | macOS | 8.3.6 | 12.3.6 | `e48f3c9` (main after #123), dev-signed | The narrow sitting for [#121](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/121) — [#42](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/pull/120)'s three renderer-unwrap fixes, driven by Claude on Sam's screen. Measured with [the renderer probe](#the-renderer-probe) rather than by eye. **After a full dark→light cycle the whole renderer inventory is identical to a plain `updateComponentTreeUI` baseline taken in the same session** — every tree, every table, renderer class, row height and row count — and no FlatLaf class survives anywhere. Populated table (`TagValuesTable`, 3 rows): `SyntheticaDefaultTableCellRenderer` back, every row band white. Opened *while dark* and restored clean: OPC Browser tree, Query Browser schema tree, and the Tag Browser closed and rebuilt under dark — all back to their stock renderers. Under dark, all 74 trees and 15 tables carry the module's wrappers, so the fixed path is genuinely exercised. Relaunch comes up stock. **Not exercised: a tree using the look and feel's own renderer** — this Designer has none (`createdRenderer=False` on all 74, in the stock Designer too), and no lazily-built tree renderer was found. One apparent regression (`EventTimelinePanel$TimelineHeader$2` → Synthetica's) reproduced with the module uninvolved, so it is Swing/Synthetica's, not ours |
 | 2026-09-20 | headless harness, all three CI platforms | — | — | branch for #76 | `UiScaleDisableTest`: under simulated Synthetica-scaled fonts (Dialog 18 / 24 pt) dark mode keeps the size, so it cannot be undersized relative to stock; FlatLaf's user-scale path is inert under the shipped property. What the harness cannot see is the JDK transform itself. Closes the investigation in [#76](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/76); a live Windows/Linux `env:` block remains the only real corroboration, via [#96](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/96) |
 | 2026-09-18 (afternoon) | macOS | 8.3.6 | 12.3.6 | dev build of main, then the #89 branch, dev-signed via the new worktree-aware `ops/deploy.sh` | First run of §O, driven by Claude on Sam's screen: the Exchange 1.3.0 script seeded into `test`, its checkbox added from the Script Console, all five transitions of the two toggles recorded with screenshots (see §O's last row). Then on the fix: startup notice, checkbox arriving disabled, the console-ticked case unticked by the next click |
 | 2026-09-18 (release) | macOS | 8.3.6 | 12.3.6 | **v0.4.1 as released** (the GitHub asset, release certificate, seeded on the dev gateway) | Short sitting on the released patch, driven by Claude on Sam's screen: Designer came up dark on Vision (`Designer Dark Mode [v0.4.1]` in the console), Main Window opened under dark, a fresh Comments Panel dropped from the palette (property editor: Border "No Border"), Save All; checker clean, byte scan clean (no FlatLaf class, no font, no dark value), no failed phase in the log; the Vision client opened the window with the new panel light, Synthetica's own outline and black text, beside the two panels the fix had repaired the evening before |
@@ -668,11 +669,69 @@ and confirm these return to stock:
 | Tag Browser | `pass` | `2026-08-31` | `Tag \| Value` header back to matching light grey ([#45](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/45)) |
 | Dock title bars and dividers | `pass` | `2026-08-31` | |
 | Script editor and console | — | — | |
-| Tree and table cell colours | `pass` | `2026-08-31` | Renderers are restored from tracked sets, not the live tree |
+| Tree and table cell colours | `pass` | `2026-09-24` | Renderers are restored from tracked sets, not the live tree. Measured rather than eyeballed on the 2026-09-24 run: after a cycle every visible tree's and table's renderer matches a plain `updateComponentTreeUI` baseline exactly — see [the renderer probe](#the-renderer-probe) |
+| Tables: no dark alternating rows | `pass` | `2026-09-24` | Tag Browser `TagValuesTable`, 3 rows: `SyntheticaDefaultTableCellRenderer` back, every row band `#FFFFFF` |
+| Trees: icons and row height back | `pass` | `2026-09-24` | Project Browser and OPC Browser after two cycles: full-colour icons, stock row height |
+| **Surfaces opened while dark** | `pass` | `2026-09-24` | See [the standing step](#surfaces-opened-while-dark) below |
 | **With a Vision window open** | `fixed` | `2026-08-29` | The throw is now prevented rather than contained — see below |
 
-Then relaunch the Designer and confirm it comes up stock. *(Not done on the
-2026-08-31 run.)*
+Then relaunch the Designer and confirm it comes up stock. *(Done 2026-09-24:
+after a toggle-off and a quit, the relaunch logs `Stock look and feel` and no
+`switching to dark mode`, and the renderer inventory matches the pre-cycle
+baseline.)*
+
+### Surfaces opened while dark
+
+**Do this on every run.** It is two minutes, and it is the state that both
+review findings on [#42](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/pull/120)
+needed: a component wrapped *after* the switch, whose renderer the restore has
+to hand back. Nothing else in this checklist asks for it — every other row
+opens its surface light.
+
+1. With dark mode **on**, open a table and a tree that were not on screen when
+   you toggled. Cheapest pair that needs no database:
+   - **View → Panels → Tag Browser** to close it, then the same item again to
+     reopen it — a populated tree *and* table, rebuilt under dark;
+   - **View → Panels → OPC Browser** — a tree with folder icons, expanded one
+     level.
+   The debug log confirms the wrap took: `TreeIconRecolorer: wrapped N tree
+   renderer(s)` with a rising total.
+2. Toggle dark **off**.
+3. Both must come back on the light palette, with their icons and row heights.
+
+> **A modal dialog can never be part of this.** Diagnostics and Image
+> Management blank the Designer's screen menu bar while they are up, so
+> **Tools → Dark Mode is unreachable** and the surface cannot be on screen
+> across a toggle. Use dock panels. (Likewise, with a *floating* panel focused
+> the Tools items are disabled — click the main window first.)
+
+### The renderer probe
+
+Neither `TreeIconRecolorer` nor `CellRendererSanitizer` names the components it
+touches — the log only counts them — and the inspector reports colours and
+borders, not cell renderers. So "the tree came back right" is otherwise an
+eyeball judgement. [`ops/qa-renderer-probe.py`](../ops/qa-renderer-probe.py)
+closes that gap from the **Script Console**, which runs in the Designer's own
+JVM: it writes every visible `JTree`'s cell renderer, every `JTable`'s default
+renderer, their row heights and `BasicTreeUI.createdRenderer` to a file.
+
+```python
+OUTPATH='/tmp/ddm-qa/stock.txt'; execfile('/path/to/ops/qa-renderer-probe.py')
+```
+
+Take one before the cycle and one after, and `diff` them. Two traps learned on
+2026-09-24:
+
+- **Baseline against a plain tree update, not against the untouched Designer.**
+  A bare `updateComponentTreeUI` is not a no-op even Synthetica→Synthetica: it
+  replaces a `UIResource` renderer an application installed. On this project
+  that costs the SFC timeline header its `EventTimelinePanel$TimelineHeader$2`,
+  which looks exactly like a restore bug until you reproduce it with the module
+  uninvolved. Set `CONTROL=True` before the `execfile` and the probe does that
+  refresh first, on the EDT.
+- **`screencapture -l <windowid>`, not a full-screen grab**, for colour
+  evidence: a full-screen capture picks up whatever overlaps the Designer, and
+  the desktop-control screenshot can serve a stale frame for this app.
 
 Worth reading the debug log after the restore as well as looking at the screen:
 `Light restore: re-ran updateUI on N component(s)` says whether the child-first
