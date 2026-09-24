@@ -10,6 +10,13 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ## [Unreleased]
 
+### Added
+
+- **Tools → About Designer Dark Mode…** shows the installed version, who
+  makes the module, and links to Mustry Solutions' other Ignition modules,
+  to contact, and to this repository's issues. It follows the current theme,
+  and its links are held to 4.5:1 contrast in both.
+
 ### Changed
 
 - The module's description in **Config → Modules** and the license shown at

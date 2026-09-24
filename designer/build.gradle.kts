@@ -25,6 +25,18 @@ dependencies {
     testRuntimeOnly("org.slf4j:slf4j-nop:2.0.12")
 }
 
+/*
+ * The module version, for Tools -> About Designer Dark Mode. Only this one
+ * file is expanded: the message bundle next to it goes through untouched.
+ */
+tasks.processResources {
+    val moduleVersion = project.version.toString()
+    inputs.property("moduleVersion", moduleVersion)
+    filesMatching("**/designerdarkmode-build.properties") {
+        expand("version" to moduleVersion)
+    }
+}
+
 tasks.test {
     useJUnitPlatform()
 
