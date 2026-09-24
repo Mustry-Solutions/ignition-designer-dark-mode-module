@@ -414,7 +414,8 @@ public class CellRendererSanitizer {
         for (int i = 0; i < columnCount; i++) {
             TableColumn column = table.getColumnModel().getColumn(i);
             TableCellRenderer renderer = column.getCellRenderer();
-            if (renderer != null && !(renderer instanceof SanitizingTableRenderer)) {
+            if (renderer != null && !(renderer instanceof SanitizingTableRenderer)
+                    && !ownedByTheTable(table, renderer)) {
                 originals[i] = renderer;
                 rememberColorsAtWrapTime(renderer);
                 column.setCellRenderer(new SanitizingTableRenderer(renderer));
@@ -426,7 +427,8 @@ public class CellRendererSanitizer {
         Map<Class<?>, TableCellRenderer> defaults = new java.util.HashMap<>();
         for (Class<?> valueClass : DEFAULT_RENDERER_CLASSES) {
             TableCellRenderer renderer = table.getDefaultRenderer(valueClass);
-            if (renderer != null && !(renderer instanceof SanitizingTableRenderer)) {
+            if (renderer != null && !(renderer instanceof SanitizingTableRenderer)
+                    && !ownedByTheTable(table, renderer)) {
                 defaults.put(valueClass, renderer);
                 rememberColorsAtWrapTime(renderer);
                 table.setDefaultRenderer(valueClass, new SanitizingTableRenderer(renderer));
@@ -435,6 +437,73 @@ public class CellRendererSanitizer {
         wrappedDefaults.put(table, defaults);
         table.repaint();
     }
+
+    /**
+     * Is this renderer a nested class of the code that built the table?
+     *
+     * <p>If it is, that code knows the renderer's concrete type and may cast
+     * {@code getCellRenderer()} back to it, which fails once the renderer is
+     * wrapped. {@code ProjectListTable$TableMouseListener} does exactly that
+     * in {@code mousePressed} and {@code mouseMoved}:
+     * {@code (ActionCellRenderer) table.getCellRenderer(row, column)}. The
+     * {@code ClassCastException} was swallowed by the EDT, so the OPEN buttons
+     * in the Open/Create Project dialog did nothing in dark mode (#130).
+     *
+     * <p>A tree's cast can be found by the tree's shape (see
+     * {@code TreeIconRecolorer.castsItsRenderer}), but this one sits in a
+     * listener, where no shape check can see it. Ownership is the nearest
+     * visible signal: the renderer is declared inside the table's class, the
+     * class enclosing it, or the class of a component the table sits in, or
+     * inside one of their superclasses. That is broader than the casts themselves,
+     * and the trade is cheap here: a skipped column is still sanitized at paint
+     * time by {@link SanitizingCellRendererPane}. Wrapping one that casts
+     * breaks the table outright.
+     *
+     * <p>A sweep of the 8.3.8 Designer, client, Vision, Perspective, Reporting,
+     * SFC and JIDE jars for a cast applied directly to a fetched table renderer
+     * found only this listener. Header renderers are not covered by the pane
+     * net, and the one header cast found (Vision's {@code ColumnCustomizer})
+     * runs at construction, before any wrap, so {@link #wrapHeader} does not
+     * use this.
+     */
+    private static boolean ownedByTheTable(JTable table, TableCellRenderer renderer) {
+        try {
+            java.util.Set<Class<?>> declaredIn = new java.util.HashSet<>();
+            for (Class<?> outer = renderer.getClass().getEnclosingClass(); outer != null;
+                    outer = outer.getEnclosingClass()) {
+                declaredIn.add(outer);
+            }
+            if (declaredIn.isEmpty()) {
+                return false;
+            }
+            for (Component owner = table; owner != null; owner = owner.getParent()) {
+                for (Class<?> type = owner.getClass();
+                        type != null && !type.getName().startsWith("java");
+                        type = type.getSuperclass()) {
+                    for (Class<?> outer = type; outer != null; outer = outer.getEnclosingClass()) {
+                        if (declaredIn.contains(outer)) {
+                            if (reportedOwnedRenderers.add(renderer.getClass().getName())) {
+                                DebugLog.detail("Table renderer left unwrapped (owned by "
+                                    + outer.getName() + ", which may cast it): "
+                                    + renderer.getClass().getName());
+                            }
+                            return true;
+                        }
+                    }
+                }
+            }
+        } catch (Throwable t) {
+            // getEnclosingClass reads the InnerClasses attribute and can throw
+            // for a class whose outer class is missing. Wrap as before.
+            DebugLog.log("Renderer ownership check failed for "
+                + renderer.getClass().getName(), t);
+        }
+        return false;
+    }
+
+    /** Renderer classes ownedByTheTable has declined, to log each once. */
+    private static final java.util.Set<String> reportedOwnedRenderers =
+        new java.util.HashSet<>();
 
     private void wrapHeader(JTableHeader header) {
         TableCellRenderer renderer = header.getDefaultRenderer();

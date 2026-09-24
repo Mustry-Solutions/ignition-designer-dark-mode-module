@@ -118,6 +118,7 @@ point of the first run.
 |---|---|---|---|---|
 | Project → Properties: Project General | Project → Properties | `pass` | `2026-08-31` | incl. the nav list, combos, checkboxes and OK/Apply/Cancel |
 | File chooser dialogs (Windows, Linux) | File → Import / Export, Image Management upload | — | — | On macOS the Designer may hand you a native `FileDialog`, which no look and feel reaches; off macOS it is a Swing `JFileChooser`, which FlatLaf themes — with icons that may be the platform's own. A different surface, not the same one |
+| Open/Create Project dialog (`ProjectListTable`) | File → Open… | `fixed` | `2026-09-24` | [#130](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/130): the OPEN buttons did nothing while dark (seen live on 8.1.50, where they worked again as soon as the Designer went light). IA's mouse listener casts the action column's renderer back to its own type, and our wrapper made that a swallowed `ClassCastException`. Fixed and pinned by `TableRendererCastTest`, but NOT yet re-checked by eye. Check that clicking OPEN launches the project, that hovering the action column highlights it, and that the action column is still dark (it is sanitized by the renderer pane now, not by a column wrapper) |
 | Project → Properties: Project Permissions | " | — | — | |
 | Project → Properties: Project Designer | " | — | — | |
 | Project → Properties: Vision General | " | — | — | Vision module required |
