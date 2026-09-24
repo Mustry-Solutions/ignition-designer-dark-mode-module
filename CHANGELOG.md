@@ -10,18 +10,79 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-09-24
+
+A theme-restore release: switching dark mode back off no longer leaves
+trees without their icons or tables with dark rows, including trees and
+tables first opened while the Designer was dark. Also an About dialog, and a
+windowed mode for the look-and-feel harness that found the restore bugs.
+
+The restore fixes were checked in a live 8.3.6 Designer
+([#121](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/121)):
+after a dark → light cycle every tree and table carried the same renderer,
+row height and row count as a plain look-and-feel refresh, for surfaces
+opened before the switch and while dark. Two cases stay harness-only because
+that Designer has no surface that shows them: a tree on the look and feel's
+own renderer (every tree there supplies its own), and a tree that builds its
+renderer after it is first wrapped.
+
 ### Added
 
 - **Tools → About Designer Dark Mode…** shows the installed version, who
   makes the module, and links to Mustry Solutions' other Ignition modules,
   to contact, and to this repository's issues. It follows the current theme,
   and its links are held to 4.5:1 contrast in both.
+- **The look-and-feel harness has a windowed mode**
+  ([#42](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/42)).
+  `./gradlew :designer:lafHarness -Pharness.windowed=true` drops the
+  headless flag, adds the one JDK opening a light-theme render needs
+  (`javax.swing.tree`, for Synthetica's `LabelPainter`) and keeps macOS out
+  of the Dock. `WindowedCycleTest` builds a packed, never-shown `JFrame` of
+  Designer-like shapes and drives `apply(true)`/`apply(false)` over it the
+  way a Designer does — the first time the passes that walk
+  `Window.getWindows()` have run under test at all. It pins: a swapped
+  white or light-neutral background comes back as the same instance; every
+  cached JIDE `ThemePainter` field is `BasicPainter` under dark and
+  Synthetica's after the restore, including on a component that never
+  re-reads the map; a `JInternalFrame` whose content pane throws on a null
+  background survives the tree update with its layout (the Vision crash in
+  plain Swing); and the light theme renders pixel-identical after a cycle,
+  against a baseline of one plain `updateComponentTreeUI`. Headless, the
+  class skips itself; with the property given and no display it fails, so a
+  runner that loses its display shows as red. CI runs the harness windowed
+  on all three platforms, Linux under Xvfb. The old "not from a Gradle test
+  worker" trap — JIDE's unlicensed-use dialog hanging the worker — is gone:
+  the harness runs `IgnitionLookAndFeel.init()` since #102, which is where
+  the Designer licenses JIDE.
 
 ### Changed
 
 - The module's description in **Config → Modules** and the license shown at
   install now say who makes the module and where to find Mustry Solutions'
   other Ignition modules. Release pages get the same short footer.
+- **`flatlaf.uiScale.enabled=false` is documented as required on every OS,
+  not a macOS-only optimisation**
+  ([#76](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/76)).
+  FlatLaf system scaling (JDK HiDPI) is untouched by the property; only
+  user scaling is off, because its permanent `UIScale` listener NPEs on a
+  later Synthetica uninitialize. A new harness test simulates
+  Synthetica-scaled fonts (Dialog 18 / 24 pt) and pins that dark mode keeps
+  that size via the existing font pin, so it cannot come out undersized
+  relative to stock. Re-enabling user scaling would stretch insets on top
+  of that font on Linux/macOS and buy nothing on Windows (FlatLaf's own
+  guard), while bringing the listener back everywhere. The `startup`
+  comment, the ARCHITECTURE gotcha, and the QA checklist are updated to
+  match; a live HiDPI `env:` block ([#96](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/96))
+  remains the only real corroboration.
+- **`WorkspaceTabStripTest` now does its Swing work on the dispatch thread
+  and clears its Windows spoof through `setDesktopProperty`.** The reflective
+  map removal it used never worked headless (the default toolkit is a
+  `HeadlessToolkit` whose own map is empty), so the spoofed 3D colours
+  outlived the test. The JIDE layout also ran on the test thread while JIDE
+  had posted dispatch-thread work for the same pane; one Windows CI run
+  (floor SDK) hit `No such child: 6` out of that layout, which needs the
+  child list to change under it. Same remedy as #95; not reproduced on a
+  Mac, so recorded as the likely cause, not a proven one.
 
 ### Fixed
 
@@ -56,57 +117,6 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   such a renderer and nulls both its colours, so one that colours itself in
   its constructor came out of the restore with none. Those colours are now
   recorded as the renderer is wrapped.
-
-### Added
-
-- **The look-and-feel harness has a windowed mode**
-  ([#42](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/42)).
-  `./gradlew :designer:lafHarness -Pharness.windowed=true` drops the
-  headless flag, adds the one JDK opening a light-theme render needs
-  (`javax.swing.tree`, for Synthetica's `LabelPainter`) and keeps macOS out
-  of the Dock. `WindowedCycleTest` builds a packed, never-shown `JFrame` of
-  Designer-like shapes and drives `apply(true)`/`apply(false)` over it the
-  way a Designer does — the first time the passes that walk
-  `Window.getWindows()` have run under test at all. It pins: a swapped
-  white or light-neutral background comes back as the same instance; every
-  cached JIDE `ThemePainter` field is `BasicPainter` under dark and
-  Synthetica's after the restore, including on a component that never
-  re-reads the map; a `JInternalFrame` whose content pane throws on a null
-  background survives the tree update with its layout (the Vision crash in
-  plain Swing); and the light theme renders pixel-identical after a cycle,
-  against a baseline of one plain `updateComponentTreeUI`. Headless, the
-  class skips itself; with the property given and no display it fails, so a
-  runner that loses its display shows as red. CI runs the harness windowed
-  on all three platforms, Linux under Xvfb. The old "not from a Gradle test
-  worker" trap — JIDE's unlicensed-use dialog hanging the worker — is gone:
-  the harness runs `IgnitionLookAndFeel.init()` since #102, which is where
-  the Designer licenses JIDE.
-
-### Changed
-
-- **`flatlaf.uiScale.enabled=false` is documented as required on every OS,
-  not a macOS-only optimisation**
-  ([#76](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/76)).
-  FlatLaf system scaling (JDK HiDPI) is untouched by the property; only
-  user scaling is off, because its permanent `UIScale` listener NPEs on a
-  later Synthetica uninitialize. A new harness test simulates
-  Synthetica-scaled fonts (Dialog 18 / 24 pt) and pins that dark mode keeps
-  that size via the existing font pin, so it cannot come out undersized
-  relative to stock. Re-enabling user scaling would stretch insets on top
-  of that font on Linux/macOS and buy nothing on Windows (FlatLaf's own
-  guard), while bringing the listener back everywhere. The `startup`
-  comment, the ARCHITECTURE gotcha, and the QA checklist are updated to
-  match; a live HiDPI `env:` block ([#96](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/96))
-  remains the only real corroboration.
-- **`WorkspaceTabStripTest` now does its Swing work on the dispatch thread
-  and clears its Windows spoof through `setDesktopProperty`.** The reflective
-  map removal it used never worked headless (the default toolkit is a
-  `HeadlessToolkit` whose own map is empty), so the spoofed 3D colours
-  outlived the test. The JIDE layout also ran on the test thread while JIDE
-  had posted dispatch-thread work for the same pane; one Windows CI run
-  (floor SDK) hit `No such child: 6` out of that layout, which needs the
-  child list to change under it. Same remedy as #95; not reproduced on a
-  Mac, so recorded as the likely cause, not a proven one.
 
 ## [0.4.2] - 2026-09-18
 
