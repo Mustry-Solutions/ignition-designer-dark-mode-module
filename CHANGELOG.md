@@ -17,6 +17,12 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   to contact, and to this repository's issues. It follows the current theme,
   and its links are held to 4.5:1 contrast in both.
 
+### Changed
+
+- The module's description in **Config → Modules** and the license shown at
+  install now say who makes the module and where to find Mustry Solutions'
+  other Ignition modules. Release pages get the same short footer.
+
 ### Fixed
 
 - **A light restore no longer strips default-renderered trees of their icons

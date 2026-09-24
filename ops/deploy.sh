@@ -21,8 +21,15 @@ build_and_stage_module
 # gateway, or after the dev keystore was regenerated, a plain restart parks
 # the gateway in commissioning over the "unknown" dev certificate. Re-seed
 # in that case; it is a stop/edit/start, not a restart.
+#
+# The same holds for the license: the registry records a hash of the
+# license.html it accepted, so a build with an edited license parks the
+# gateway in commissioning just as an unknown certificate does.
 if [[ "$(registry_fingerprint)" != "$(dev_cert_fingerprint)" ]]; then
   warn "The gateway's registry does not hold the dev certificate; re-seeding acceptance."
+  accept_staged_module
+elif [[ "$(registry_license_hash)" != "$(staged_license_crc)" ]]; then
+  warn "license.html changed since the gateway accepted it; re-seeding acceptance."
   accept_staged_module
 else
   info "Restarting the gateway to load the new build..."
