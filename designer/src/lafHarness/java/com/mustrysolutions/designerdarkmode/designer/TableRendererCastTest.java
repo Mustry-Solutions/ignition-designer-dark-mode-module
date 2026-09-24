@@ -1,6 +1,7 @@
 package com.mustrysolutions.designerdarkmode.designer;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -17,6 +18,7 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.ParameterizedType;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 
@@ -64,6 +66,19 @@ import org.junit.jupiter.api.Test;
  * and still painted through the sanitizing pane, and an ordinary table is
  * still wrapped, because a guard that skipped everything would pass the
  * first test and quietly disable the pass.
+ *
+ * <h2>The second cause, found live</h2>
+ *
+ * <p>With only the cast fixed, OPEN still did nothing in a live 8.3.6
+ * Designer: hovering worked, the press selected the row, nothing launched.
+ * The press has to start the OPEN cell's editor, and only the table UI's own
+ * mouse handler does that. It ignores a consumed event, and IA's listener
+ * consumes every press in that column. On a table built the normal way the
+ * UI's handler runs first; under FlatLaf the table's UI is replaced (JIDE's
+ * {@code BasicCellSpanTableUI}) and the new handler lands after IA's
+ * listener. {@link #aRealClickOnOpenLaunches} drives the whole
+ * move-press-release sequence through {@code dispatchEvent} and asserts the
+ * project is launched, which needs both fixes.
  *
  * <h2>The assumption guard</h2>
  *
@@ -148,6 +163,63 @@ class TableRendererCastTest {
         assertNotEquals(CellRendererPane.class, rendererPane(table).getClass(),
             "the table's renderer pane was not intercepted, so the skipped column "
                 + "paints with no sanitizing at all");
+    }
+
+    @Test
+    @DisplayName("a real hover, press and release on OPEN launches the project under dark")
+    void aRealClickOnOpenLaunches() throws Exception {
+        manager.apply(true);
+        List<String> launched = new ArrayList<>();
+        JPanel projectList = projectListTable(launched::add);
+        JTable table = (JTable) field(projectList, "table");
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.add(projectList, BorderLayout.CENTER);
+        panel.setSize(900, 300);
+        layOut(panel);
+        // Found before the pass runs, so a wrapped column fails below rather
+        // than making this lookup skip the test.
+        int action = actionColumn(table);
+
+        renderers.installIn(panel);
+
+        // IA's listener reads the OPEN button's bounds from the renderer,
+        // which a paint lays out. Headless, validate() is a no-op, so render
+        // the cell and lay the renderer out by hand instead.
+        Rectangle cellBounds = table.getCellRect(0, action, false);
+        TableCellRenderer renderer = table.getColumnModel().getColumn(action).getCellRenderer();
+        Component rendered = renderer.getTableCellRendererComponent(
+            table, table.getValueAt(0, action), false, false, 0, action);
+        rendered.setBounds(0, 0, cellBounds.width, cellBounds.height);
+        layOut((Container) rendered);
+        java.lang.reflect.Method openButton =
+            renderer.getClass().getSuperclass().getDeclaredMethod("getOpenButton");
+        openButton.setAccessible(true);
+        Rectangle button = ((Component) openButton.invoke(renderer)).getBounds();
+        assertTrue(button.width > 0, "the OPEN button was never laid out, so no event can hit it");
+        // The press is reposted into the cell EDITOR, which needs the same
+        // hand layout for the button inside it to receive the click.
+        Component editor = table.getColumnModel().getColumn(action).getCellEditor()
+            .getTableCellEditorComponent(table, table.getValueAt(0, action), false, 0, action);
+        editor.setBounds(0, 0, cellBounds.width, cellBounds.height);
+        layOut((Container) editor);
+
+        Rectangle cell = table.getCellRect(0, action, false);
+        // Inside both the button and the cell: the renderer can lay out wider than its cell.
+        int x = cell.x + button.x + Math.min(button.width, cell.width - button.x) / 2;
+        int y = cell.y + button.y + button.height / 2;
+
+        table.dispatchEvent(new MouseEvent(table, MouseEvent.MOUSE_MOVED,
+            System.currentTimeMillis(), 0, x, y, 0, false, MouseEvent.NOBUTTON));
+        table.dispatchEvent(new MouseEvent(table, MouseEvent.MOUSE_PRESSED,
+            System.currentTimeMillis(), MouseEvent.BUTTON1_DOWN_MASK, x, y, 1, false,
+            MouseEvent.BUTTON1));
+        assertTrue(table.isEditing(),
+            "the press did not start the OPEN cell's editor; IA's listener consumed it "
+                + "ahead of the table UI's own handler, so the button never sees the click");
+        table.dispatchEvent(new MouseEvent(table, MouseEvent.MOUSE_RELEASED,
+            System.currentTimeMillis(), 0, x, y, 1, false, MouseEvent.BUTTON1));
+        assertEquals(List.of("demo"), launched,
+            "the editor started but the OPEN button's action did not launch the project");
     }
 
     @Test
