@@ -354,8 +354,9 @@ back ([DeveloperDefaults](#developerdefaults)).
 
 **The corruption sweep.** The first three fixes were proven on a three-component
 window. `VisionCorruptionSweepTest` in the Vision probe takes the same
-standard to the whole palette: every one of Vision's 61 palette components
-(55 build headlessly; the rest need a client context), built from the
+standard to the whole palette: every one of Vision's 60 palette components
+(57 build headlessly — see below for the three that do not; measured on
+2026-09-24 against Vision 12.3.8), built from the
 palette and saved under dark, born under stock and cycled twice with the
 window open, with hand-set values, nested three deep with a template, and
 as a full `FPMIWindow`, must serialize to the same bytes a stock Designer
@@ -439,8 +440,9 @@ class name in any save — the client's own criterion, and the one
 two client statics some constructors read (a gateway connection, a
 localization manager; `VisionClientStubs`), which brings both Comments
 Panels and the Spinner into the sweep. Still unbuildable headless: the Easy
-Chart (a `DropTarget`), the Slider under Synthetica, and the Date Time
-Selector under a stock tree update — all `HeadlessException` territory.
+Chart (a `DropTarget`) and the Slider under Synthetica, both
+`HeadlessException`, and the Date Time Selector under a stock tree update,
+where Synthetica serves no style for it headless.
 
 What the sweep accepts as residue, each documented: the stock token value
 written where a stock Designer writes nothing (see
@@ -715,12 +717,11 @@ listed as *Trial* under **Config → Modules** (#114). It registers nothing.
   (`IgnitionDesigner$LoadedModule.shutdown()` does so twice before
   `hook.shutdown()`, from both exit and opening another project). A
   `StateChangeAction` fires `itemStateChanged` from `setSelected`, so seeding
-  the Tools menu checkbox from the preference used to read as a click at that
-  moment — harmless while the preference always matched the screen, a refusal
-  dialog on the way out plus a wiped preference once a Vision-blocked launch
-  could keep "dark" saved with a light Designer. The hook seeds under its
-  `syncing` guard, and `ThemeManager.setDark` ignores requests after
-  `shutdown()`.
+  the Tools menu checkbox from a "dark" preference reads as a click at that
+  moment and would start a full theme switch on the way out. (While
+  `VisionGate` existed, until 0.4.0, it also raised the Vision refusal dialog
+  there and wiped the preference.) The hook seeds under its `syncing` guard,
+  and `ThemeManager.setDark` ignores requests after `shutdown()`.
 - **"Inside Vision" is the canvas, not the package.** The passes that lift
   dark text and refresh dark leftovers must not touch Vision's user content,
   and the first cut keyed that on any ancestor from a `factorypmi` package.
@@ -814,8 +815,8 @@ listed as *Trial* under **Config → Modules** (#114). It registers nothing.
   `InaccessibleObjectException` case — the one failure the user can fix —
   and the degraded status line carries the argument and where it goes in
   the launcher, ahead of the log pointer. Verified by running the harness
-  with that opening removed: 1 of 23 phases fails, everything else
-  completes.
+  with that opening removed (2026-09-15): one phase failed and every other
+  completed — 1 of 23 then; a dark switch runs 25 phases now.
 - **`flatlaf.uiScale.enabled=false` is required on every OS, and is not a
   HiDPI tax.** FlatLaf has two modes: *system* scaling (the JDK HiDPI
   transform, Java 9+, all platforms) and *user* scaling (a font-derived

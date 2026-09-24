@@ -4,8 +4,9 @@ How to build, run, debug, sign and release Designer Dark Mode.
 
 ## Prerequisites
 
-- **JDK 17.** The Gradle toolchain pins Java 17; the build fails on other
-  versions. (Note: the Ignition Module Generator that scaffolded this project
+- **JDK 17.** The Gradle toolchain pins Java 17 and does not download one,
+  so the build fails unless a JDK 17 is installed. Gradle itself may run on
+  another JDK; it finds the 17 through the toolchain. (Note: the Ignition Module Generator that scaffolded this project
   needs a specific JDK too — the `v0.5.0` generator tag works on JDK 17.)
 - **Docker** — only if you want the local dev gateway under `ops/`.
 - Network access to `https://nexus.inductiveautomation.com/repository/public`,
@@ -216,6 +217,16 @@ module keys on. CI never sees it; run it before touching anything under
 style primer. Its two restore scenarios were the reproduction of the last
 piece of [#92][92], the fonts after a light restore, and now pin the fix.
 
+`VisionCorruptionSweepTest` takes the same test to the whole palette: every
+kind that builds headlessly (57 of 60 on Vision 12.3.8), saved from a stock
+Designer and from a dark one — built under dark, born under stock and
+cycled, nested in a template — must write the same bytes, net of a short
+list of documented residue, carry no FlatLaf class name, and load back. It
+prints `Sweep: built N of M` with the kinds it could not build. Run it too
+before touching `LookAndFeelBorders`, `LookAndFeelColors` or the
+`VisionConstruction*` classes; see
+[ARCHITECTURE](ARCHITECTURE.md#vision) for what it found.
+
 **The harness's stock install is the Designer's own.** `DesignerLookAndFeel
 .installStock()` runs `IgnitionLookAndFeel.init()` — Synthetica through
 Ignition's look and feel, Dialog 12, and the developer defaults Ignition puts
@@ -350,10 +361,12 @@ nobody has `-Ddesignerdarkmode.debug=true` on at the moment a bug first appears.
 Look for `Tree-update diagnostic for` in the log. It answers the three questions
 the stack trace cannot:
 
-- **which components have no font at all**, with the ancestor path to each
-  (`getFont()` returns null only when the whole chain is unset, so the path is
-  the diagnostic, not the component);
-- **which `UIManager` font keys resolve to null** right then;
+- **which components have no font, background or foreground**, with the
+  ancestor path to each (a getter returns null only when the whole chain is
+  unset, so the path is the diagnostic, not the component). Which of the three
+  is fatal depends on whose delegate ran: the Vision crash this was built for
+  was a null background;
+- **which `UIManager` keys resolve to null** right then;
 - **how much of the tree still holds a wrong-look-and-feel delegate** — the
   subtree the aborted update never reached, which is the actual damage.
 

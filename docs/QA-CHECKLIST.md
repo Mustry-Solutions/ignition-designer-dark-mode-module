@@ -603,19 +603,24 @@ a renderer built under dark was never re-synced. Both are pinned in
 
 ### Note on the 2026-08-31 run
 
+*Historical: what that run could and could not show. §L has since been
+re-verified from inside the JVM (2026-09-01), and the dev project now has a
+saved view.*
+
 Driven with computer use rather than by hand, which changes what the run is
 worth in two directions:
 
 - **§L (popups) was not re-verified.** Synthetic right-clicks did not reach the
   Designer at all — no popup opened and none was logged — so every §L result
-  below still dates from 2026-08-29. A popup sweep needs a human hand.
+  in [§L](#l-popup-sweep) still dated from 2026-08-29. A popup sweep needs a
+  human hand.
 - **Judge colour zoomed, never on a scaled screenshot.** Two surfaces (the
   autocomplete popup, the whole Project Properties dialog) read as *light* on a
   full-screen capture scaled from 3456px and turned out to be perfectly dark
   when zoomed. Both would have been false bug reports.
 
-The Perspective view editor, binding editors and style editor are still
-unchecked in substance: the dev project has no views.
+The Perspective view editor, binding editors and style editor were still
+unchecked in substance: the dev project had no views then.
 
 ### Compare against a relaunched Designer before calling something a bug
 
@@ -793,7 +798,7 @@ these is a real gap, not a pass.
 
 | Surface | Why it is unchecked | What it needs |
 |---|---|---|
-| §L right-click popups, the remaining 5 sources | Three verified 2026-09-01 by dispatching the trigger from inside the JVM (both trees, the Perspective canvas). The rest need their surface open first: the Vision canvas needs a window, the property-row and binding-picker menus need a component on a view, and a text field's cut/copy/paste menu did not open from a synthetic trigger on the fields available | Either the Script Console technique in [§L](#right-click-cannot-be-automated-from-outside--but-it-can-from-inside), or ~10 minutes by hand |
+| §L right-click popups: 5 sources not re-checked since 2026-08-29 | Every §L row passed on 2026-08-29; only three have been re-verified since, on 2026-09-01 by dispatching the trigger from inside the JVM (both trees, the Perspective canvas). The rest need their surface open first: the Vision canvas needs a window, the property-row and binding-picker menus need a component on a view, and a text field's cut/copy/paste menu did not open from a synthetic trigger on the fields available | Either the Script Console technique in [§L](#right-click-cannot-be-automated-from-outside--but-it-can-from-inside), or ~10 minutes by hand |
 | §E binding editor, component scope picker, style editor | **The view is no longer the blocker** — a saved view (`qa-dark-mode`) exists in the dev project, so the editor opens. What is still missing is a component dropped on that view: it needs a palette drag the automation cannot do, and the Perspective palette was not docked in the layout used | A component dropped on the view, by hand |
 | §H Reporting, Preview and Schedule tabs | The dev project now HAS a report (`qa-report`, saved 2026-09-01), and Report Overview, Data and Design were swept on it in both modes — that sweep is what found #59. Preview and Schedule were not opened | Open the last two tabs on `qa-report` |
 | §F border chooser, Layout, Size and Position | Need a Vision window with a component selected | A Vision window, by hand |

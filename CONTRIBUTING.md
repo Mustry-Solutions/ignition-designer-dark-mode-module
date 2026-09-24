@@ -49,11 +49,12 @@ already fixed.
 ## Diagnosing a "still light" component
 
 This is the most common kind of contribution. The module ships a component
-inspector: with dark mode on, press **Cmd/Ctrl+Shift+I** (or `+F12`) with the
-mouse over the offending area, and the component chain — class, bounds, colors,
+inspector: press **Cmd/Ctrl+Shift+I** (or `+F12`) with the mouse over the
+offending area, and the component chain — class, bounds, colors,
 opacity, borders and UI delegate per level, plus a scroll pane's parts — is
 dumped to
-`~/.ignition/designer-dark-mode.log`. Full walkthrough in
+`~/.ignition/designer-dark-mode.log`. It works in either theme, so dump the
+same spot dark and light and compare. Full walkthrough in
 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#the-inspector--diagnosing-a-still-light-component).
 
 ## Pull request flow
@@ -67,7 +68,11 @@ dumped to
    If you touched the switch sequence itself, also run `./gradlew
    :designer:lafHarness` — it drives that sequence against the real Synthetica,
    JIDE and FlatLaf jars headlessly, and catches the kind of `UIManager` damage
-   that is invisible on screen. See
+   that is invisible on screen. If you touched a pass that walks windows, the
+   restore, or a renderer, run it again with `-Pharness.windowed=true`: that
+   drives the switch over real frames and compares the light theme's pixels
+   before and after a cycle, which is how the 0.5.0 restore bugs were found.
+   CI runs the windowed mode on every platform. See
    [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#the-look-and-feel-harness).
 3. **Verify the light restore, not just the dark result.** Toggling dark mode
    off must return the Designer exactly to stock. A change that only looks
