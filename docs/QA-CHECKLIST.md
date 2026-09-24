@@ -165,7 +165,7 @@ check an editor of each kind rather than assuming "the editors" are covered.
 | Project Library editor | Project Browser → Scripting → Project Library | — | — | |
 | Project Library nav tree | Left of that editor | — | — | Source of a `JTree` popup in §L |
 | Script editor gutter, autocomplete popup | Type inside any script editor | `pass` | `2026-08-31` | `system.` + Ctrl+Space in the Script Console. The list and the attribute pane are dark; the enclosing `AutoCompletePopupWindow` window is still `#EEEEEE` explicit, which does not show at this size |
-| Script Console | Tools → Script Console | `pass` | `2026-08-31` | both panes |
+| Script Console | Tools → Script Console | `fail` | `2026-09-24` | 8.1.50: the interpreter banner, written before Dark Mode is switched on, stayed `#0000FF` on `#3C3F41` (1.23:1), and an off/on cycle left it blue. Text printed after the switch was light grey. The 2026-08-31 `pass` ("both panes") missed the banner. Fix for #129 is harness-verified only; re-check the banner with Dark Mode switched on while the console is open, then switch off and check text printed while dark comes back blue/red |
 | Gateway Events editor | Project Browser → Scripting → Gateway Events | — | — | |
 | Message handler dialog **(1.3.0)** | Gateway Events → Message → add or edit a handler **(unverified)** | — | — | 1.3.0 added `MessageHandlerEditor$MessageHandlerConfigPanel` and `SecurityPanel` for this dialog |
 | Client/Session Events editor | Project Browser → Scripting → … Events | — | — | |

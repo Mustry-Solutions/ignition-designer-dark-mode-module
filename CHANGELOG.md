@@ -17,6 +17,16 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   own zone. Each line now ends its timestamp with `Z`, so a log pasted into a
   bug report states its zone wherever it came from.
 
+### Fixed
+
+- **Script Console banner stays blue in dark mode (#129).** Text already in the
+  Script Console or diagnostics console when Dark Mode was switched on (the
+  interpreter's "Jython … executing locally" banner, and any earlier error
+  output) kept its stock `#0000FF` / `#FF0000` on the dark background. It is now
+  recoloured. The reverse also applies: text printed while dark goes back to
+  the stock colours when Dark Mode is switched off, instead of staying light
+  blue on the light theme.
+
 ## [0.5.0] - 2026-09-24
 
 A theme-restore release: switching dark mode back off no longer leaves

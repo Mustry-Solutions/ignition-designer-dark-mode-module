@@ -269,12 +269,20 @@ The Script Console's interpreter and the Output Console colour text per
 character through the document, not through the component, so the LAF swap
 leaves near-black output and `Color.blue` banners on a dark background.
 
-`ConsolePanel` registers its colours as **named styles** on the styled document
-— `regular`, `emphasize`, `error` — rather than stamping attributes onto each
-run. That is the useful detail: restyling those style objects recolours all
-existing *and future* text at once, and is exactly reversible. Rewriting
-character attributes across the document would be neither, and could not be
-undone once text scrolled away.
+`ConsolePanel` registers its colours as **named styles** on the styled document:
+`regular` (no colour; it follows `default`), `emphasize` (`Color.blue`) and
+`error` (`Color.red`). Restyling those objects recolours **future** text only.
+`insertString(offset, text, style)` copies the style's colour into the run, so
+text already written in `emphasize` or `error` keeps its own copy (#129: the
+interpreter banner stayed `#0000FF` on `#3C3F41`). Runs written in `regular`
+carry no colour and do follow the restyle.
+
+So the runs that carry a copy are rewritten **by colour**, as for the Output
+Console: blue and red to the dark values on install, and the dark values back to
+blue and red on uninstall. Mapping by colour rather than offset survives the
+document being trimmed, and the reverse mapping also catches text Ignition wrote
+*while* dark, which carries the dark colour and would otherwise stay light on the
+light theme. Runs that inherit their colour are never stamped.
 
 Styles are looked up by name, so only documents that define them are touched.
 The restore distinguishes a style that had an explicit foreground from one that
