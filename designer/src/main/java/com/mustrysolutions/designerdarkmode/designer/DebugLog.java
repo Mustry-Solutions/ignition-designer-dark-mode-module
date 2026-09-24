@@ -7,8 +7,9 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.io.Writer;
-import java.text.SimpleDateFormat;
-import java.util.Date;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 
 /**
  * Best-effort append-only debug log at ~/.ignition/designer-dark-mode.log.
@@ -26,6 +27,11 @@ import java.util.Date;
  * a write and a close on the event dispatch thread.
  */
 public final class DebugLog {
+
+    // UTC, and marked as such: the log travels in bug reports from any zone,
+    // and gets read next to gateway logs that may be in another one.
+    private static final DateTimeFormatter STAMP =
+        DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS'Z'").withZone(ZoneOffset.UTC);
 
     /**
      * Overridable so unit tests do not append to the developer's real
@@ -127,7 +133,7 @@ public final class DebugLog {
             if (writer == null) {
                 writer = new BufferedWriter(new FileWriter(LOG_FILE, true));
             }
-            String stamp = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS").format(new Date());
+            String stamp = STAMP.format(Instant.now());
             writer.write(stamp + " " + message + System.lineSeparator());
             // Flushed per line rather than left to the buffer: the log's whole
             // purpose is to survive a Designer that hangs or is killed.

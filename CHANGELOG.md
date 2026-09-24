@@ -10,6 +10,13 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ## [Unreleased]
 
+### Changed
+
+- **Debug log timestamps are UTC, and say so.** The docs always claimed UTC,
+  but `~/.ignition/designer-dark-mode.log` was stamped in the Designer JVM's
+  own zone. Each line now ends its timestamp with `Z`, so a log pasted into a
+  bug report states its zone wherever it came from.
+
 ## [0.5.0] - 2026-09-24
 
 A theme-restore release: switching dark mode back off no longer leaves

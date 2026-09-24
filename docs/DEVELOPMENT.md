@@ -365,7 +365,7 @@ reports.
 ### The debug log
 
 `~/.ignition/designer-dark-mode.log` — append-only, written by `DebugLog`.
-**Timestamps are UTC** — add your local offset when correlating with the clock.
+**Timestamps are UTC** (marked with a trailing `Z`) — add your local offset when correlating with the clock.
 
 Two levels. `DebugLog.log` always writes, and is reserved for what a user or a
 maintainer reading a bug report needs: the theme switches and the failures

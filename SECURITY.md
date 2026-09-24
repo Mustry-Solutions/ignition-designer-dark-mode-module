@@ -23,8 +23,10 @@ remediation, and credit you (if you wish) once a fix ships.
 
 ## Scope
 
-This module runs **only inside the Ignition Designer**, on the machine where
-the Designer is launched. It has no gateway scope, no client scope, and no
+This module runs **inside the Ignition Designer**, on the machine where the
+Designer is launched. Its only gateway-scope code is a one-method hook that
+tells the gateway the module is free, so **Config → Modules** does not list it
+as a trial; it registers no gateway service. It has no client scope and no
 network listener; it neither reads nor writes gateway resources, and it
 transmits nothing. Its only persisted state is the theme preference, stored
 locally via the Java preferences API.

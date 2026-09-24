@@ -13,7 +13,8 @@ Made by [Mustry Solutions](https://mustrysolutions.com), a Belgian IT/OT
 consultancy that builds Ignition systems and modules. See
 [Built by Mustry Solutions](#built-by-mustry-solutions).
 
-> Status: young but usable. Designer scope only; targets Ignition **8.3+**.
+> Status: young but usable. Everything it does happens in the Designer (see
+> [Install](#install) for its one gateway-side hook); targets Ignition **8.3+**.
 > See [Known limitations](#known-limitations) before installing.
 
 ## What it does
@@ -266,9 +267,9 @@ components one class at a time — which means surfaces nobody has explicitly
 catalogued come out dark by default.
 
 One difference cuts the other way. Because the script never swaps the look and
-feel, the Vision serializer problem described under
-[Known limitations](#known-limitations) does not arise with it, and on a
-project that is mostly Vision it remains the better choice today. The two are
+feel, a Vision window in the Designer keeps looking the way it will in the
+client (see [Known limitations](#known-limitations)), so on a project that is
+mostly Vision it remains the better choice today. The two are
 not meant to run in the same project; that section says why and what to
 remove.
 

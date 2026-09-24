@@ -102,7 +102,7 @@ point of the first run.
 | Menus and menu popups | Top of the main frame | `pass` | `2026-08-31` | File / Project / Tools / Help popups |
 | macOS system menu bar | Top of the screen | `skip` | `2026-08-31` | Drawn by the OS and following the system appearance — not reachable from a Swing look and feel. Neither is the search field inside the Help menu |
 | In-window menu bar (Windows, Linux) | Top of the main frame | — | — | The opposite case: off macOS the menu bar is a Swing `JMenuBar`, so the swap DOES theme it — and it has never been looked at, because on macOS it does not exist. Menu titles, hover, mnemonics and the accelerator text in the popups |
-| Native title bar and window frame (Windows, Linux) | Around every window | `skip` | — | Stays light by decision (see [ARCHITECTURE](ARCHITECTURE.md#the-switch-step-by-step), step 9): the `apple.awt.windowAppearance` property is macOS-only, and FlatLaf window decorations on Ignition's frames would be a larger change than the gap justifies. Record it, do not file it |
+| Native title bar and window frame (Windows, Linux) | Around every window | `skip` | — | Stays light by decision (see [ARCHITECTURE](ARCHITECTURE.md#the-switch-step-by-step), step 10): the `apple.awt.windowAppearance` property is macOS-only, and FlatLaf window decorations on Ignition's frames would be a larger change than the gap justifies. Record it, do not file it |
 | Toolbars | Below the menu bar | `pass` | `2026-08-31` | incl. the Vision workspace's extra toolbars |
 | Dock title bars, grippers, split dividers | Any docked panel | `pass` | `2026-08-31` | |
 | Section headers / collapsible title panes | Left and right docks | `pass` | `2026-08-31` | `SESSION PROPS` |
@@ -740,8 +740,9 @@ toggle**, including with the property editor re-attached under dark — so on th
 path the filter is restored by the tracked white-swap, and that pass is
 belt-and-braces rather than the thing doing the work.
 
-> **Open defect, found by the 2026-08-29 run.** With a Vision window open, the
-> light restore's phase-6 `updateComponentTreeUI` throws
+> **Fixed; found by the 2026-08-29 run.** With a Vision window open, the
+> light restore's tree update (step 9 in
+> [ARCHITECTURE](ARCHITECTURE.md#the-switch-step-by-step)) used to throw
 > `NullPointerException: Cannot invoke "java.awt.Color.getAlpha()" because
 > "newColor" is null` and abandons the walk for the entire main frame.
 >
@@ -772,11 +773,15 @@ belt-and-braces rather than the thing doing the work.
 > Designer, completed clean — consistent with no Vision *window* being open at
 > the time, only the Vision workspace.
 >
-> The harm is the abort, not the null: one throwing component stranded the rest
-> of the main frame's tree. **Contained** — the phase-6 walk is now per
-> component, so a throw costs only that component while its siblings and its
-> own subtree are still walked. The NPE itself is Ignition's and still fires;
-> what it no longer does is take the frame with it.
+> **Prevented, in two layers.** The throw itself no longer happens: before each
+> `updateUI()` the walk swaps the content pane's background for the same colour
+> as a plain `Color`, so IA's `instanceof UIResource` block skips itself, and
+> puts a `UIResource` back afterwards
+> (`ThemeManager.neutraliseInternalFrameBackground`). Merely catching the throw
+> was tried first and was worse: the frame never got its layout, and every later
+> `getMinimumSize()` threw instead. Independently, the tree update is now per
+> component, so anything else that throws out of `updateUI()` costs only that
+> component and not the rest of the main frame's tree.
 
 ## What is still unchecked, and why
 
