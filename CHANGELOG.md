@@ -37,6 +37,18 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ### Fixed
 
+- **Vision Property Editor values are readable again after switching Dark Mode
+  off.** After a dark → light switch the value column (a component's Name,
+  its Data, and every other value whose editor had been shown while dark)
+  drew in FlatLaf's near-white #DDDDDD on a light row, 1.23:1 against 13.58:1
+  in a Designer that was never dark. Vision's property table keeps one editor
+  panel per property type and reuses it for every paint, so that panel is
+  never in the window tree when the light restore walks it, and it kept
+  FlatLaf's UI delegates in a stock Designer. Going into dark mode already
+  fixed such a panel on the paint that showed it; the light side now does the
+  same, from the watcher that already runs after a restore. Found and
+  measured in a live 8.1.50 Designer; the property table is the same on 8.3.
+
 - **The OPEN buttons in File → Open… work in dark mode again**
   ([#130](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/130)).
   Two things stopped them. The dialog's table casts its action column's
