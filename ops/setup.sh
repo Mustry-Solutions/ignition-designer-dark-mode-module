@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# Build the module and bring up a fresh local Ignition 8.3.6 gateway with the
-# module installed. Safe to re-run.
+# Build the module and bring up a fresh local Ignition gateway with the module
+# installed. Safe to re-run.
 #
-# Usage: ops/setup.sh
+# Usage: ops/setup.sh                     the 8.3 gateway (docker-compose.yml)
+#        IGNITION_LINE=8.1 ops/setup.sh   the 8.1 gateway (docker-compose.8.1.yml)
 
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 
@@ -14,6 +15,8 @@ info "Starting the Ignition gateway container..."
 # /external-modules in the container (see docker-compose.yml). The gateway discovers
 # it during first-time commissioning.
 "${COMPOSE[@]}" up -d
+# 8.1 has no external modules folder; copy the build in (no-op on 8.3).
+install_into_container
 
 # On a fresh volume the gateway parks in COMMISSIONING over the staged module
 # until its certificate AND EULA are accepted. Seed both into data/modules.json
@@ -21,6 +24,7 @@ info "Starting the Ignition gateway container..."
 wait_for_modules_registry 60 && accept_staged_module
 
 wait_for_gateway 90 || true
+verify_deployed
 
 echo
 ok "Gateway is running with the module accepted and enabled."

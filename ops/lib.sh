@@ -29,7 +29,22 @@ fi
 IN_WORKTREE=0
 [[ "${MAIN_ROOT}" != "${PROJECT_ROOT}" ]] && IN_WORKTREE=1
 
-MODULES_DIR="${MAIN_ROOT}/ops/modules"
+# --- which gateway: 8.3 (the default) or 8.1 --------------------------------
+# IGNITION_LINE=8.1 points every script at docker-compose.8.1.yml and builds
+# designer-dark-mode-8.1.modl (-Pignition.line=8.1). The workflow is the same;
+# the helpers below branch only where an 8.1 gateway differs: it has no
+# externalModulesFolder (the build is copied into user-lib/modules), and it
+# keeps module acceptance in config.idb rather than data/modules.json.
+IGNITION_LINE="${IGNITION_LINE:-8.3}"
+case "${IGNITION_LINE}" in
+  8.3) LINE_SUFFIX="" ;;
+  8.1) LINE_SUFFIX="-8.1" ;;
+  *) echo "IGNITION_LINE must be 8.3 or 8.1, not '${IGNITION_LINE}'" >&2; exit 1 ;;
+esac
+is_8_1() { [[ "${IGNITION_LINE}" == "8.1" ]]; }
+
+MODULES_DIR="${MAIN_ROOT}/ops/modules${LINE_SUFFIX}"
+MODL_NAME="designer-dark-mode${LINE_SUFFIX}.modl"
 
 # Local self-signed signing material for development (gitignored). On a fresh
 # gateway the certificate is accepted unattended, by seeding its fingerprint into
@@ -47,6 +62,17 @@ SIGNING_DNAME="CN=Mustry Solutions (Dev), O=Mustry Solutions, C=BE"
 # Must match id.set(...) in build.gradle.kts.
 MODULE_ID="com.mustrysolutions.designerdarkmode"
 CONTAINER_NAME="designer-dark-mode-ignition"
+COMPOSE_FILE_NAME="docker-compose.yml"
+if is_8_1; then
+  CONTAINER_NAME="designer-dark-mode-ignition-81"
+  COMPOSE_FILE_NAME="docker-compose.8.1.yml"
+fi
+# Where the gateway loads the module from, inside the container.
+if is_8_1; then
+  MODL_IN_CONTAINER="/usr/local/bin/ignition/user-lib/modules/${MODL_NAME}"
+else
+  MODL_IN_CONTAINER="/external-modules/${MODL_NAME}"
+fi
 
 # Use Java 17 for Gradle (matches the module's toolchain).
 JAVA_17_HOME="/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home"
@@ -60,6 +86,9 @@ if [[ -f "${MAIN_ROOT}/.env" ]]; then
   set -a; source "${MAIN_ROOT}/.env"; set +a
 fi
 GATEWAY_HTTP_PORT="${GATEWAY_HTTP_PORT:-8088}"
+if is_8_1; then
+  GATEWAY_HTTP_PORT="${GATEWAY_81_HTTP_PORT:-9588}"
+fi
 # A container that already exists was created with whatever port was in force
 # at `up` time (an .env since deleted, an env var since dropped). It is the
 # truth for every script that talks to it; .env only decides a fresh `up`.
@@ -74,7 +103,14 @@ ADMIN_PASS="password"
 # docker compose invocation, always pointed at the main checkout's compose
 # file: the compose PROJECT is named after that directory, and a worktree's
 # copy would be a second project fighting over the same container name.
-COMPOSE=(docker compose -f "${MAIN_ROOT}/docker-compose.yml" --project-directory "${MAIN_ROOT}")
+COMPOSE_FILE_PATH="${MAIN_ROOT}/${COMPOSE_FILE_NAME}"
+# A branch that adds a compose file is run from its worktree before the main
+# checkout has the file. The 8.1 file names its own compose project and uses no
+# relative paths, so its worktree copy is the same stack.
+if [[ ! -f "${COMPOSE_FILE_PATH}" && -f "${PROJECT_ROOT}/${COMPOSE_FILE_NAME}" ]]; then
+  COMPOSE_FILE_PATH="${PROJECT_ROOT}/${COMPOSE_FILE_NAME}"
+fi
+COMPOSE=(docker compose -f "${COMPOSE_FILE_PATH}" --project-directory "${MAIN_ROOT}")
 
 # --- pretty logging -------------------------------------------------------
 if [[ -t 1 ]]; then
@@ -99,10 +135,27 @@ require_docker() {
   fi
 }
 
+# Run one query against a copy of an 8.1 gateway's config.idb (SQLite).
+# docker cp works whether or not the container is running.
+idb_query() {
+  local tmp out
+  tmp="$(mktemp -d)"
+  if docker cp "${CONTAINER_NAME}:/usr/local/bin/ignition/data/db/config.idb" "${tmp}/config.idb" >/dev/null 2>&1; then
+    out="$(sqlite3 "${tmp}/config.idb" "$1" 2>/dev/null || true)"
+  fi
+  rm -rf "${tmp}"
+  echo "${out:-}"
+}
+
 # The certificate fingerprint the gateway's registry holds for OUR module, or
 # empty when the module is not registered (fresh volume) or the gateway is
-# not running.
+# not running. On 8.1 the registry is a table of trusted certificates, not a
+# per-module entry, so the question becomes "is the dev certificate trusted".
 registry_fingerprint() {
+  if is_8_1; then
+    idb_query "SELECT lower(hex(THUMBPRINT)) FROM CERTIFICATES WHERE lower(hex(THUMBPRINT)) = '$(dev_cert_fingerprint)';"
+    return 0
+  fi
   docker exec "${CONTAINER_NAME}" cat /usr/local/bin/ignition/data/modules.json 2>/dev/null \
     | MODULE_ID="${MODULE_ID}" python3 -c '
 import json, os, sys
@@ -115,6 +168,10 @@ except Exception:
 
 # The license hash the gateway's registry holds for OUR module, or empty.
 registry_license_hash() {
+  if is_8_1; then
+    idb_query "SELECT CRC FROM EULAS WHERE MODULEID = '${MODULE_ID}';"
+    return 0
+  fi
   docker exec "${CONTAINER_NAME}" cat /usr/local/bin/ignition/data/modules.json 2>/dev/null \
     | MODULE_ID="${MODULE_ID}" python3 -c '
 import json, os, sys
@@ -142,21 +199,39 @@ dev_cert_fingerprint() {
 # After a restart: the gateway must be RUNNING (not parked in commissioning
 # over an unaccepted certificate) and must be serving the bytes we staged.
 verify_deployed() {
-  local staged state inside
-  staged="$(find "${MODULES_DIR}" -maxdepth 1 -name '*.modl' | head -1)"
+  local staged state inside started
+  staged="${MODULES_DIR}/${MODL_NAME}"
   state="$(curl -fsS "${GATEWAY_URL}/StatusPing" 2>/dev/null || true)"
   if echo "${state}" | grep -q COMMISSIONING; then
     err "Gateway is parked in COMMISSIONING: it has not accepted the staged module's certificate or license."
     err "Compare 'ops/status.sh' fingerprints; ops/setup.sh re-seeds acceptance."
     return 1
   fi
-  inside="$(docker exec "${CONTAINER_NAME}" md5sum "/external-modules/$(basename "${staged}")" 2>/dev/null | cut -d' ' -f1)"
+  inside="$(docker exec "${CONTAINER_NAME}" md5sum "${MODL_IN_CONTAINER}" 2>/dev/null | cut -d' ' -f1)"
   if [[ -z "${inside}" || "${inside}" != "$(md5 -q "${staged}" 2>/dev/null || md5sum "${staged}" | cut -d' ' -f1)" ]]; then
-    err "The gateway does not see the staged build: /external-modules is mounted from somewhere else."
-    docker inspect "${CONTAINER_NAME}" --format '{{range .Mounts}}   {{.Source}} -> {{.Destination}}{{"\n"}}{{end}}' 2>/dev/null || true
+    if is_8_1; then
+      err "The gateway does not hold the staged build at ${MODL_IN_CONTAINER}."
+    else
+      err "The gateway does not see the staged build: /external-modules is mounted from somewhere else."
+      docker inspect "${CONTAINER_NAME}" --format '{{range .Mounts}}   {{.Source}} -> {{.Destination}}{{"\n"}}{{end}}' 2>/dev/null || true
+    fi
     return 1
   fi
-  ok "Gateway is serving the staged build ($(basename "${staged}"), md5 ${inside})."
+  # Holding the bytes is not running them. An 8.1 gateway with an
+  # unaccepted certificate or license does not park in commissioning, it just
+  # never starts the module, so ask the log of the current boot.
+  started=""
+  for ((i = 1; i <= 12; i++)); do
+    started="$(docker logs --since "$(docker inspect -f '{{.State.StartedAt}}' "${CONTAINER_NAME}")" "${CONTAINER_NAME}" 2>&1 \
+      | grep -m1 "Starting up module '${MODULE_ID}'" || true)"
+    [[ -n "${started}" ]] && break
+    sleep 5
+  done
+  if [[ -z "${started}" ]]; then
+    err "The gateway holds the build but did not start the module this boot. Check 'ops/logs.sh'."
+    return 1
+  fi
+  ok "Gateway is running the staged build (${MODL_NAME}, md5 ${inside})."
 }
 
 # --- signing --------------------------------------------------------------
@@ -195,6 +270,7 @@ build_and_stage_module() {
   # unsigned artifact. This module is small, so a clean build is quick.
   ( cd "${PROJECT_ROOT}" && ./gradlew clean build --console plain \
       -Dorg.gradle.java.installations.auto-download=false \
+      -Pignition.line="${IGNITION_LINE}" \
       -Pignition.signing.keystoreFile="${KEYSTORE_FILE}" \
       -Pignition.signing.keystorePassword="${SIGNING_PASS}" \
       -Pignition.signing.certFile="${CERT_FILE}" \
@@ -202,10 +278,9 @@ build_and_stage_module() {
       -Pignition.signing.certPassword="${SIGNING_PASS}" )
 
   # Select the SIGNED module, not the `.unsigned.modl` signing intermediate.
-  local modl
-  modl="$(find "${PROJECT_ROOT}/build" -maxdepth 1 -name '*.modl' ! -name '*.unsigned.modl' | head -1)"
-  if [[ -z "${modl}" ]]; then
-    err "No signed .modl found under build/ after the build. Aborting."
+  local modl="${PROJECT_ROOT}/build/${MODL_NAME}"
+  if [[ ! -f "${modl}" ]]; then
+    err "No signed ${MODL_NAME} under build/ after the build. Aborting."
     exit 1
   fi
 
@@ -214,6 +289,17 @@ build_and_stage_module() {
   rm -f "${MODULES_DIR}"/*.modl 2>/dev/null || true
   cp "${modl}" "${MODULES_DIR}/"
   ok "Staged $(basename "${modl}") -> ${MODULES_DIR}/"
+}
+
+# 8.1 only: put the staged build where an 8.1 gateway loads modules from. It
+# has no externalModulesFolder, so there is nothing to bind-mount; the file
+# lives in the container (not the data volume) and a recreated container
+# needs it again. No-op on 8.3, whose staging folder is mounted.
+install_into_container() {
+  is_8_1 || return 0
+  docker cp "${MODULES_DIR}/${MODL_NAME}" "${CONTAINER_NAME}:${MODL_IN_CONTAINER}" >/dev/null
+  docker exec -u root "${CONTAINER_NAME}" chown ignition:ignition "${MODL_IN_CONTAINER}"
+  ok "Copied ${MODL_NAME} into the container's user-lib/modules."
 }
 
 # --- wait for gateway -----------------------------------------------------
@@ -239,6 +325,20 @@ wait_for_gateway() {
 # module — it is the point where accept_staged_module can safely merge.
 wait_for_modules_registry() {
   local tries="${1:-60}"
+  if is_8_1; then
+    # config.idb exists from first boot; what matters is that commissioning
+    # (automatic here, from the compose environment) has finished writing it.
+    info "Waiting for the 8.1 gateway to finish commissioning ..."
+    for ((i = 1; i <= tries; i++)); do
+      if curl -fsS "${GATEWAY_URL}/StatusPing" 2>/dev/null | grep -q RUNNING; then
+        ok "Gateway is running."
+        return 0
+      fi
+      sleep 5
+    done
+    err "The 8.1 gateway was not RUNNING after $((tries * 5))s. Check 'ops/logs.sh'."
+    return 1
+  fi
   info "Waiting for the gateway to write its module registry ..."
   for ((i = 1; i <= tries; i++)); do
     if docker exec "${CONTAINER_NAME}" \
@@ -264,6 +364,10 @@ wait_for_modules_registry() {
 # license.html (build.gradle.kts `license.set`), and without the hash every
 # fresh boot parks in commissioning even with the certificate accepted.
 accept_staged_module() {
+  if is_8_1; then
+    accept_staged_module_81
+    return
+  fi
   local modl fingerprint tmp license_crc
   modl="$(find "${MODULES_DIR}" -maxdepth 1 -name '*.modl' | head -1)"
   [[ -n "${modl}" ]] || { err "No staged .modl in ops/modules."; return 1; }
@@ -298,6 +402,38 @@ PY
   # container against the same volume — the gateway itself is stopped here.
   "${COMPOSE[@]}" run --rm -u root --entrypoint sh gateway \
       -c 'chown ignition:ignition /usr/local/bin/ignition/data/modules.json'
+  "${COMPOSE[@]}" start gateway
+  ok "Module acceptance seeded; gateway restarting."
+}
+
+# 8.1 keeps acceptance in its internal SQLite database, data/db/config.idb:
+#   CERTIFICATES(CERTIFICATES_ID, THUMBPRINT, SUBJECTNAME) — THUMBPRINT is the
+#     raw SHA-1 of the DER certificate (SecurityUtils.getCertificateThumbprintBytes)
+#   EULAS(EULAS_ID, MODULEID, CRC) — CRC32 of the module's license.html
+# Worked out from the 8.1.50 gateway (ModuleManagerImpl, CertificateRecord,
+# ModuleEulaRecord). Written while the gateway is stopped, under a fixed high
+# id that the gateway's own records will not reach; re-seeding replaces it.
+accept_staged_module_81() {
+  local fingerprint subject license_crc tmp
+  fingerprint="$(dev_cert_fingerprint)"
+  subject="$(openssl x509 -in "${CERT_FILE}" -noout -subject | sed 's/^subject= *//' | sed "s/'/''/g")"
+  license_crc="$(staged_license_crc)"
+  [[ -n "${fingerprint}" && -n "${license_crc}" ]] || { err "Could not read the dev certificate or the staged license."; return 1; }
+
+  info "Pre-accepting the module certificate (${fingerprint}) + license (crc ${license_crc}) in config.idb..."
+  "${COMPOSE[@]}" stop gateway
+  tmp="$(mktemp -d)"
+  docker cp "${CONTAINER_NAME}:/usr/local/bin/ignition/data/db/config.idb" "${tmp}/config.idb"
+  sqlite3 "${tmp}/config.idb" "
+    DELETE FROM CERTIFICATES WHERE CERTIFICATES_ID = 9001 OR lower(hex(THUMBPRINT)) = '${fingerprint}';
+    DELETE FROM EULAS WHERE EULAS_ID = 9001 OR MODULEID = '${MODULE_ID}';
+    INSERT INTO CERTIFICATES (CERTIFICATES_ID, THUMBPRINT, SUBJECTNAME) VALUES (9001, X'${fingerprint}', '${subject}');
+    INSERT INTO EULAS (EULAS_ID, MODULEID, CRC) VALUES (9001, '${MODULE_ID}', ${license_crc});"
+  docker cp "${tmp}/config.idb" "${CONTAINER_NAME}:/usr/local/bin/ignition/data/db/config.idb"
+  rm -rf "${tmp}"
+  # docker cp writes as root; the gateway must own its database.
+  "${COMPOSE[@]}" run --rm -u root --entrypoint sh gateway \
+      -c 'chown ignition:ignition /usr/local/bin/ignition/data/db/config.idb'
   "${COMPOSE[@]}" start gateway
   ok "Module acceptance seeded; gateway restarting."
 }
