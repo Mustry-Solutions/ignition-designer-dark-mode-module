@@ -50,6 +50,12 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   white, because the restore wrote back a dark-theme colour it had recorded
   after the look and feel had already changed. They now take the console's
   own light foreground.
+- **Console error text is easier to read in dark mode**
+  ([#139](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/139)).
+  Errors in the Script Console, the diagnostics console and the Output
+  Console were `#FF7B72` on `#3C3F41`, a contrast ratio of 4.21:1, under the
+  WCAG AA minimum of 4.5:1. They are now `#FF8B83` (4.68:1), the same hue
+  slightly lighter.
 
 ## [0.5.0] - 2026-09-24
 

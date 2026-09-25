@@ -36,6 +36,8 @@ class ScriptConsoleTextTest {
 
     private static final String BLUE = "#0000FF";
     private static final String RED = "#FF0000";
+    /** The console background measured from window pixels in the #129 sitting. */
+    private static final Color CONSOLE_BACKGROUND = new Color(0x3C3F41);
 
     private ConsoleTextTheme consoles;
     private JPanel window;
@@ -132,6 +134,42 @@ class ScriptConsoleTextTest {
         assertEquals(new Color(0x2E2E2E), StyleConstants.getForeground(defaultStyle),
             "`default` got the dark look and feel's foreground back, so regular "
                 + "text is near-white on the light console");
+    }
+
+    @Test
+    @DisplayName("every dark console colour reaches WCAG AA on the console background (#139)")
+    void darkColoursReachWcagAa() throws Exception {
+        write("Jython 2.7.3, executing locally in the Designer.\n", "emphasize");
+        write("Traceback (most recent call last):\n", "error");
+
+        consoles.installIn(window);
+
+        List<Color> colours = new ArrayList<>();
+        for (String run : foregrounds()) {
+            colours.add(Color.decode(run));
+        }
+        for (String name : new String[] {"default", "regular", "emphasize", "error"}) {
+            colours.add(StyleConstants.getForeground(document.getStyle(name)));
+        }
+        for (Color colour : colours) {
+            double ratio = contrast(colour, CONSOLE_BACKGROUND);
+            assertTrue(ratio >= 4.5, String.format(
+                "#%06X is %.2f:1 on #3C3F41, below WCAG AA", colour.getRGB() & 0xFFFFFF, ratio));
+        }
+    }
+
+    private static double contrast(Color a, Color b) {
+        double la = luminance(a);
+        double lb = luminance(b);
+        return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+    }
+
+    private static double luminance(Color c) {
+        double[] rgb = {c.getRed() / 255.0, c.getGreen() / 255.0, c.getBlue() / 255.0};
+        for (int i = 0; i < 3; i++) {
+            rgb[i] = rgb[i] <= 0.03928 ? rgb[i] / 12.92 : Math.pow((rgb[i] + 0.055) / 1.055, 2.4);
+        }
+        return 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
     }
 
     private void write(String text, String styleName) throws Exception {

@@ -59,9 +59,13 @@ final class ConsoleTextTheme {
         "default", new Color(0xC8CDD1),
         "regular", new Color(0xC8CDD1),
         // Ignition uses Color.blue for the banner and Color.red for errors —
-        // both unreadable on a dark background. Keep the hue, lift the value.
+        // both unreadable on a dark background. Keep the hue, lift the value
+        // until it reaches WCAG AA (4.5:1) on the console's #3C3F41: 4.69:1
+        // and 4.68:1. The error colour was #FF7B72 until #139, at 4.21:1.
+        // The restore maps back by colour, so each value must stay distinct
+        // from the stock colours and from each other.
         "emphasize", new Color(0x6FB3E8),
-        "error", new Color(0xFF7B72));
+        "error", new Color(0xFF8B83));
 
     /** Style -> its stock foreground, or null when the style did not define one. */
     private final Map<Style, Color> originals = new IdentityHashMap<>();
