@@ -10,6 +10,13 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ## [Unreleased]
 
+### Changed
+
+- **Debug log timestamps are UTC, and say so.** The docs always claimed UTC,
+  but `~/.ignition/designer-dark-mode.log` was stamped in the Designer JVM's
+  own zone. Each line now ends its timestamp with `Z`, so a log pasted into a
+  bug report states its zone wherever it came from.
+
 ### Fixed
 
 - **Opening another project no longer duplicates the Tools menu items.**
@@ -18,13 +25,18 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   asking the module for it again and uninstalling what comes back, and the
   module built a new menu on every call, so the removal matched nothing. The
   menu is now built once per project and the same one is handed back.
-
-### Changed
-
-- **Debug log timestamps are UTC, and say so.** The docs always claimed UTC,
-  but `~/.ignition/designer-dark-mode.log` was stamped in the Designer JVM's
-  own zone. Each line now ends its timestamp with `Z`, so a log pasted into a
-  bug report states its zone wherever it came from.
+- **Script Console banner stays blue in dark mode (#129).** Text already in the
+  Script Console or diagnostics console when Dark Mode was switched on (the
+  interpreter's "Jython … executing locally" banner, and any earlier error
+  output) kept its stock `#0000FF` / `#FF0000` on the dark background. It is now
+  recoloured. The reverse also applies: text printed while dark goes back to
+  the stock colours when Dark Mode is switched off, instead of staying light
+  blue on the light theme.
+- **Script Console prompts and output invisible after switching Dark Mode
+  off.** Typed input, `>>>` prompts and `print` output came back `#DDDDDD` on
+  white, because the restore wrote back a dark-theme colour it had recorded
+  after the look and feel had already changed. They now take the console's
+  own light foreground.
 
 ## [0.5.0] - 2026-09-24
 
