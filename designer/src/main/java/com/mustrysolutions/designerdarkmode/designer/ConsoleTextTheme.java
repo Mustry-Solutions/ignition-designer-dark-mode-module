@@ -68,29 +68,30 @@ final class ConsoleTextTheme {
     /** Styles that had no explicit foreground, so the restore can remove it again. */
     private final Map<Style, Boolean> wasUndefined = new IdentityHashMap<>();
     /**
-     * Every console document themed since the last uninstall, so the restore
+     * Every console pane themed since the last uninstall, so the restore
      * reaches a console whose window has since closed as well as open ones.
      */
-    private final Set<StyledDocument> themed = Collections.newSetFromMap(new IdentityHashMap<>());
+    private final Set<JTextPane> themed = Collections.newSetFromMap(new IdentityHashMap<>());
 
     /** Recolour every console currently in the UI. Safe to re-run. */
     void install() {
-        themeDocuments(findConsoleDocuments());
+        themePanes(findConsolePanes());
         themeOutputConsole(true);
     }
 
     /** Recolour the consoles under one container; the harness's way in. */
     void installIn(Container container) {
-        List<StyledDocument> documents = new ArrayList<>();
-        collect(container, documents);
-        themeDocuments(documents);
+        List<JTextPane> panes = new ArrayList<>();
+        collect(container, panes);
+        themePanes(panes);
     }
 
-    private void themeDocuments(List<StyledDocument> documents) {
+    private void themePanes(List<JTextPane> panes) {
         int restyled = 0;
         int rewritten = 0;
-        for (StyledDocument document : documents) {
-            themed.add(document);
+        for (JTextPane pane : panes) {
+            themed.add(pane);
+            StyledDocument document = pane.getStyledDocument();
             for (String name : STYLE_NAMES) {
                 Style style = document.getStyle(name);
                 if (style == null || originals.containsKey(style)) {
@@ -135,9 +136,10 @@ final class ConsoleTextTheme {
         originals.clear();
         wasUndefined.clear();
         int rewritten = 0;
-        for (StyledDocument document : themed) {
+        for (JTextPane pane : themed) {
             try {
-                rewritten += recolourRuns(document, consoleRunColours(false));
+                followPaneForeground(pane);
+                rewritten += recolourRuns(pane.getStyledDocument(), consoleRunColours(false));
             } catch (Throwable t) {
                 DebugLog.log("ConsoleTextTheme: could not restore a console's text.", t);
             }
@@ -148,6 +150,27 @@ final class ConsoleTextTheme {
                 + "their stock colour.");
         }
         themeOutputConsole(false);
+    }
+
+    /**
+     * Give {@code default} the pane's own foreground back, not the colour
+     * recorded at install.
+     *
+     * <p>{@code default} is not an ordinary style: {@code BasicTextPaneUI}
+     * copies the pane's foreground into it whenever that foreground changes,
+     * which the look-and-feel swap does. {@code install} runs after the dark
+     * look and feel is in, so what it records for {@code default} is FlatLaf's
+     * {@code #DDDDDD}; {@code uninstall} runs after the light one is back, so
+     * writing that record back put near-white text on the white console
+     * (every prompt, typed line and {@code print}). The pane's foreground at
+     * this point is the light one, and copying it is what Swing would have
+     * done had we never touched the style.
+     */
+    private static void followPaneForeground(JTextPane pane) {
+        Style style = pane.getStyledDocument().getStyle("default");
+        if (style != null && pane.getForeground() != null) {
+            StyleConstants.setForeground(style, pane.getForeground());
+        }
     }
 
     // Package-private so ReflectiveSurfaceTest can assert this name still
@@ -311,24 +334,24 @@ final class ConsoleTextTheme {
     }
 
     /**
-     * Styled documents that define Ignition's console styles. Looking for the
+     * Text panes whose document defines Ignition's console styles. Looking for the
      * style names rather than the panel class keeps this working if IA moves
      * or renames the panel, and keeps it away from unrelated text panes.
      */
-    private List<StyledDocument> findConsoleDocuments() {
-        List<StyledDocument> documents = new ArrayList<>();
+    private List<JTextPane> findConsolePanes() {
+        List<JTextPane> panes = new ArrayList<>();
         for (Window window : Window.getWindows()) {
-            collect(window, documents);
+            collect(window, panes);
         }
-        return documents;
+        return panes;
     }
 
-    private void collect(Container container, List<StyledDocument> out) {
+    private void collect(Container container, List<JTextPane> out) {
         for (Component child : container.getComponents()) {
             if (child instanceof JTextPane) {
                 StyledDocument document = ((JTextPane) child).getStyledDocument();
                 if (document != null && document.getStyle("emphasize") != null) {
-                    out.add(document);
+                    out.add((JTextPane) child);
                 }
             }
             if (child instanceof Container) {

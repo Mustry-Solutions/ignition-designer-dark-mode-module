@@ -10,6 +10,7 @@ import java.util.List;
 
 import javax.swing.JPanel;
 import javax.swing.JTextPane;
+import javax.swing.plaf.ColorUIResource;
 import javax.swing.text.AttributeSet;
 import javax.swing.text.SimpleAttributeSet;
 import javax.swing.text.Style;
@@ -38,12 +39,13 @@ class ScriptConsoleTextTest {
 
     private ConsoleTextTheme consoles;
     private JPanel window;
+    private JTextPane pane;
     private StyledDocument document;
 
     @BeforeEach
     void buildAConsole() {
         consoles = new ConsoleTextTheme();
-        JTextPane pane = new JTextPane();
+        pane = new JTextPane();
         document = pane.getStyledDocument();
         Style regular = document.addStyle("regular", document.getStyle("default"));
         StyleConstants.setForeground(document.addStyle("emphasize", regular), Color.blue);
@@ -107,6 +109,29 @@ class ScriptConsoleTextTest {
         assertEquals(List.of("#008000"), foregrounds());
         consoles.uninstall();
         assertEquals(List.of("#008000"), foregrounds());
+    }
+
+    @Test
+    @DisplayName("prompts and print output follow the light pane foreground after switching off")
+    void theDefaultStyleFollowsThePaneAfterUninstall() {
+        // What the look-and-feel swaps do to the pane, in ThemeManager's order:
+        // the dark look and feel is in before install, the light one is back
+        // before uninstall. BasicTextPaneUI copies each foreground into the
+        // `default` style, which is what regular runs (prompts, input, print)
+        // inherit from.
+        Style defaultStyle = document.getStyle("default");
+        pane.setForeground(new ColorUIResource(0xDDDDDD));
+        assertEquals(new Color(0xDDDDDD), StyleConstants.getForeground(defaultStyle),
+            "the text pane UI no longer mirrors its foreground into `default`, "
+                + "so this test would prove nothing");
+
+        consoles.installIn(window);
+        pane.setForeground(new ColorUIResource(0x2E2E2E));
+        consoles.uninstall();
+
+        assertEquals(new Color(0x2E2E2E), StyleConstants.getForeground(defaultStyle),
+            "`default` got the dark look and feel's foreground back, so regular "
+                + "text is near-white on the light console");
     }
 
     private void write(String text, String styleName) throws Exception {

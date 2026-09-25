@@ -284,6 +284,13 @@ document being trimmed, and the reverse mapping also catches text Ignition wrote
 *while* dark, which carries the dark colour and would otherwise stay light on the
 light theme. Runs that inherit their colour are never stamped.
 
+`default` is restored differently from the other styles. `BasicTextPaneUI`
+copies the pane's foreground into it on every look-and-feel swap, and the theme
+installs after the dark look and feel is in, so the value it records is
+FlatLaf's `#DDDDDD`. Writing that back after the light swap left every prompt,
+typed line and `print` near-white on white. The restore sets `default` to the
+pane's current (light) foreground instead, which is what Swing would have done.
+
 Styles are looked up by name, so only documents that define them are touched.
 The restore distinguishes a style that had an explicit foreground from one that
 inherited it, and removes the attribute rather than writing an explicit value

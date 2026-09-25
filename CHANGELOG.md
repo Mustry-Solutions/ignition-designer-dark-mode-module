@@ -26,6 +26,11 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   recoloured. The reverse also applies: text printed while dark goes back to
   the stock colours when Dark Mode is switched off, instead of staying light
   blue on the light theme.
+- **Script Console prompts and output invisible after switching Dark Mode
+  off.** Typed input, `>>>` prompts and `print` output came back `#DDDDDD` on
+  white, because the restore wrote back a dark-theme colour it had recorded
+  after the look and feel had already changed. They now take the console's
+  own light foreground.
 
 ## [0.5.0] - 2026-09-24
 
