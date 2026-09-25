@@ -27,12 +27,16 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ### Fixed
 
-- **Opening another project no longer duplicates the Tools menu items.**
-  Each File → Open in a Designer session added one more Dark Mode and About
-  Designer Dark Mode… pair to Tools. The Designer removes a module's menu by
-  asking the module for it again and uninstalling what comes back, and the
-  module built a new menu on every call, so the removal matched nothing. The
-  menu is now built once per project and the same one is handed back.
+- **The OPEN buttons in File → Open… work in dark mode again**
+  ([#130](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/130)).
+  Two things stopped them. The dialog's table casts its action column's
+  renderer back to IA's own type on every hover and press, and the module's
+  wrapper made that cast fail silently. The table's UI is also replaced
+  under the dark look and feel, which puts its own mouse handler behind
+  IA's listener; that listener consumes the press, so the button's editor
+  never started. Renderers declared by the code that owns a table are no
+  longer wrapped (their cells are still darkened when painted), and that
+  code's mouse listeners are moved back behind the look and feel's.
 
 ### Changed
 
@@ -40,6 +44,27 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   but `~/.ignition/designer-dark-mode.log` was stamped in the Designer JVM's
   own zone. Each line now ends its timestamp with `Z`, so a log pasted into a
   bug report states its zone wherever it came from.
+
+### Fixed
+
+- **Opening another project no longer duplicates the Tools menu items.**
+  Each File → Open in a Designer session added one more Dark Mode and About
+  Designer Dark Mode… pair to Tools. The Designer removes a module's menu by
+  asking the module for it again and uninstalling what comes back, and the
+  module built a new menu on every call, so the removal matched nothing. The
+  menu is now built once per project and the same one is handed back.
+- **Script Console banner stays blue in dark mode (#129).** Text already in the
+  Script Console or diagnostics console when Dark Mode was switched on (the
+  interpreter's "Jython … executing locally" banner, and any earlier error
+  output) kept its stock `#0000FF` / `#FF0000` on the dark background. It is now
+  recoloured. The reverse also applies: text printed while dark goes back to
+  the stock colours when Dark Mode is switched off, instead of staying light
+  blue on the light theme.
+- **Script Console prompts and output invisible after switching Dark Mode
+  off.** Typed input, `>>>` prompts and `print` output came back `#DDDDDD` on
+  white, because the restore wrote back a dark-theme colour it had recorded
+  after the look and feel had already changed. They now take the console's
+  own light foreground.
 
 ## [0.5.0] - 2026-09-24
 
