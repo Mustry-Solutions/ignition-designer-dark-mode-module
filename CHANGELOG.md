@@ -22,8 +22,18 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   now found by reflection, so both files come from one source. CI builds both
   and runs the look-and-feel harness against 8.1.55 and 8.1.33 as well as
   8.3.8 and 8.3.0. Checked in a live 8.1.50 Designer: the Tools items, a
-  dark → light → dark cycle, the Script Console, and the Exchange script
-  notice.
+  dark → light → dark cycle, the Script Console, the Exchange script
+  notice, a Vision window saved under dark mode and again after a cycle
+  (no FlatLaf in either save, and it reopens intact after a relaunch), and
+  the three fixes below on that line — the project dialog's OPEN buttons,
+  one set of Tools items after switching projects, and the console banner.
+
+### Changed
+
+- **Debug log timestamps are UTC, and say so.** The docs always claimed UTC,
+  but `~/.ignition/designer-dark-mode.log` was stamped in the Designer JVM's
+  own zone. Each line now ends its timestamp with `Z`, so a log pasted into a
+  bug report states its zone wherever it came from.
 
 ### Fixed
 
@@ -37,29 +47,20 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   never started. Renderers declared by the code that owns a table are no
   longer wrapped (their cells are still darkened when painted), and that
   code's mouse listeners are moved back behind the look and feel's.
-
-### Changed
-
-- **Debug log timestamps are UTC, and say so.** The docs always claimed UTC,
-  but `~/.ignition/designer-dark-mode.log` was stamped in the Designer JVM's
-  own zone. Each line now ends its timestamp with `Z`, so a log pasted into a
-  bug report states its zone wherever it came from.
-
-### Fixed
-
 - **Opening another project no longer duplicates the Tools menu items.**
   Each File → Open in a Designer session added one more Dark Mode and About
   Designer Dark Mode… pair to Tools. The Designer removes a module's menu by
   asking the module for it again and uninstalling what comes back, and the
   module built a new menu on every call, so the removal matched nothing. The
   menu is now built once per project and the same one is handed back.
-- **Script Console banner stays blue in dark mode (#129).** Text already in the
-  Script Console or diagnostics console when Dark Mode was switched on (the
-  interpreter's "Jython … executing locally" banner, and any earlier error
-  output) kept its stock `#0000FF` / `#FF0000` on the dark background. It is now
-  recoloured. The reverse also applies: text printed while dark goes back to
-  the stock colours when Dark Mode is switched off, instead of staying light
-  blue on the light theme.
+- **The Script Console banner no longer stays blue in dark mode**
+  ([#129](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/129)).
+  Text already in the Script Console or diagnostics console when Dark Mode
+  was switched on (the interpreter's "Jython … executing locally" banner,
+  and any earlier error output) kept its stock `#0000FF` / `#FF0000` on the
+  dark background. It is now recoloured. The reverse also applies: text
+  printed while dark goes back to the stock colours when Dark Mode is
+  switched off, instead of staying light blue on the light theme.
 - **Script Console prompts and output invisible after switching Dark Mode
   off.** Typed input, `>>>` prompts and `print` output came back `#DDDDDD` on
   white, because the restore wrote back a dark-theme colour it had recorded
