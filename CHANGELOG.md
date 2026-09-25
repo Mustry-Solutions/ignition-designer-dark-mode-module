@@ -10,15 +10,6 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ## [Unreleased]
 
-### Fixed
-
-- **Opening another project no longer duplicates the Tools menu items.**
-  Each File → Open in a Designer session added one more Dark Mode and About
-  Designer Dark Mode… pair to Tools. The Designer removes a module's menu by
-  asking the module for it again and uninstalling what comes back, and the
-  module built a new menu on every call, so the removal matched nothing. The
-  menu is now built once per project and the same one is handed back.
-
 ### Changed
 
 - **Debug log timestamps are UTC, and say so.** The docs always claimed UTC,
@@ -28,6 +19,12 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ### Fixed
 
+- **Opening another project no longer duplicates the Tools menu items.**
+  Each File → Open in a Designer session added one more Dark Mode and About
+  Designer Dark Mode… pair to Tools. The Designer removes a module's menu by
+  asking the module for it again and uninstalling what comes back, and the
+  module built a new menu on every call, so the removal matched nothing. The
+  menu is now built once per project and the same one is handed back.
 - **Script Console banner stays blue in dark mode (#129).** Text already in the
   Script Console or diagnostics console when Dark Mode was switched on (the
   interpreter's "Jython … executing locally" banner, and any earlier error
