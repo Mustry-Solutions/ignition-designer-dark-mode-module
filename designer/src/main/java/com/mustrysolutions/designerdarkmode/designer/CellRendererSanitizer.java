@@ -241,6 +241,7 @@ public class CellRendererSanitizer {
             if (child instanceof JTable) {
                 wrapTable((JTable) child);
                 interceptRendererPane((JTable) child);
+                moveOwnedMouseListenersLast((JTable) child);
             } else if (child instanceof JTableHeader) {
                 wrapHeader((JTableHeader) child);
             } else if (child instanceof JList) {
@@ -414,7 +415,8 @@ public class CellRendererSanitizer {
         for (int i = 0; i < columnCount; i++) {
             TableColumn column = table.getColumnModel().getColumn(i);
             TableCellRenderer renderer = column.getCellRenderer();
-            if (renderer != null && !(renderer instanceof SanitizingTableRenderer)) {
+            if (renderer != null && !(renderer instanceof SanitizingTableRenderer)
+                    && !ownedByTheTable(table, renderer)) {
                 originals[i] = renderer;
                 rememberColorsAtWrapTime(renderer);
                 column.setCellRenderer(new SanitizingTableRenderer(renderer));
@@ -426,7 +428,8 @@ public class CellRendererSanitizer {
         Map<Class<?>, TableCellRenderer> defaults = new java.util.HashMap<>();
         for (Class<?> valueClass : DEFAULT_RENDERER_CLASSES) {
             TableCellRenderer renderer = table.getDefaultRenderer(valueClass);
-            if (renderer != null && !(renderer instanceof SanitizingTableRenderer)) {
+            if (renderer != null && !(renderer instanceof SanitizingTableRenderer)
+                    && !ownedByTheTable(table, renderer)) {
                 defaults.put(valueClass, renderer);
                 rememberColorsAtWrapTime(renderer);
                 table.setDefaultRenderer(valueClass, new SanitizingTableRenderer(renderer));
@@ -435,6 +438,132 @@ public class CellRendererSanitizer {
         wrappedDefaults.put(table, defaults);
         table.repaint();
     }
+
+    /**
+     * Is this renderer a nested class of the code that built the table?
+     *
+     * <p>If it is, that code knows the renderer's concrete type and may cast
+     * {@code getCellRenderer()} back to it, which fails once the renderer is
+     * wrapped. {@code ProjectListTable$TableMouseListener} does exactly that
+     * in {@code mousePressed} and {@code mouseMoved}:
+     * {@code (ActionCellRenderer) table.getCellRenderer(row, column)}. The
+     * {@code ClassCastException} was swallowed by the EDT, so the OPEN buttons
+     * in the Open/Create Project dialog did nothing in dark mode (#130).
+     *
+     * <p>A tree's cast can be found by the tree's shape (see
+     * {@code TreeIconRecolorer.castsItsRenderer}), but this one sits in a
+     * listener, where no shape check can see it. Ownership is the nearest
+     * visible signal: the renderer is declared inside the table's class, the
+     * class enclosing it, or the class of a component the table sits in, or
+     * inside one of their superclasses. That is broader than the casts themselves,
+     * and the trade is cheap here: a skipped column is still sanitized at paint
+     * time by {@link SanitizingCellRendererPane}. Wrapping one that casts
+     * breaks the table outright.
+     *
+     * <p>A sweep of the 8.3.8 Designer, client, Vision, Perspective, Reporting,
+     * SFC and JIDE jars for a cast applied directly to a fetched table renderer
+     * found only this listener. Header renderers are not covered by the pane
+     * net, and the one header cast found (Vision's {@code ColumnCustomizer})
+     * runs at construction, before any wrap, so {@link #wrapHeader} does not
+     * use this.
+     */
+    private static boolean ownedByTheTable(JTable table, TableCellRenderer renderer) {
+        Class<?> owner = declaringOwner(table, renderer.getClass());
+        if (owner != null && reportedOwnedRenderers.add(renderer.getClass().getName())) {
+            DebugLog.detail("Table renderer left unwrapped (owned by " + owner.getName()
+                + ", which may cast it): " + renderer.getClass().getName());
+        }
+        return owner != null;
+    }
+
+    /**
+     * The class in the table's ownership chain that declares {@code type} as
+     * a nested class, or null: the table's class, the class enclosing it, or
+     * the class of a component the table sits in, or one of their
+     * superclasses. JDK classes never count as owners.
+     */
+    private static Class<?> declaringOwner(JTable table, Class<?> type) {
+        try {
+            java.util.Set<Class<?>> declaredIn = new java.util.HashSet<>();
+            for (Class<?> outer = type.getEnclosingClass(); outer != null;
+                    outer = outer.getEnclosingClass()) {
+                declaredIn.add(outer);
+            }
+            if (declaredIn.isEmpty()) {
+                return null;
+            }
+            for (Component owner = table; owner != null; owner = owner.getParent()) {
+                for (Class<?> ownerType = owner.getClass();
+                        ownerType != null && !ownerType.getName().startsWith("java");
+                        ownerType = ownerType.getSuperclass()) {
+                    for (Class<?> outer = ownerType; outer != null;
+                            outer = outer.getEnclosingClass()) {
+                        if (declaredIn.contains(outer)) {
+                            return outer;
+                        }
+                    }
+                }
+            }
+        } catch (Throwable t) {
+            // getEnclosingClass reads the InnerClasses attribute and can throw
+            // for a class whose outer class is missing. Treat it as unowned.
+            DebugLog.log("Ownership check failed for " + type.getName(), t);
+        }
+        return null;
+    }
+
+    /**
+     * Put the table owner's own mouse listeners back after the look and
+     * feel's.
+     *
+     * <p>A component's UI installs its mouse handler when the UI is set, so
+     * on a table built the normal way that handler comes first and the code
+     * that built the table adds its listeners after it. Any later UI change
+     * puts the new handler at the END. {@code ProjectListTable} depends on
+     * that first order: its {@code TableMouseListener.mousePressed} consumes
+     * every press in the action column, and {@code BasicTableUI}'s handler
+     * ignores a consumed event, so once the handler runs second the OPEN
+     * button's cell editor never starts and the click launches nothing
+     * (#130). Under FlatLaf the table always ends up with a replaced UI
+     * (JIDE's {@code BasicCellSpanTableUI}) whether or not we refresh it, and
+     * our own stale-delegate refresh replaces it too.
+     *
+     * <p>Only listeners declared inside the table's owner are moved, and only
+     * when one of them sits ahead of a listener that is not, so a table that
+     * is already in the right order is left alone. Runs on every pass, not
+     * once per table, because a rescan can replace the UI again at any time.
+     */
+    private static void moveOwnedMouseListenersLast(JTable table) {
+        java.awt.event.MouseListener[] listeners = table.getMouseListeners();
+        java.util.List<java.awt.event.MouseListener> owned = new java.util.ArrayList<>();
+        boolean outOfOrder = false;
+        for (java.awt.event.MouseListener listener : listeners) {
+            if (declaringOwner(table, listener.getClass()) != null) {
+                owned.add(listener);
+            } else if (!owned.isEmpty()) {
+                outOfOrder = true;
+            }
+        }
+        if (!outOfOrder) {
+            return;
+        }
+        for (java.awt.event.MouseListener listener : owned) {
+            table.removeMouseListener(listener);
+            table.addMouseListener(listener);
+        }
+        if (reportedReorderedTables.add(table.getClass().getName())) {
+            DebugLog.detail("Moved " + owned.size() + " owner mouse listener(s) behind the "
+                + "look and feel's on " + table.getClass().getName());
+        }
+    }
+
+    /** Table classes whose listeners were reordered, to log each once. */
+    private static final java.util.Set<String> reportedReorderedTables =
+        new java.util.HashSet<>();
+
+    /** Renderer classes ownedByTheTable has declined, to log each once. */
+    private static final java.util.Set<String> reportedOwnedRenderers =
+        new java.util.HashSet<>();
 
     private void wrapHeader(JTableHeader header) {
         TableCellRenderer renderer = header.getDefaultRenderer();

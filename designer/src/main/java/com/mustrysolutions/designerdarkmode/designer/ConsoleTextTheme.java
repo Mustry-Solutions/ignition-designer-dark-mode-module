@@ -5,9 +5,11 @@ import java.awt.Component;
 import java.awt.Container;
 import java.awt.Window;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import javax.swing.JTextPane;
 import javax.swing.text.Style;
@@ -29,11 +31,21 @@ import javax.swing.text.StyledDocument;
  * background.
  *
  * <p>Ignition's {@code ConsolePanel} registers its colours as <em>named
- * styles</em> on the styled document — {@code regular}, {@code emphasize} and
- * {@code error} — rather than stamping attributes onto each run. That is the
- * useful detail: restyling the four style objects recolours all existing and
- * future text at once, and is exactly reversible. Rewriting character
- * attributes across the document would be neither.
+ * styles</em> on the styled document: {@code regular} (no colour of its own,
+ * so it follows {@code default}), {@code emphasize} ({@code Color.blue}) and
+ * {@code error} ({@code Color.red}). Restyling those four objects recolours
+ * <em>future</em> text only. {@code insertString(offset, text, style)} copies
+ * the style's attributes into the run, so a run written in {@code emphasize}
+ * keeps its own {@code Color.blue} however the style changes afterwards (#129
+ * — the interpreter banner, written before Dark Mode is switched on). Runs
+ * written in {@code regular} carry no foreground and do follow
+ * {@code default}, so restyling covers them.
+ *
+ * <p>The runs that carry a copied colour are therefore rewritten by colour,
+ * the same way as the Output Console's: blue and red to their dark values on
+ * the way in, and back on the way out. The way out matters as much: text
+ * printed while dark carries a copy of the dark colour, and without the
+ * reverse mapping it would stay light blue on the light background.
  *
  * <p>Styles are looked up by name, so only documents that actually define them
  * (the consoles) are touched; a user's text pane elsewhere is left alone.
@@ -55,11 +67,31 @@ final class ConsoleTextTheme {
     private final Map<Style, Color> originals = new IdentityHashMap<>();
     /** Styles that had no explicit foreground, so the restore can remove it again. */
     private final Map<Style, Boolean> wasUndefined = new IdentityHashMap<>();
+    /**
+     * Every console pane themed since the last uninstall, so the restore
+     * reaches a console whose window has since closed as well as open ones.
+     */
+    private final Set<JTextPane> themed = Collections.newSetFromMap(new IdentityHashMap<>());
 
-    /** Recolour every console style currently in the UI. Safe to re-run. */
+    /** Recolour every console currently in the UI. Safe to re-run. */
     void install() {
+        themePanes(findConsolePanes());
+        themeOutputConsole(true);
+    }
+
+    /** Recolour the consoles under one container; the harness's way in. */
+    void installIn(Container container) {
+        List<JTextPane> panes = new ArrayList<>();
+        collect(container, panes);
+        themePanes(panes);
+    }
+
+    private void themePanes(List<JTextPane> panes) {
         int restyled = 0;
-        for (StyledDocument document : findConsoleDocuments()) {
+        int rewritten = 0;
+        for (JTextPane pane : panes) {
+            themed.add(pane);
+            StyledDocument document = pane.getStyledDocument();
             for (String name : STYLE_NAMES) {
                 Style style = document.getStyle(name);
                 if (style == null || originals.containsKey(style)) {
@@ -75,11 +107,12 @@ final class ConsoleTextTheme {
                 StyleConstants.setForeground(style, dark);
                 restyled++;
             }
+            rewritten += recolourRuns(document, consoleRunColours(true));
         }
-        if (restyled > 0) {
-            DebugLog.detail("ConsoleTextTheme: restyled " + restyled + " console style(s).");
+        if (restyled > 0 || rewritten > 0) {
+            DebugLog.detail("ConsoleTextTheme: restyled " + restyled + " console style(s), "
+                + rewritten + " existing run(s) recoloured.");
         }
-        themeOutputConsole(true);
     }
 
     /** Put every console style back exactly as it was. */
@@ -102,7 +135,42 @@ final class ConsoleTextTheme {
         }
         originals.clear();
         wasUndefined.clear();
+        int rewritten = 0;
+        for (JTextPane pane : themed) {
+            try {
+                followPaneForeground(pane);
+                rewritten += recolourRuns(pane.getStyledDocument(), consoleRunColours(false));
+            } catch (Throwable t) {
+                DebugLog.log("ConsoleTextTheme: could not restore a console's text.", t);
+            }
+        }
+        themed.clear();
+        if (rewritten > 0) {
+            DebugLog.detail("ConsoleTextTheme: " + rewritten + " console run(s) given back "
+                + "their stock colour.");
+        }
         themeOutputConsole(false);
+    }
+
+    /**
+     * Give {@code default} the pane's own foreground back, not the colour
+     * recorded at install.
+     *
+     * <p>{@code default} is not an ordinary style: {@code BasicTextPaneUI}
+     * copies the pane's foreground into it whenever that foreground changes,
+     * which the look-and-feel swap does. {@code install} runs after the dark
+     * look and feel is in, so what it records for {@code default} is FlatLaf's
+     * {@code #DDDDDD}; {@code uninstall} runs after the light one is back, so
+     * writing that record back put near-white text on the white console
+     * (every prompt, typed line and {@code print}). The pane's foreground at
+     * this point is the light one, and copying it is what Swing would have
+     * done had we never touched the style.
+     */
+    private static void followPaneForeground(JTextPane pane) {
+        Style style = pane.getStyledDocument().getStyle("default");
+        if (style != null && pane.getForeground() != null) {
+            StyleConstants.setForeground(style, pane.getForeground());
+        }
     }
 
     // Package-private so ReflectiveSurfaceTest can assert this name still
@@ -153,7 +221,7 @@ final class ConsoleTextTheme {
             if (pane == null) {
                 return;
             }
-            int rewritten = recolourRuns(pane.getStyledDocument(), dark);
+            int rewritten = recolourRuns(pane.getStyledDocument(), outputConsoleColours(dark));
             int appenders = repointAppenders(consoleClass, dark);
             DebugLog.detail("ConsoleTextTheme: Output Console — " + rewritten
                 + " run(s) recoloured, " + appenders + " appender(s) repointed.");
@@ -164,27 +232,45 @@ final class ConsoleTextTheme {
         }
     }
 
-    /** Swap every run wearing one of the two known colours for its counterpart. */
-    private int recolourRuns(StyledDocument document, boolean dark) {
+    /** Output Console runs: {@code OutputConsole}'s two appender colours. */
+    private static Map<Color, Color> outputConsoleColours(boolean dark) {
+        return mapping(dark, Color.black, DARK.get("regular"), Color.red, DARK.get("error"));
+    }
+
+    /**
+     * Script Console and diagnostics console runs: the colours ConsolePanel's
+     * {@code emphasize} and {@code error} styles copy into each run. Runs in
+     * {@code regular} have no foreground of their own and are deliberately not
+     * in the map; they follow the restyled {@code default}, and stamping a
+     * colour on them would cut them loose from it.
+     */
+    private static Map<Color, Color> consoleRunColours(boolean dark) {
+        return mapping(dark, Color.blue, DARK.get("emphasize"), Color.red, DARK.get("error"));
+    }
+
+    private static Map<Color, Color> mapping(
+            boolean dark, Color stockA, Color darkA, Color stockB, Color darkB) {
+        return dark ? Map.of(stockA, darkA, stockB, darkB) : Map.of(darkA, stockA, darkB, stockB);
+    }
+
+    /**
+     * Swap every run whose own foreground is a key of {@code colours} for its
+     * value. Only an explicitly defined foreground counts: a run that inherits
+     * its colour is left to its style.
+     */
+    private int recolourRuns(StyledDocument document, Map<Color, Color> colours) {
         if (document == null) {
             return 0;
         }
-        Color fromNormal = dark ? Color.black : DARK.get("regular");
-        Color toNormal = dark ? DARK.get("regular") : Color.black;
-        Color fromError = dark ? Color.red : DARK.get("error");
-        Color toError = dark ? DARK.get("error") : Color.red;
         int rewritten = 0;
         int position = 0;
         while (position < document.getLength()) {
             javax.swing.text.Element run = document.getCharacterElement(position);
             int end = Math.max(run.getEndOffset(), position + 1);
-            Color foreground = StyleConstants.getForeground(run.getAttributes());
-            Color replacement = null;
-            if (fromNormal.equals(foreground)) {
-                replacement = toNormal;
-            } else if (fromError.equals(foreground)) {
-                replacement = toError;
-            }
+            javax.swing.text.AttributeSet own = run.getAttributes();
+            Color replacement = own.isDefined(StyleConstants.Foreground)
+                ? colours.get(StyleConstants.getForeground(own))
+                : null;
             if (replacement != null) {
                 javax.swing.text.SimpleAttributeSet attributes =
                     new javax.swing.text.SimpleAttributeSet();
@@ -248,24 +334,24 @@ final class ConsoleTextTheme {
     }
 
     /**
-     * Styled documents that define Ignition's console styles. Looking for the
+     * Text panes whose document defines Ignition's console styles. Looking for the
      * style names rather than the panel class keeps this working if IA moves
      * or renames the panel, and keeps it away from unrelated text panes.
      */
-    private List<StyledDocument> findConsoleDocuments() {
-        List<StyledDocument> documents = new ArrayList<>();
+    private List<JTextPane> findConsolePanes() {
+        List<JTextPane> panes = new ArrayList<>();
         for (Window window : Window.getWindows()) {
-            collect(window, documents);
+            collect(window, panes);
         }
-        return documents;
+        return panes;
     }
 
-    private void collect(Container container, List<StyledDocument> out) {
+    private void collect(Container container, List<JTextPane> out) {
         for (Component child : container.getComponents()) {
             if (child instanceof JTextPane) {
                 StyledDocument document = ((JTextPane) child).getStyledDocument();
                 if (document != null && document.getStyle("emphasize") != null) {
-                    out.add(document);
+                    out.add((JTextPane) child);
                 }
             }
             if (child instanceof Container) {

@@ -140,6 +140,12 @@ val harnessJvmArgs = listOf(
     "--add-exports", "java.desktop/sun.swing.table=ALL-UNNAMED",
     "--add-exports", "java.desktop/sun.swing.plaf.synth=ALL-UNNAMED",
     "--add-exports", "java.desktop/sun.awt=ALL-UNNAMED",
+    // On Windows, JIDE's header UI for a table built under dark mode
+    // subclasses WindowsTableHeaderUI; without this, building the Open/Create
+    // Project table fails with an IllegalAccessError (#130's test, windows-latest).
+    // The Designer passes it on every platform; elsewhere the package is
+    // absent and the JVM only warns.
+    "--add-exports", "java.desktop/com.sun.java.swing.plaf.windows=ALL-UNNAMED",
     "--add-opens", "java.desktop/javax.swing=ALL-UNNAMED",
     "--add-opens", "java.desktop/javax.swing.plaf.synth=ALL-UNNAMED",
     // CellRendererSanitizer replaces BasicTableUI's protected rendererPane;
