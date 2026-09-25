@@ -2034,6 +2034,19 @@ public class ThemeManager {
      * Refresh one component whose subtree still holds a FlatLaf delegate under
      * the light look and feel. Package-private so the harness can drive it.
      *
+     * <p>A refresh gives back more than the delegate: {@code installBorder}
+     * treats a {@code null} border like a look-and-feel one and fills it in.
+     * Vision's {@code EditorTextField} sets its border to {@code null} in its
+     * constructor, so a stock-built one has none; refreshed from FlatLaf it got
+     * a {@code SynthBorder}, and the property editor's Name value sat in a box
+     * a never-dark Designer does not draw. So every component in the subtree
+     * that had no border before the refresh is compared with a fresh instance
+     * of its class, built under the look and feel now in force, the yardstick
+     * {@link VisionConstructionBorders} already uses for saves — a class that
+     * clears its border in its constructor gets {@code null} back, and a plain
+     * label keeps the look and feel's border. Only those components are
+     * compared, so only their classes are ever constructed.
+     *
      * @return 1 if it was stale and refreshed, 0 if there was nothing to do
      */
     int refreshStaleAttached(java.awt.Component component) {
@@ -2041,13 +2054,34 @@ public class ThemeManager {
                 || !hasStaleUi(component, false)) {
             return 0;
         }
+        java.util.List<javax.swing.JComponent> borderless = new java.util.ArrayList<>();
+        collectBorderless(component, borderless);
         java.util.Set<String> failed = new java.util.LinkedHashSet<>();
         int failures = updateComponentTreeUiResiliently(component, failed);
         if (failures > 0) {
             DebugLog.log("Light restore: updateUI failed on " + failures + " component(s) under "
                 + component.getClass().getName() + ": " + failed + ". Their subtrees were still walked.");
         }
+        for (javax.swing.JComponent child : borderless) {
+            if (child.getBorder() != null) {
+                VisionConstructionBorders.alignWithFresh(child,
+                    VisionConstructionBorders.freshBorder(child.getClass()));
+            }
+        }
         return 1;
+    }
+
+    private static void collectBorderless(java.awt.Component component,
+            java.util.List<javax.swing.JComponent> into) {
+        if (component instanceof javax.swing.JComponent
+                && ((javax.swing.JComponent) component).getBorder() == null) {
+            into.add((javax.swing.JComponent) component);
+        }
+        if (component instanceof java.awt.Container) {
+            for (java.awt.Component child : ((java.awt.Container) component).getComponents()) {
+                collectBorderless(child, into);
+            }
+        }
     }
 
     private void uninstallLightLeftoverWatcher() {

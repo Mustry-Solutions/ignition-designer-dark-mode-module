@@ -2,6 +2,7 @@ package com.mustrysolutions.designerdarkmode.designer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.awt.BorderLayout;
@@ -12,6 +13,7 @@ import java.awt.image.BufferedImage;
 import java.util.HashMap;
 import java.util.Map;
 
+import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
@@ -113,6 +115,15 @@ class CachedEditorAfterRestoreTest {
         assertEquals(stock("TextField.foreground"), rgb(field.getForeground()),
             "the cached editor's text kept FlatLaf's dark-theme foreground, near-white "
                 + "on a light row");
+
+        // And it looks like a stock-built one: the refresh's installBorder
+        // treats the field's null as unset, which drew a box round the value.
+        assertNull(field.getBorder(),
+            "the refresh gave a field that clears its own border the look and feel's "
+                + "border, a box a never-dark Designer does not draw: " + field.getBorder());
+        assertEquals(new JLabel().getBorder() == null, renderer.cachedLabel().getBorder() == null,
+            "a plain label in the same editor did not end up with the border a fresh "
+                + "label has under the stock look and feel");
     }
 
     @Test
@@ -142,10 +153,10 @@ class CachedEditorAfterRestoreTest {
                 boolean isSelected, boolean hasFocus, int row, int column) {
             JPanel panel = editors.computeIfAbsent(String.class, type -> {
                 JPanel editor = new JPanel(new BorderLayout());
-                JTextField text = new JTextField();
+                JTextField text = new BorderlessField();
                 text.setOpaque(false);
-                text.setBorder(null);
                 editor.add(text, BorderLayout.CENTER);
+                editor.add(new JLabel("..."), BorderLayout.EAST);
                 return editor;
             });
             ((JTextField) panel.getComponent(0)).setText(String.valueOf(value));
@@ -158,6 +169,21 @@ class CachedEditorAfterRestoreTest {
 
         JTextField cachedField() {
             return (JTextField) cachedPanel().getComponent(0);
+        }
+
+        JLabel cachedLabel() {
+            return (JLabel) cachedPanel().getComponent(1);
+        }
+    }
+
+    /**
+     * Vision's {@code EditorTextField}: clears its border in its constructor,
+     * so a stock-built one has none. Package-private with a no-arg
+     * constructor, as the fresh-instance comparison needs.
+     */
+    static final class BorderlessField extends JTextField {
+        BorderlessField() {
+            setBorder(null);
         }
     }
 

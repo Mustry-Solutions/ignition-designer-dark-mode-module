@@ -46,8 +46,11 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   never in the window tree when the light restore walks it, and it kept
   FlatLaf's UI delegates in a stock Designer. Going into dark mode already
   fixed such a panel on the paint that showed it; the light side now does the
-  same, from the watcher that already runs after a restore. Found and
-  measured in a live 8.1.50 Designer; the property table is the same on 8.3.
+  same, from the watcher that already runs after a restore — and puts back
+  the borderless look of an editor that clears its own border, which a bare
+  refresh would have drawn as a box. Found and measured in a live 8.1.50
+  Designer, where the fixed editor now probes identical to a never-dark one;
+  the property table is the same on 8.3.
 
 - **The OPEN buttons in File → Open… work in dark mode again**
   ([#130](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/130)).
