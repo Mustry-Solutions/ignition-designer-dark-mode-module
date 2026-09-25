@@ -2,7 +2,8 @@
 # Rebuild the module and reload it into the already-running gateway.
 # Use this after you change module code. For a clean slate, use teardown.sh + setup.sh.
 #
-# Usage: ops/deploy.sh
+# Usage: ops/deploy.sh                     the 8.3 gateway
+#        IGNITION_LINE=8.1 ops/deploy.sh   the 8.1 gateway
 
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 
@@ -15,6 +16,7 @@ if ! "${COMPOSE[@]}" ps --status running --services 2>/dev/null | grep -q '^gate
 fi
 
 build_and_stage_module
+install_into_container
 
 # The registry keys the module's acceptance on the signing certificate. After
 # a RELEASED build (signed with the release certificate) was run on this

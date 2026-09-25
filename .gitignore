@@ -5,6 +5,7 @@ build/
 
 # --- Staged module artifacts for the local dev gateway ---
 ops/modules/*.modl
+ops/modules-8.1/
 
 # --- Local dev signing material (NEVER commit keystores/certs/keys) ---
 ops/signing/

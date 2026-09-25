@@ -1,0 +1,57 @@
+# Local development gateway for the Ignition 8.1 build of the module
+# (designer-dark-mode-8.1.modl). The 8.3 gateway is docker-compose.yml; the two
+# can run side by side.
+#
+# DEVELOPMENT ONLY: it accepts the EULA automatically and uses a fixed weak
+# admin password. Do NOT use in production.
+#
+# Drive it with the ops scripts and IGNITION_LINE=8.1, e.g.
+#   IGNITION_LINE=8.1 ops/setup.sh
+#
+# Two things differ from 8.3, and the scripts handle both (ops/lib.sh):
+#   - 8.1 has no externalModulesFolder; it loads modules only from
+#     user-lib/modules. The build is copied in with `docker cp`, so it lives in
+#     the container, not the data volume: a recreated container gets it again
+#     from setup.sh.
+#   - 8.1 keeps certificate and EULA acceptance in its internal database
+#     (config.idb, tables CERTIFICATES and EULAS), not in data/modules.json.
+#     An unaccepted module does not park 8.1 in commissioning; the gateway
+#     runs and simply never starts it.
+
+# Its own compose project: both files sit in the same directory and both call
+# their service "gateway", so without this they would be one project and one
+# service, and bringing one stack down would take the other with it.
+name: designer-dark-mode-81
+
+services:
+  gateway:
+    # 8.1.50: the 8.1 release the live Designer sitting used. The module's
+    # 8.1 floor is 8.1.33 (the first 8.1 on Java 17).
+    image: inductiveautomation/ignition:8.1.50
+    container_name: designer-dark-mode-ignition-81
+    ports:
+      # The next free block in the Mustry host-port scheme (9x88 per repo;
+      # this repo's 8.3 gateway is on 9388 here via .env). Override in .env.
+      - "${GATEWAY_81_HTTP_PORT:-9588}:8088"
+      - "${GATEWAY_81_HTTPS_PORT:-9543}:8043"
+    environment:
+      ACCEPT_IGNITION_EULA: "Y"
+      GATEWAY_ADMIN_USERNAME: "admin"
+      GATEWAY_ADMIN_PASSWORD: "password"
+      IGNITION_EDITION: "standard"
+      TZ: "UTC"
+    volumes:
+      - gateway-data-81:/usr/local/bin/ignition/data
+    command:
+      - "-n"
+      - "designer-dark-mode-dev-81"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8088/StatusPing"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    restart: "no"
+
+volumes:
+  gateway-data-81:

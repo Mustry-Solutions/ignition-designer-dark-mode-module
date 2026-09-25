@@ -1,13 +1,16 @@
 # Local dev gateway
 
-Disposable Ignition 8.3.6 gateway in Docker for testing the Designer Dark Mode module.
+Disposable Ignition gateways in Docker for testing the Designer Dark Mode module:
+an 8.3.6 one (`docker-compose.yml`) and an 8.1.50 one (`docker-compose.8.1.yml`)
+for the 8.1 build. Every script drives the 8.3 gateway unless you set
+`IGNITION_LINE=8.1`; the two run side by side.
 Development only: fixed weak admin credentials (`admin` / `password`) and an
 auto-accepted EULA. Never point this at anything real.
 
 | Script | What it does |
 |--------|--------------|
-| `setup.sh` | Build + sign the module and start the gateway with it installed. Commissioning is unattended — the module's certificate and EULA are seeded into `data/modules.json` for you, so there is no browser wizard to click through. |
-| `deploy.sh` | Rebuild after code changes and restart the gateway to reload the module. If the gateway's registry holds another certificate for the module (a released build was run on it, or the dev keystore was regenerated), acceptance is re-seeded instead of a plain restart. Ends by checking that the gateway is running, not commissioning, and serving the bytes just staged. Relaunch the Designer afterwards to pick up designer-scope code. |
+| `setup.sh` | Build + sign the module and start the gateway with it installed. Commissioning is unattended — the module's certificate and EULA are seeded into `data/modules.json` for you (on 8.1, `config.idb`), so there is no browser wizard to click through. Ends by checking that the module started. |
+| `deploy.sh` | Rebuild after code changes and restart the gateway to reload the module. If the gateway's registry holds another certificate for the module (a released build was run on it, or the dev keystore was regenerated), acceptance is re-seeded instead of a plain restart. Ends by checking that the gateway is running, not commissioning, holding the bytes just staged, and that the module started this boot. Relaunch the Designer afterwards to pick up designer-scope code. |
 | `status.sh` | Container status, gateway URL, staged module files. |
 | `logs.sh` | Tail gateway logs. |
 | `teardown.sh` | Stop the gateway (`--purge` also wipes its data volume). |
@@ -45,6 +48,36 @@ How the pieces fit:
 - Gateway state lives in the `gateway-data` Docker volume, so commissioning and
   cert acceptance survive restarts. `teardown.sh --purge` resets everything.
 
-Testing the Designer: install the Designer Launcher on your machine, add the
+## The 8.1 gateway
+
+```bash
+IGNITION_LINE=8.1 ops/setup.sh     # build designer-dark-mode-8.1.modl, start 8.1.50, accept, verify
+IGNITION_LINE=8.1 ops/deploy.sh    # rebuild and reload
+IGNITION_LINE=8.1 ops/status.sh    # (and logs.sh, teardown.sh [--purge])
+```
+
+It publishes on **http://localhost:9588** (HTTPS 9543), overridable with
+`GATEWAY_81_HTTP_PORT` / `GATEWAY_81_HTTPS_PORT` in `../.env`. Same dev
+certificate, same admin login. Two things work differently underneath, and the
+scripts handle both:
+
+- **No external modules folder.** 8.1 only loads modules from
+  `user-lib/modules`, so the build is staged in `modules-8.1/` and copied into
+  the container with `docker cp`. The file lives in the container, not the data
+  volume; a recreated container gets it again from `setup.sh` or `deploy.sh`.
+- **Acceptance lives in `config.idb`.** 8.1 keeps trusted module certificates
+  and accepted EULAs in its internal SQLite database, tables `CERTIFICATES`
+  (the raw SHA-1 of the certificate) and `EULAS` (the CRC32 of
+  `license.html`), not in `data/modules.json`. The scripts seed both rows while
+  the gateway is stopped (host `sqlite3` needed; macOS has it).
+
+An 8.1 gateway that has not accepted a module does **not** park in
+commissioning — it runs, and simply never starts the module. So `setup.sh` and
+`deploy.sh` (on both lines) end by checking the current boot's log for the
+module starting, not just that the gateway answers and holds the file.
+
+## Testing the Designer
+
+Install the Designer Launcher on your machine, add the
 gateway at `http://localhost:8088`, launch a Designer, and use
 **Tools → Dark Mode**.
