@@ -2,6 +2,7 @@ package com.mustrysolutions.designerdarkmode.designer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.awt.Color;
@@ -10,6 +11,7 @@ import java.util.List;
 
 import javax.swing.JPanel;
 import javax.swing.JTextPane;
+import javax.swing.UIDefaults;
 import javax.swing.plaf.ColorUIResource;
 import javax.swing.text.AttributeSet;
 import javax.swing.text.SimpleAttributeSet;
@@ -17,6 +19,7 @@ import javax.swing.text.Style;
 import javax.swing.text.StyleConstants;
 import javax.swing.text.StyledDocument;
 
+import com.formdev.flatlaf.FlatDarkLaf;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -36,8 +39,6 @@ class ScriptConsoleTextTest {
 
     private static final String BLUE = "#0000FF";
     private static final String RED = "#FF0000";
-    /** The console background measured from window pixels in the #129 sitting. */
-    private static final Color CONSOLE_BACKGROUND = new Color(0x3C3F41);
 
     private ConsoleTextTheme consoles;
     private JPanel window;
@@ -137,7 +138,7 @@ class ScriptConsoleTextTest {
     }
 
     @Test
-    @DisplayName("every dark console colour reaches WCAG AA on the console background (#139)")
+    @DisplayName("every dark console colour reaches WCAG AA on both console backgrounds (#139)")
     void darkColoursReachWcagAa() throws Exception {
         write("Jython 2.7.3, executing locally in the Designer.\n", "emphasize");
         write("Traceback (most recent call last):\n", "error");
@@ -151,10 +152,18 @@ class ScriptConsoleTextTest {
         for (String name : new String[] {"default", "regular", "emphasize", "error"}) {
             colours.add(StyleConstants.getForeground(document.getStyle(name)));
         }
-        for (Color colour : colours) {
-            double ratio = contrast(colour, CONSOLE_BACKGROUND);
-            assertTrue(ratio >= 4.5, String.format(
-                "#%06X is %.2f:1 on #3C3F41, below WCAG AA", colour.getRGB() & 0xFFFFFF, ratio));
+        // The Script Console's interpreter is an editable text pane, so it
+        // paints TextPane.background; the Output Console is read-only and
+        // paints inactiveBackground. Both measured live on 8.3.6 (#139).
+        UIDefaults flat = new FlatDarkLaf().getDefaults();
+        for (String key : new String[] {"TextPane.background", "TextPane.inactiveBackground"}) {
+            Color background = flat.getColor(key);
+            assertNotNull(background, "FlatDarkLaf no longer defines " + key);
+            for (Color colour : colours) {
+                double ratio = contrast(colour, background);
+                assertTrue(ratio >= 4.5, String.format("#%06X is %.2f:1 on %s #%06X, below WCAG AA",
+                    colour.getRGB() & 0xFFFFFF, ratio, key, background.getRGB() & 0xFFFFFF));
+            }
         }
     }
 
