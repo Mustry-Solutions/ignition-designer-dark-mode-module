@@ -5,8 +5,13 @@ import java.awt.Component;
 import java.awt.Toolkit;
 import java.awt.event.AWTEventListener;
 import java.awt.event.ContainerEvent;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -16,10 +21,6 @@ import javax.swing.JMenuBar;
 import javax.swing.JPopupMenu;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
-
-import com.inductiveautomation.ignition.common.resourcecollection.ResourceCollection;
-import com.inductiveautomation.ignition.common.resourcecollection.ResourcePath;
-import com.inductiveautomation.ignition.common.resourcecollection.ResourceType;
 
 /**
  * Keeps the Exchange's "Dark Mode for the Designer" script from painting
@@ -73,8 +74,11 @@ import com.inductiveautomation.ignition.common.resourcecollection.ResourceType;
  * every Tools → Dark Mode click, and the moment such an item is added to a
  * menu (an AWT container event), which also covers a tag imported
  * mid-session. The script's presence in the project is read through the
- * SDK's {@code ResourceCollection}: a script module at
- * {@value #SCRIPT_MODULE_PATH}.
+ * project's {@code getResource(ResourcePath)}: a script module at
+ * {@value #SCRIPT_MODULE_PATH}. That method is looked up rather than linked,
+ * because its types moved between versions — {@code common.resourcecollection}
+ * on 8.3, {@code common.project.resource} on 8.1 — and one build has to run
+ * on both.
  */
 final class ExchangeScript {
 
@@ -118,8 +122,8 @@ final class ExchangeScript {
     /**
      * @param menuBar the Designer frame's menu bar, resolved on every use
      *                because the frame does not exist when the module starts
-     * @param project the open project, a {@code ResourceCollection}, resolved
-     *                the same way
+     * @param project the open project (8.3 {@code ResourceCollection}, 8.1
+     *                {@code Project}), resolved the same way
      * @param notify  where the one notice goes (status bar and log)
      */
     ExchangeScript(Supplier<JMenuBar> menuBar, Supplier<Object> project, Consumer<String> notify) {
@@ -277,18 +281,52 @@ final class ExchangeScript {
     boolean hasScriptModule() {
         try {
             Object open = project.get();
-            if (!(open instanceof ResourceCollection)) {
+            Method getResource = open == null ? null : getResource(open.getClass());
+            if (getResource == null) {
                 return false;
             }
-            // Built here, not in a static field: the unit tests run without
-            // the platform jars, and the catch below is what keeps a missing
-            // class from taking the whole check down.
-            ResourcePath path = new ResourcePath(
-                new ResourceType(SCRIPT_LIBRARY_MODULE, SCRIPT_LIBRARY_TYPE), SCRIPT_MODULE_PATH);
-            return ((ResourceCollection) open).getResource(path).isPresent();
+            // ResourcePath and ResourceType share a package on both versions,
+            // so the parameter type says where to find the other one.
+            Class<?> pathType = getResource.getParameterTypes()[0];
+            Class<?> resourceType = Class.forName(
+                pathType.getPackageName() + ".ResourceType", false, pathType.getClassLoader());
+            Object type = resourceType.getConstructor(String.class, String.class)
+                .newInstance(SCRIPT_LIBRARY_MODULE, SCRIPT_LIBRARY_TYPE);
+            Object path = pathType.getConstructor(resourceType, String.class)
+                .newInstance(type, SCRIPT_MODULE_PATH);
+            Object found = getResource.invoke(open, path);
+            return found instanceof Optional && ((Optional<?>) found).isPresent();
         } catch (Throwable t) {
             DebugLog.detail("ExchangeScript: the project's resources are unavailable.", t);
             return false;
         }
+    }
+
+    /**
+     * The project's {@code getResource(ResourcePath)}, declared on a public
+     * type so it can be invoked without opening the implementation class;
+     * the other {@code getResource} overloads take a resource id.
+     */
+    static Method getResource(Class<?> projectClass) {
+        Deque<Class<?>> types = new ArrayDeque<>();
+        types.add(projectClass);
+        while (!types.isEmpty()) {
+            Class<?> type = types.poll();
+            if (Modifier.isPublic(type.getModifiers())) {
+                for (Method method : type.getMethods()) {
+                    if (method.getName().equals("getResource")
+                            && method.getParameterCount() == 1
+                            && method.getParameterTypes()[0].getSimpleName().equals("ResourcePath")
+                            && Modifier.isPublic(method.getDeclaringClass().getModifiers())) {
+                        return method;
+                    }
+                }
+            }
+            if (type.getSuperclass() != null) {
+                types.add(type.getSuperclass());
+            }
+            types.addAll(List.of(type.getInterfaces()));
+        }
+        return null;
     }
 }

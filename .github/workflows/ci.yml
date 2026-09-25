@@ -45,8 +45,18 @@ jobs:
       # unsigned here (build.gradle.kts). That is what we want for CI: this job
       # proves the module assembles, not that the release keys work — the
       # release workflow's dry run covers signing.
-      - name: Build and test
+      # Both Ignition lines, from the same tree: 8.3 (the default) and 8.1,
+      # which compiles against the 8.1 floor and is a separate .modl because no
+      # single requiredIgnitionVersion is accepted by both gateways (see
+      # ignition.line in build.gradle.kts). No `clean` between them: the file
+      # names differ, so the check below sees both.
+      - name: Build and test (8.3)
         run: ./gradlew build --no-daemon --stacktrace
+        env:
+          ORG_GRADLE_PROJECT_org.gradle.java.installations.auto-download: "false"
+
+      - name: Build and test (8.1)
+        run: ./gradlew build -Pignition.line=8.1 --no-daemon --stacktrace
         env:
           ORG_GRADLE_PROJECT_org.gradle.java.installations.auto-download: "false"
 
@@ -57,12 +67,18 @@ jobs:
       # instead (#114), so a build that lost the hook would show "Trial"
       # again. The element is still checked, since build.gradle.kts sets it.
       # None of this has a test that would catch an accidental removal.
+      #
+      # Also that each file declares its own line's floor: an 8.3 gateway
+      # refuses anything but 8.3.x, an 8.1 gateway anything above itself.
       - name: Check module.xml wiring
         run: |
-          modl="$(find build -maxdepth 1 -name '*.unsigned.modl' | head -1)"
-          if [ -z "$modl" ]; then echo "::error::no .modl produced"; exit 1; fi
+          check() {
+          modl="build/$1"
+          [ -f "$modl" ] || { echo "::error::$1 was not produced"; exit 1; }
           xml="$(unzip -p "$modl" module.xml)"
           echo "$xml"
+          echo "$xml" | grep -q "<requiredIgnitionVersion>$2</requiredIgnitionVersion>" \
+            || { echo "::error::$1 does not require Ignition $2"; exit 1; }
           echo "$xml" | grep -q '<license>license.html</license>' \
             || { echo "::error::module.xml is missing the <license> element"; exit 1; }
           echo "$xml" | grep -q '<freeModule>true</freeModule>' \
@@ -73,6 +89,9 @@ jobs:
             || { echo "::error::module.xml ships no gateway jar for the G hook"; exit 1; }
           unzip -l "$modl" | grep -q 'license.html' \
             || { echo "::error::license.html was not staged into the .modl"; exit 1; }
+          }
+          check designer-dark-mode.unsigned.modl 8.3.0
+          check designer-dark-mode-8.1.unsigned.modl 8.1.33
 
   harness:
     name: LaF harness (${{ matrix.os }})
@@ -100,8 +119,9 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     # Resolving the Designer's dependency tree is the slow part, and the
-    # Windows runner is the slow platform.
-    timeout-minutes: 25
+    # Windows runner is the slow platform. Four runs now (8.3 and 8.1, each at
+    # current and floor), two dependency trees to resolve cold.
+    timeout-minutes: 45
     defaults:
       run:
         # Git Bash on Windows, so `./gradlew` and the flags read the same on
@@ -147,7 +167,7 @@ jobs:
       # missing (Git Bash on Windows) the watchdog still fails the step, just
       # without a jstack — JUnit's own per-test timeout dump, which runs
       # inside the test JVM, covers that case on every platform.
-      - name: Windowed look-and-feel harness (current Ignition)
+      - name: Windowed look-and-feel harness (8.3 current)
         # eval, so the wrapper's quoted screen argument survives as one word.
         run: eval "$DISPLAY_WRAPPER ops/laf-harness-watchdog.sh -Pharness.windowed=true"
         env:
@@ -158,8 +178,25 @@ jobs:
           HARNESS_DEADLINE_SECONDS: "900"
           ORG_GRADLE_PROJECT_org.gradle.java.installations.auto-download: "false"
 
-      - name: Windowed look-and-feel harness (support floor)
+      - name: Windowed look-and-feel harness (8.3 support floor)
         run: eval "$DISPLAY_WRAPPER ops/laf-harness-watchdog.sh -Pharness.windowed=true -Pharness.sdk=8.3.0"
+        env:
+          DISPLAY_WRAPPER: ${{ runner.os == 'Linux' && 'xvfb-run -a -s "-screen 0 1280x1024x24"' || '' }}
+          HARNESS_DEADLINE_SECONDS: "900"
+          ORG_GRADLE_PROJECT_org.gradle.java.installations.auto-download: "false"
+
+      # The 8.1 line, the same two ends: 8.1.55 is the newest 8.1 with jars
+      # on IA's Nexus, 8.1.33 the floor. Two harness tests are about 8.3-only
+      # surfaces and are left out here (designer/build.gradle.kts).
+      - name: Windowed look-and-feel harness (8.1 current)
+        run: eval "$DISPLAY_WRAPPER ops/laf-harness-watchdog.sh -Pharness.windowed=true -Pignition.line=8.1"
+        env:
+          DISPLAY_WRAPPER: ${{ runner.os == 'Linux' && 'xvfb-run -a -s "-screen 0 1280x1024x24"' || '' }}
+          HARNESS_DEADLINE_SECONDS: "900"
+          ORG_GRADLE_PROJECT_org.gradle.java.installations.auto-download: "false"
+
+      - name: Windowed look-and-feel harness (8.1 support floor)
+        run: eval "$DISPLAY_WRAPPER ops/laf-harness-watchdog.sh -Pharness.windowed=true -Pignition.line=8.1 -Pharness.sdk=8.1.33"
         env:
           DISPLAY_WRAPPER: ${{ runner.os == 'Linux' && 'xvfb-run -a -s "-screen 0 1280x1024x24"' || '' }}
           HARNESS_DEADLINE_SECONDS: "900"

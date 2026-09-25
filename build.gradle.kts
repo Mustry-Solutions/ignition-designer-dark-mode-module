@@ -11,7 +11,39 @@ plugins {
     id("io.ia.sdk.modl") version("0.5.0")
 }
 
-val sdk_version by extra("8.3.0")
+/*
+ * Which Ignition line this build is for: 8.3 (the default) or 8.1.
+ *
+ *     ./gradlew build                       -> build/designer-dark-mode.modl
+ *     ./gradlew build -Pignition.line=8.1   -> build/designer-dark-mode-8.1.modl
+ *
+ * One source tree, two .modl files, because no single requiredIgnitionVersion
+ * is accepted by both lines. Checked against the gateways themselves: 8.3's
+ * ModuleInstance refuses any module whose required MAJOR.MINOR differs from
+ * its own (ModuleManager.MajorVersionMismatch), and 8.1 refuses any module
+ * that requires more than it is ("requires at least"). The only value both
+ * accept is the literal "dev", which skips the check altogether; that is an
+ * internal mechanism, and it would also let a Java 11 gateway (8.1.25 and
+ * older) install a module whose Designer jar needs Java 17.
+ *
+ * The code is the same for both. It links against either line's jars with
+ * nothing missing (the one API that moved, a project's getResource, is looked
+ * up by reflection in ExchangeScript), so the line only decides the floor the
+ * module compiles against and declares, the file name, and what the harness
+ * runs against.
+ */
+val ignition_line by extra((project.findProperty("ignition.line") as String?) ?: "8.3")
+val is_8_1_line = when (ignition_line) {
+    "8.3" -> false
+    "8.1" -> true
+    else -> throw GradleException("ignition.line must be 8.3 or 8.1, not '$ignition_line'")
+}
+
+/*
+ * The support FLOOR per line. 8.1.33 is the first 8.1 whose Designer runs on
+ * Java 17 (8.1.25 and earlier ship Java 11 bytecode), which this module needs.
+ */
+val sdk_version by extra(if (is_8_1_line) "8.1.33" else "8.3.0")
 
 /*
  * What the HEADLESS HARNESS runs against, which is deliberately not
@@ -28,10 +60,14 @@ val sdk_version by extra("8.3.0")
  * testing jars nobody has. Nothing about the floor is wrong; it is simply not
  * evidence about 8.3.6 or 8.3.8, which is where the reports come from.
  *
- * Override to reproduce a specific gateway: -Pharness.sdk=8.3.6
+ * Override to reproduce a specific gateway: -Pharness.sdk=8.3.6 (on the 8.1
+ * line, -Pignition.line=8.1 -Pharness.sdk=8.1.50).
  */
 val harness_sdk_version by extra(
-    (project.findProperty("harness.sdk") as String?) ?: "8.3.8")
+    (project.findProperty("harness.sdk") as String?)
+        // 8.1.55 is the newest 8.1 whose jars are on IA's Nexus; 8.1.56 has
+        // metadata but no files.
+        ?: if (is_8_1_line) "8.1.55" else "8.3.8")
 
 allprojects {
     // The release workflow passes -PreleaseVersion=<tag> (the git tag drives the
@@ -49,7 +85,7 @@ ignitionModule {
     /*
      * Name of the '.modl' file to be created, without file extension.
      */
-    fileName.set("designer-dark-mode")
+    fileName.set(if (is_8_1_line) "designer-dark-mode-8.1" else "designer-dark-mode")
     /*
      * Unique identifier for the module.  Reverse domain convention is recommended (e.g.: com.mycompany.charting-module)
      */

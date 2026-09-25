@@ -1,8 +1,9 @@
 name: Release
 
-# A release is a git tag `vX.Y.Z`. Pushing the tag builds + signs the module,
-# then publishes a GitHub Release with the signed .modl attached. The tag
-# drives the module version.
+# A release is a git tag `vX.Y.Z`. Pushing the tag builds + signs the module
+# for both Ignition lines, then publishes a GitHub Release with both signed
+# .modl files attached: designer-dark-mode.modl (8.3) and
+# designer-dark-mode-8.1.modl (8.1.33 and later). The tag drives the version.
 #
 # Required secrets (repo or org level — Settings → Secrets and variables → Actions):
 #   SIGNING_KEYSTORE_B64       base64 of the signing keystore (.p12/.jks)
@@ -12,7 +13,8 @@ name: Release
 #   SIGNING_CERT_PASSWORD      key password (often == keystore password)
 #
 # Validate the signing path without publishing: run this workflow manually
-# with dry_run=true. It builds, signs and uploads the .modl as an artifact.
+# with dry_run=true. It builds, signs and uploads both .modl files as an
+# artifact.
 
 on:
   push:
@@ -90,39 +92,52 @@ jobs:
           printf '%s' "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/keystore.p12"
           printf '%s' "$CERT_B64" | base64 -d > "$RUNNER_TEMP/cert.pem"
 
-      - name: Build & sign the module
+      # One source tree, two files (see ignition.line in build.gradle.kts): no
+      # single requiredIgnitionVersion is accepted by both an 8.1 and an 8.3
+      # gateway. No `clean` between the builds: the names differ.
+      - name: Build & sign the module (8.3 and 8.1)
         env:
           ORG_GRADLE_PROJECT_org.gradle.java.installations.auto-download: "false"
         run: |
-          ./gradlew clean build --no-daemon --stacktrace \
-            -PreleaseVersion="${{ steps.ver.outputs.version }}" \
-            -Pignition.signing.keystoreFile="$RUNNER_TEMP/keystore.p12" \
-            -Pignition.signing.keystorePassword="${{ secrets.SIGNING_KEYSTORE_PASSWORD }}" \
-            -Pignition.signing.certFile="$RUNNER_TEMP/cert.pem" \
-            -Pignition.signing.certAlias="${{ secrets.SIGNING_CERT_ALIAS }}" \
-            -Pignition.signing.certPassword="${{ secrets.SIGNING_CERT_PASSWORD }}"
+          for line in 8.3 8.1; do
+            ./gradlew build --no-daemon --stacktrace \
+              -Pignition.line="$line" \
+              -PreleaseVersion="${{ steps.ver.outputs.version }}" \
+              -Pignition.signing.keystoreFile="$RUNNER_TEMP/keystore.p12" \
+              -Pignition.signing.keystorePassword="${{ secrets.SIGNING_KEYSTORE_PASSWORD }}" \
+              -Pignition.signing.certFile="$RUNNER_TEMP/cert.pem" \
+              -Pignition.signing.certAlias="${{ secrets.SIGNING_CERT_ALIAS }}" \
+              -Pignition.signing.certPassword="${{ secrets.SIGNING_CERT_PASSWORD }}"
+          done
 
-      - name: Locate the signed .modl
+      - name: Locate the signed .modl files
         id: modl
         run: |
-          f="$(find build -maxdepth 1 -name '*.modl' ! -name '*.unsigned.modl' | head -1)"
-          if [ -z "$f" ]; then echo "::error::no signed .modl produced"; exit 1; fi
-          echo "path=$f" >> "$GITHUB_OUTPUT"
+          for f in build/designer-dark-mode.modl build/designer-dark-mode-8.1.modl; do
+            [ -f "$f" ] || { echo "::error::$f was not produced"; exit 1; }
+          done
+          echo "v83=build/designer-dark-mode.modl" >> "$GITHUB_OUTPUT"
+          echo "v81=build/designer-dark-mode-8.1.modl" >> "$GITHUB_OUTPUT"
 
-      - name: Verify the signature
+      # A signed Ignition .modl carries certificates.p7b + signatures.properties
+      # (an unsigned one has neither) — not a JAR-style META-INF block. Each
+      # file must also carry the tag's version and its own line's floor.
+      - name: Verify signatures, versions and floors
         run: |
-          echo "Signed artifact: ${{ steps.modl.outputs.path }}"
-          # A signed Ignition .modl carries certificates.p7b + signatures.properties
-          # (an unsigned one has neither) — not a JAR-style META-INF block.
-          names="$(unzip -l "${{ steps.modl.outputs.path }}")"
-          echo "$names" | grep -q 'certificates.p7b' && echo "$names" | grep -q 'signatures.properties' \
-            && echo "signature present (certificates.p7b + signatures.properties)" \
-            || { echo "::error::.modl is not signed (missing certificates.p7b / signatures.properties)"; exit 1; }
-
-      - name: Check the stamped version
-        run: |
-          unzip -p "${{ steps.modl.outputs.path }}" module.xml | grep -q "<version>${{ steps.ver.outputs.version }}</version>" \
-            || { echo "::error::module.xml version does not match the tag"; unzip -p "${{ steps.modl.outputs.path }}" module.xml; exit 1; }
+          verify() {
+            f="$1"; floor="$2"
+            echo "Signed artifact: $f"
+            names="$(unzip -l "$f")"
+            echo "$names" | grep -q 'certificates.p7b' && echo "$names" | grep -q 'signatures.properties' \
+              || { echo "::error::$f is not signed (missing certificates.p7b / signatures.properties)"; exit 1; }
+            xml="$(unzip -p "$f" module.xml)"
+            echo "$xml" | grep -q "<version>${{ steps.ver.outputs.version }}</version>" \
+              || { echo "::error::$f: module.xml version does not match the tag"; echo "$xml"; exit 1; }
+            echo "$xml" | grep -q "<requiredIgnitionVersion>$floor</requiredIgnitionVersion>" \
+              || { echo "::error::$f does not require Ignition $floor"; echo "$xml"; exit 1; }
+          }
+          verify "${{ steps.modl.outputs.v83 }}" 8.3.0
+          verify "${{ steps.modl.outputs.v81 }}" 8.1.33
 
       # The release notes ARE the CHANGELOG section for this version. Generated
       # notes are a list of commit subjects, which says what was touched but not
@@ -153,12 +168,14 @@ jobs:
 
       # Dry run (workflow_dispatch): keep the signed .modl as an artifact
       # instead of publishing — the way to confirm the signing secrets work.
-      - name: Upload signed .modl (dry run)
+      - name: Upload signed .modl files (dry run)
         if: ${{ steps.ver.outputs.publish != 'true' }}
         uses: actions/upload-artifact@v7
         with:
           name: signed-modl-${{ steps.ver.outputs.version }}
-          path: ${{ steps.modl.outputs.path }}
+          path: |
+            ${{ steps.modl.outputs.v83 }}
+            ${{ steps.modl.outputs.v81 }}
           if-no-files-found: error
 
       - name: Publish GitHub Release
@@ -172,5 +189,6 @@ jobs:
             --title "v${{ steps.ver.outputs.version }}" \
             --notes-file "${{ steps.notes.outputs.path }}" \
             --draft \
-            "${{ steps.modl.outputs.path }}"
+            "${{ steps.modl.outputs.v83 }}" \
+            "${{ steps.modl.outputs.v81 }}"
           gh release edit "$GITHUB_REF_NAME" --draft=false

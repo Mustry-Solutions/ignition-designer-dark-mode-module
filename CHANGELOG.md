@@ -10,6 +10,24 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ## [Unreleased]
 
+### Added
+
+- **Ignition 8.1 support (8.1.33 and newer).** Each release now carries a
+  second file, `designer-dark-mode-8.1.modl`, built from the same code against
+  the 8.1.33 SDK. It has to be a separate file: an 8.3 gateway refuses any
+  module whose required version is not 8.3.x, and an 8.1 gateway refuses one
+  that requires more than it is. 8.1.33 is the floor because older 8.1
+  releases run the Designer on Java 11. The one API that moved between the
+  lines — how the Exchange script's presence in a project is looked up — is
+  now found by reflection, so both files come from one source. CI builds both
+  and runs the look-and-feel harness against 8.1.55 and 8.1.33 as well as
+  8.3.8 and 8.3.0. Checked in a live 8.1.50 Designer: the Tools items, a
+  dark → light → dark cycle, the Script Console, the Exchange script
+  notice, a Vision window saved under dark mode and again after a cycle
+  (no FlatLaf in either save, and it reopens intact after a relaunch), and
+  the three fixes below on that line — the project dialog's OPEN buttons,
+  one set of Tools items after switching projects, and the console banner.
+
 ### Changed
 
 - **Debug log timestamps are UTC, and say so.** The docs always claimed UTC,

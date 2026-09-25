@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -106,6 +107,19 @@ class ReflectiveSurfaceTest {
                 + "; the chrome they colour is no longer themed");
     }
 
+    /**
+     * Classes behind features 8.1 never had, so their absence there is expected
+     * rather than a rename. Only the Event Stream editor's flow cells so far.
+     * On 8.3 they are held to the same standard as everything else.
+     */
+    private static final Set<String> EIGHT_THREE_ONLY = Set.of(
+        "com.inductiveautomation.ignition.designer.gui.flowpane.render.FlowCellContent");
+
+    /** The line the harness jars come from; set by designer/build.gradle.kts. */
+    private static boolean onEightOne() {
+        return "8.1".equals(System.getProperty("designerdarkmode.harness.line"));
+    }
+
     @Test
     @DisplayName("every hardcoded class constant the module rewrites still exists (#53)")
     void everyClassConstantResolves() {
@@ -115,7 +129,9 @@ class ReflectiveSurfaceTest {
             try {
                 owner = load(className);
             } catch (ClassNotFoundException absent) {
-                missing.add(className + " (whole class)");
+                if (!(onEightOne() && EIGHT_THREE_ONLY.contains(className))) {
+                    missing.add(className + " (whole class)");
+                }
                 return;
             }
             fields.keySet().forEach(field -> {
