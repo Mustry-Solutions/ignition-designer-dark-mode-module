@@ -10,6 +10,19 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The OPEN buttons in File → Open… work in dark mode again**
+  ([#130](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/130)).
+  Two things stopped them. The dialog's table casts its action column's
+  renderer back to IA's own type on every hover and press, and the module's
+  wrapper made that cast fail silently. The table's UI is also replaced
+  under the dark look and feel, which puts its own mouse handler behind
+  IA's listener; that listener consumes the press, so the button's editor
+  never started. Renderers declared by the code that owns a table are no
+  longer wrapped (their cells are still darkened when painted), and that
+  code's mouse listeners are moved back behind the look and feel's.
+
 ### Changed
 
 - **Debug log timestamps are UTC, and say so.** The docs always claimed UTC,
