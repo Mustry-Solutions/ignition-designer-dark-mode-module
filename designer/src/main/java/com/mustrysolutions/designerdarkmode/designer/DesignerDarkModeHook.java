@@ -27,8 +27,7 @@ public class DesignerDarkModeHook extends AbstractDesignerModuleHook {
 
     /**
      * The Tools menu action, kept so the checkmark can be corrected once a
-     * switch has actually happened (#15). Rebuilding the menu replaces it;
-     * the newest one is the one on screen.
+     * switch has actually happened (#15). Built once, with the menu.
      */
     private StateChangeAction darkModeAction;
 
@@ -82,8 +81,27 @@ public class DesignerDarkModeHook extends AbstractDesignerModuleHook {
         LookAndFeelBorders.register(serializer);
     }
 
+    /**
+     * Built once and handed back on every call. The Designer does not keep the
+     * merge it installs: {@code LoadedModule} installs
+     * {@code hook.getModuleMenu()} at startup and, on shutdown (every project
+     * switch, and exit), uninstalls {@code hook.getModuleMenu()} — a second
+     * call. The SDK's item merges remove only the {@code JMenuItem} their own
+     * {@code install} created, so a freshly built merge removed nothing, and
+     * each project opened in a session added another Dark Mode and About pair
+     * to Tools. The next project gets a new hook, and with it a new merge.
+     */
+    private MenuBarMerge moduleMenu;
+
     @Override
     public MenuBarMerge getModuleMenu() {
+        if (moduleMenu == null) {
+            moduleMenu = buildModuleMenu();
+        }
+        return moduleMenu;
+    }
+
+    private MenuBarMerge buildModuleMenu() {
         StateChangeAction darkMode =
                 new StateChangeAction("designerdarkmode.Action.DarkMode", new MoonIcon(16)) {
             @Override
@@ -95,14 +113,12 @@ public class DesignerDarkModeHook extends AbstractDesignerModuleHook {
             }
         };
         // Seeded under the guard: StateChangeAction fires itemStateChanged
-        // from setSelected, and this method is not only called at startup.
-        // The Designer rebuilds module menus during its own teardown
-        // (LoadedModule.shutdown calls getModuleMenu before hook.shutdown) and
-        // when another project is opened. Unguarded, ticking the fresh
-        // checkbox for a "dark" preference would read as a click: a full
-        // theme switch on every rebuild, including one on the way out. (Until
-        // 0.4.0 it also raised the Vision refusal dialog there and lost the
-        // preference.)
+        // from setSelected. Unguarded, ticking the fresh checkbox for a "dark"
+        // preference would read as a click and run a full theme switch before
+        // the menu is even on screen. (Until the merge was cached, this ran on
+        // every getModuleMenu call, including the one LoadedModule.shutdown
+        // makes on the way out; until 0.4.0 that also raised the Vision
+        // refusal dialog and lost the preference.)
         syncing = true;
         try {
             darkMode.setSelected(themes.isDarkModeEnabled());
