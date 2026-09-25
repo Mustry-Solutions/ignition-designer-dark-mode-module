@@ -2,6 +2,7 @@ package com.mustrysolutions.designerdarkmode.designer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.awt.Color;
@@ -10,6 +11,7 @@ import java.util.List;
 
 import javax.swing.JPanel;
 import javax.swing.JTextPane;
+import javax.swing.UIDefaults;
 import javax.swing.plaf.ColorUIResource;
 import javax.swing.text.AttributeSet;
 import javax.swing.text.SimpleAttributeSet;
@@ -17,6 +19,7 @@ import javax.swing.text.Style;
 import javax.swing.text.StyleConstants;
 import javax.swing.text.StyledDocument;
 
+import com.formdev.flatlaf.FlatDarkLaf;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -132,6 +135,50 @@ class ScriptConsoleTextTest {
         assertEquals(new Color(0x2E2E2E), StyleConstants.getForeground(defaultStyle),
             "`default` got the dark look and feel's foreground back, so regular "
                 + "text is near-white on the light console");
+    }
+
+    @Test
+    @DisplayName("every dark console colour reaches WCAG AA on both console backgrounds (#139)")
+    void darkColoursReachWcagAa() throws Exception {
+        write("Jython 2.7.3, executing locally in the Designer.\n", "emphasize");
+        write("Traceback (most recent call last):\n", "error");
+
+        consoles.installIn(window);
+
+        List<Color> colours = new ArrayList<>();
+        for (String run : foregrounds()) {
+            colours.add(Color.decode(run));
+        }
+        for (String name : new String[] {"default", "regular", "emphasize", "error"}) {
+            colours.add(StyleConstants.getForeground(document.getStyle(name)));
+        }
+        // The Script Console's interpreter is an editable text pane, so it
+        // paints TextPane.background; the Output Console is read-only and
+        // paints inactiveBackground. Both measured live on 8.3.6 (#139).
+        UIDefaults flat = new FlatDarkLaf().getDefaults();
+        for (String key : new String[] {"TextPane.background", "TextPane.inactiveBackground"}) {
+            Color background = flat.getColor(key);
+            assertNotNull(background, "FlatDarkLaf no longer defines " + key);
+            for (Color colour : colours) {
+                double ratio = contrast(colour, background);
+                assertTrue(ratio >= 4.5, String.format("#%06X is %.2f:1 on %s #%06X, below WCAG AA",
+                    colour.getRGB() & 0xFFFFFF, ratio, key, background.getRGB() & 0xFFFFFF));
+            }
+        }
+    }
+
+    private static double contrast(Color a, Color b) {
+        double la = luminance(a);
+        double lb = luminance(b);
+        return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+    }
+
+    private static double luminance(Color c) {
+        double[] rgb = {c.getRed() / 255.0, c.getGreen() / 255.0, c.getBlue() / 255.0};
+        for (int i = 0; i < 3; i++) {
+            rgb[i] = rgb[i] <= 0.03928 ? rgb[i] / 12.92 : Math.pow((rgb[i] + 0.055) / 1.055, 2.4);
+        }
+        return 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
     }
 
     private void write(String text, String styleName) throws Exception {
