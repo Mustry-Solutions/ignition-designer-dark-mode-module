@@ -84,9 +84,11 @@ public class ThemeManager {
      * Set by {@link #shutdown}. The Designer rebuilds module menus during its
      * own teardown, after which nothing may start a switch: a queued
      * {@code apply(true)} would otherwise run against a module that has
-     * already restored the stock theme and closed its log.
+     * already restored the stock theme and closed its log. Volatile: it is
+     * written on the thread that shuts the module down and read on the EDT,
+     * by a switch or the startup poll already queued there.
      */
-    private boolean shutDown;
+    private volatile boolean shutDown;
 
     /**
      * Told when a switch starts and when it ends, so the Tools menu can follow
@@ -213,13 +215,24 @@ public class ThemeManager {
         status.message(message);
     }
 
-    /** Called on module shutdown; puts the Designer back the way we found it. */
+    /**
+     * Called on module shutdown; puts the Designer back the way we found it.
+     *
+     * <p>{@code apply(false)} alone is not enough (#147): the light restore
+     * INSTALLS the light-leftover watcher, and a Designer that is already
+     * light returns early and keeps the one its last restore installed. An
+     * AWT listener outlives the module — it pins the module's classloader
+     * and keeps refreshing the live Designer from code that should be gone —
+     * so both watchers are taken down explicitly after the restore.
+     */
     public void shutdown() {
         shutDown = true;
         onEdt(() -> {
             exchangeScript.uninstall();
             inspector.uninstall();
             apply(false);
+            uninstallLightLeftoverWatcher();
+            uninstallComponentWatcher();
         });
     }
 
@@ -263,6 +276,11 @@ public class ThemeManager {
             ? "Applying dark mode\u2026"
             : "Restoring the stock Designer theme\u2026");
         SwingUtilities.invokeLater(() -> {
+            if (shutDown) {
+                // Clicked just before shutdown: the switch would re-install
+                // what shutdown just took down (#147).
+                return;
+            }
             try {
                 apply(dark);
             } finally {
@@ -330,6 +348,12 @@ public class ThemeManager {
         final int[] polls = {0};
         final int[] readyTicks = {0};
         timer.addActionListener(e -> {
+            if (shutDown) {
+                // Unloaded while still waiting for the Designer: applying
+                // now would theme it from a module that is gone (#147).
+                timer.stop();
+                return;
+            }
             Frame frame = context.getFrame();
             // "Showing" is not enough: at that point the docked panels are
             // still being built, and theming a half-built UI leaves it

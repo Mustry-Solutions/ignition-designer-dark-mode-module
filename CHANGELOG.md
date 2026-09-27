@@ -37,6 +37,16 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ### Fixed
 
+- **Unloading the module no longer leaves a listener running in the Designer**
+  ([#147](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/147)).
+  Module shutdown puts the stock theme back, and that restore installed the
+  watcher that tidies up panels attached after a switch; a Designer that was
+  already light kept the one its last switch installed. Either way the
+  listener outlived the module, holding it in memory and still refreshing the
+  Designer after an uninstall, upgrade or reinstall. Shutdown now takes it
+  down, and a switch clicked just before shutdown, or a startup still waiting
+  for the Designer to finish loading, no longer themes the Designer after it.
+
 - **Vision Property Editor values are readable again after switching Dark Mode
   off.** After a dark → light switch the value column (a component's Name,
   its Data, and every other value whose editor had been shown while dark)
