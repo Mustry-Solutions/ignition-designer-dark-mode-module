@@ -5,11 +5,9 @@ import java.awt.Component;
 import java.awt.Container;
 import java.awt.Window;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import javax.swing.JTextPane;
 import javax.swing.text.Style;
@@ -75,10 +73,18 @@ final class ConsoleTextTheme {
     /** Styles that had no explicit foreground, so the restore can remove it again. */
     private final Map<Style, Boolean> wasUndefined = new IdentityHashMap<>();
     /**
-     * Every console pane themed since the last uninstall, so the restore
-     * reaches a console whose window has since closed as well as open ones.
+     * Every console pane themed since the last uninstall, with the document
+     * whose runs were rewritten, so the restore reaches a console whose window
+     * has since closed as well as open ones. Weak on both ends: a closed
+     * console must not stay reachable for a whole dark session (and a
+     * document's listeners can point back at its pane, so the document is
+     * held weakly too). Recording the document is what lets install() walk a
+     * pane's runs once instead of on every rescan: a pane seen again with the
+     * same document needs nothing, its later text is written in the restyled
+     * styles.
      */
-    private final Set<JTextPane> themed = Collections.newSetFromMap(new IdentityHashMap<>());
+    private final Map<JTextPane, java.lang.ref.WeakReference<StyledDocument>> themed =
+        new java.util.WeakHashMap<>();
 
     /** Recolour every console currently in the UI. Safe to re-run. */
     void install() {
@@ -97,8 +103,10 @@ final class ConsoleTextTheme {
         int restyled = 0;
         int rewritten = 0;
         for (JTextPane pane : panes) {
-            themed.add(pane);
             StyledDocument document = pane.getStyledDocument();
+            java.lang.ref.WeakReference<StyledDocument> seen = themed.get(pane);
+            boolean walkRuns = seen == null || seen.get() != document;
+            themed.put(pane, new java.lang.ref.WeakReference<>(document));
             for (String name : STYLE_NAMES) {
                 Style style = document.getStyle(name);
                 if (style == null || originals.containsKey(style)) {
@@ -114,7 +122,9 @@ final class ConsoleTextTheme {
                 StyleConstants.setForeground(style, dark);
                 restyled++;
             }
-            rewritten += recolourRuns(document, consoleRunColours(true));
+            if (walkRuns) {
+                rewritten += recolourRuns(document, consoleRunColours(true));
+            }
         }
         if (restyled > 0 || rewritten > 0) {
             DebugLog.detail("ConsoleTextTheme: restyled " + restyled + " console style(s), "
@@ -143,7 +153,7 @@ final class ConsoleTextTheme {
         originals.clear();
         wasUndefined.clear();
         int rewritten = 0;
-        for (JTextPane pane : themed) {
+        for (JTextPane pane : new ArrayList<>(themed.keySet())) {
             try {
                 followPaneForeground(pane);
                 rewritten += recolourRuns(pane.getStyledDocument(), consoleRunColours(false));

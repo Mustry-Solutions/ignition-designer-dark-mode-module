@@ -231,6 +231,18 @@ verify_deployed() {
     err "The gateway holds the build but did not start the module this boot. Check 'ops/logs.sh'."
     return 1
   fi
+  # "Starting up" is logged before the startup runs, so a module that faults
+  # during it logs that line too. Give the startup a moment, then look for a
+  # fault or error naming the module in this boot.
+  sleep 3
+  local faults
+  faults="$(docker logs --since "$(docker inspect -f '{{.State.StartedAt}}' "${CONTAINER_NAME}")" "${CONTAINER_NAME}" 2>&1 \
+    | grep -iE "Designer Dark Mode|${MODULE_ID}" | grep -iE "fault|fail|error|exception" | head -5 || true)"
+  if [[ -n "${faults}" ]]; then
+    err "The module started but the gateway logged a fault for it this boot:"
+    echo "${faults}" >&2
+    return 1
+  fi
   ok "Gateway is running the staged build (${MODL_NAME}, md5 ${inside})."
 }
 

@@ -52,12 +52,16 @@ import com.formdev.flatlaf.FlatDarkLaf;
  *
  * <p>Dark only, and only inside Vision content ({@link VisionWindows}): under
  * Synthetica the saves are clean as they are, and constructing arbitrary
- * Designer classes to compare against would be reckless. The one light-mode
- * use is {@code ThemeManager.refreshStaleAttached}, and it is held to the same
- * care: only for a renderer component (one attached to a
- * {@code CellRendererPane}) refreshed off FlatLaf, and only for the classes in
- * it that had no border. The cache is cleared at every switch, since a fresh
- * instance is only fresh under the look and feel that built it.
+ * Designer classes to compare against would be reckless. The cache is
+ * cleared at every switch, since a fresh instance is only fresh under the
+ * look and feel that built it.
+ *
+ * <p>The light-mode border alignment for cached renderer components
+ * ({@code ThemeManager.refreshStaleAttached}, and the dark renderer pane's
+ * refresh) does NOT go through here: it uses {@link RendererBorders}, which
+ * shares {@link #alignWithFresh} but keeps its own cache and may build a fresh
+ * instance with a one-{@code Object} constructor. This class must stay with
+ * what the serializer itself can build.
  */
 final class VisionConstructionBorders {
 

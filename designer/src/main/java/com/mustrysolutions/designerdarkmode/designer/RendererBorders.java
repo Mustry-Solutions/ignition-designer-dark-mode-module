@@ -89,13 +89,31 @@ final class RendererBorders {
         return FRESH.computeIfAbsent(type, RendererBorders::build);
     }
 
+    /**
+     * Only Swing text components are ever built. A fresh instance is built on
+     * the paint path (the dark renderer pane refreshes as it paints), so its
+     * constructor must be one that does nothing but configure itself; a
+     * renderer component of any other kind whose border was cleared is left
+     * as the refresh made it. Vision's value editors that clear their border
+     * are all text components ({@code EditorTextField},
+     * {@code EditorFormattedField}), and the one-{@code Object} fallback is
+     * narrower still: only a {@code JFormattedTextField}, whose
+     * {@code (Object value)} constructor accepts {@code null}.
+     */
     private static VisionConstructionBorders.Fresh build(Class<?> type) {
+        if (!javax.swing.text.JTextComponent.class.isAssignableFrom(type)) {
+            return VisionConstructionBorders.Fresh.UNBUILDABLE;
+        }
         Object fresh = null;
         try {
             fresh = type.getDeclaredConstructor().newInstance();
         } catch (Throwable noArg) {
-            // No usable no-arg constructor: a single Object argument, given
-            // null, is what a formatted field's (Object value) takes.
+            if (!javax.swing.JFormattedTextField.class.isAssignableFrom(type)) {
+                DebugLog.detail("RendererBorders: no no-arg " + type.getName()
+                    + " to compare against (" + noArg + "); its border is left as the refresh made it.");
+                return VisionConstructionBorders.Fresh.UNBUILDABLE;
+            }
+            // A formatted field's (Object value) constructor, given null.
             try {
                 Constructor<?> byValue = type.getConstructor(Object.class);
                 fresh = byValue.newInstance((Object) null);
