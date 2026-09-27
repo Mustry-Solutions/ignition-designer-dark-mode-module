@@ -6,11 +6,13 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.awt.Color;
+import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.List;
 
 import javax.swing.JPanel;
 import javax.swing.JTextPane;
+import javax.swing.SwingUtilities;
 import javax.swing.UIDefaults;
 import javax.swing.plaf.ColorUIResource;
 import javax.swing.text.AttributeSet;
@@ -34,6 +36,11 @@ import org.junit.jupiter.api.Test;
  * {@code Color.red}, and text written with {@code insertString(offset, text,
  * style)}. That call copies the style's colour into the run, so restyling the
  * style alone left the interpreter banner blue on #3C3F41.
+ *
+ * <p>Everything runs on the EDT, as it does in the Designer: the harness's
+ * own Swing timers (the light-restore watchers other tests leave behind) run
+ * there too, and while this class touched the pane from the test thread it
+ * failed once on Windows (8.1 harness pass) with dark runs left unrestored.
  */
 class ScriptConsoleTextTest {
 
@@ -46,124 +53,166 @@ class ScriptConsoleTextTest {
     private StyledDocument document;
 
     @BeforeEach
-    void buildAConsole() {
-        consoles = new ConsoleTextTheme();
-        pane = new JTextPane();
-        document = pane.getStyledDocument();
-        Style regular = document.addStyle("regular", document.getStyle("default"));
-        StyleConstants.setForeground(document.addStyle("emphasize", regular), Color.blue);
-        StyleConstants.setForeground(document.addStyle("error", regular), Color.red);
-        window = new JPanel();
-        window.add(pane);
+    void buildAConsole() throws Exception {
+        onEdt(() -> {
+            consoles = new ConsoleTextTheme();
+            pane = new JTextPane();
+            document = pane.getStyledDocument();
+            Style regular = document.addStyle("regular", document.getStyle("default"));
+            StyleConstants.setForeground(document.addStyle("emphasize", regular), Color.blue);
+            StyleConstants.setForeground(document.addStyle("error", regular), Color.red);
+            window = new JPanel();
+            window.add(pane);
+        });
     }
 
     @AfterEach
-    void leaveTheConsoleLight() {
-        consoles.uninstall();
+    void leaveTheConsoleLight() throws Exception {
+        onEdt(() -> {
+            consoles.uninstall();
+        });
     }
 
     @Test
     @DisplayName("the banner written before Dark Mode is recoloured, then restored (#129)")
     void textWrittenBeforeInstallIsRecolouredAndRestored() throws Exception {
-        write("Jython 2.7.3, executing locally in the Designer.\n", "emphasize");
-        write(">>> print 1\n", "regular");
-        write("Traceback (most recent call last):\n", "error");
-        assertEquals(List.of(BLUE, "unset", RED), foregrounds(),
-            "the stand-in console does not carry ConsolePanel's colours");
+        onEdt(() -> {
+            write("Jython 2.7.3, executing locally in the Designer.\n", "emphasize");
+            write(">>> print 1\n", "regular");
+            write("Traceback (most recent call last):\n", "error");
+            assertEquals(List.of(BLUE, "unset", RED), foregrounds(),
+                "the stand-in console does not carry ConsolePanel's colours");
 
-        consoles.installIn(window);
+            consoles.installIn(window);
 
-        List<String> dark = foregrounds();
-        assertEquals("unset", dark.get(1),
-            "a regular run was given its own colour, so it no longer follows the style");
-        for (int run : new int[] {0, 2}) {
-            assertTrue(ThemeManager.luminance(Color.decode(dark.get(run))) > 120,
-                "run " + run + " is still unreadable on the dark console: " + dark.get(run));
-        }
+            List<String> dark = foregrounds();
+            assertEquals("unset", dark.get(1),
+                "a regular run was given its own colour, so it no longer follows the style");
+            for (int run : new int[] {0, 2}) {
+                assertTrue(ThemeManager.luminance(Color.decode(dark.get(run))) > 120,
+                    "run " + run + " is still unreadable on the dark console: " + dark.get(run));
+            }
 
-        consoles.uninstall();
+            consoles.uninstall();
 
-        assertEquals(List.of(BLUE, "unset", RED), foregrounds(),
-            "the console text did not come back to its stock colours");
+            assertEquals(List.of(BLUE, "unset", RED), foregrounds(),
+                "the console text did not come back to its stock colours");
+        });
     }
 
     @Test
     @DisplayName("text written while dark is stock-coloured once Dark Mode is off (#129)")
     void textWrittenWhileDarkIsRestored() throws Exception {
-        consoles.installIn(window);
-        write("printed while dark\n", "emphasize");
-        write("failed while dark\n", "error");
-        assertFalse(foregrounds().contains(BLUE), "the restyle did not reach new text");
+        onEdt(() -> {
+            consoles.installIn(window);
+            write("printed while dark\n", "emphasize");
+            write("failed while dark\n", "error");
+            assertFalse(foregrounds().contains(BLUE), "the restyle did not reach new text");
 
-        consoles.uninstall();
+            consoles.uninstall();
 
-        assertEquals(List.of(BLUE, RED), foregrounds(),
-            "text written in the dark colours stayed light on the light console");
+            assertEquals(List.of(BLUE, RED), foregrounds(),
+                "text written in the dark colours stayed light on the light console");
+        });
     }
 
     @Test
     @DisplayName("a run in a colour the console styles never use is left alone")
     void foreignColoursAreLeftAlone() throws Exception {
-        SimpleAttributeSet green = new SimpleAttributeSet();
-        StyleConstants.setForeground(green, new Color(0x008000));
-        document.insertString(0, "someone else's colour\n", green);
+        onEdt(() -> {
+            SimpleAttributeSet green = new SimpleAttributeSet();
+            StyleConstants.setForeground(green, new Color(0x008000));
+            document.insertString(0, "someone else's colour\n", green);
 
-        consoles.installIn(window);
-        assertEquals(List.of("#008000"), foregrounds());
-        consoles.uninstall();
-        assertEquals(List.of("#008000"), foregrounds());
+            consoles.installIn(window);
+            assertEquals(List.of("#008000"), foregrounds());
+            consoles.uninstall();
+            assertEquals(List.of("#008000"), foregrounds());
+        });
     }
 
     @Test
     @DisplayName("prompts and print output follow the light pane foreground after switching off")
-    void theDefaultStyleFollowsThePaneAfterUninstall() {
-        // What the look-and-feel swaps do to the pane, in ThemeManager's order:
-        // the dark look and feel is in before install, the light one is back
-        // before uninstall. BasicTextPaneUI copies each foreground into the
-        // `default` style, which is what regular runs (prompts, input, print)
-        // inherit from.
-        Style defaultStyle = document.getStyle("default");
-        pane.setForeground(new ColorUIResource(0xDDDDDD));
-        assertEquals(new Color(0xDDDDDD), StyleConstants.getForeground(defaultStyle),
-            "the text pane UI no longer mirrors its foreground into `default`, "
-                + "so this test would prove nothing");
+    void theDefaultStyleFollowsThePaneAfterUninstall() throws Exception {
+        onEdt(() -> {
+            // What the look-and-feel swaps do to the pane, in ThemeManager's order:
+            // the dark look and feel is in before install, the light one is back
+            // before uninstall. BasicTextPaneUI copies each foreground into the
+            // `default` style, which is what regular runs (prompts, input, print)
+            // inherit from.
+            Style defaultStyle = document.getStyle("default");
+            pane.setForeground(new ColorUIResource(0xDDDDDD));
+            assertEquals(new Color(0xDDDDDD), StyleConstants.getForeground(defaultStyle),
+                "the text pane UI no longer mirrors its foreground into `default`, "
+                    + "so this test would prove nothing");
 
-        consoles.installIn(window);
-        pane.setForeground(new ColorUIResource(0x2E2E2E));
-        consoles.uninstall();
+            consoles.installIn(window);
+            pane.setForeground(new ColorUIResource(0x2E2E2E));
+            consoles.uninstall();
 
-        assertEquals(new Color(0x2E2E2E), StyleConstants.getForeground(defaultStyle),
-            "`default` got the dark look and feel's foreground back, so regular "
-                + "text is near-white on the light console");
+            assertEquals(new Color(0x2E2E2E), StyleConstants.getForeground(defaultStyle),
+                "`default` got the dark look and feel's foreground back, so regular "
+                    + "text is near-white on the light console");
+        });
     }
 
     @Test
     @DisplayName("every dark console colour reaches WCAG AA on both console backgrounds (#139)")
     void darkColoursReachWcagAa() throws Exception {
-        write("Jython 2.7.3, executing locally in the Designer.\n", "emphasize");
-        write("Traceback (most recent call last):\n", "error");
+        onEdt(() -> {
+            write("Jython 2.7.3, executing locally in the Designer.\n", "emphasize");
+            write("Traceback (most recent call last):\n", "error");
 
-        consoles.installIn(window);
+            consoles.installIn(window);
 
-        List<Color> colours = new ArrayList<>();
-        for (String run : foregrounds()) {
-            colours.add(Color.decode(run));
-        }
-        for (String name : new String[] {"default", "regular", "emphasize", "error"}) {
-            colours.add(StyleConstants.getForeground(document.getStyle(name)));
-        }
-        // The Script Console's interpreter is an editable text pane, so it
-        // paints TextPane.background; the Output Console is read-only and
-        // paints inactiveBackground. Both measured live on 8.3.6 (#139).
-        UIDefaults flat = new FlatDarkLaf().getDefaults();
-        for (String key : new String[] {"TextPane.background", "TextPane.inactiveBackground"}) {
-            Color background = flat.getColor(key);
-            assertNotNull(background, "FlatDarkLaf no longer defines " + key);
-            for (Color colour : colours) {
-                double ratio = contrast(colour, background);
-                assertTrue(ratio >= 4.5, String.format("#%06X is %.2f:1 on %s #%06X, below WCAG AA",
-                    colour.getRGB() & 0xFFFFFF, ratio, key, background.getRGB() & 0xFFFFFF));
+            List<Color> colours = new ArrayList<>();
+            for (String run : foregrounds()) {
+                colours.add(Color.decode(run));
             }
+            for (String name : new String[] {"default", "regular", "emphasize", "error"}) {
+                colours.add(StyleConstants.getForeground(document.getStyle(name)));
+            }
+            // The Script Console's interpreter is an editable text pane, so it
+            // paints TextPane.background; the Output Console is read-only and
+            // paints inactiveBackground. Both measured live on 8.3.6 (#139).
+            UIDefaults flat = new FlatDarkLaf().getDefaults();
+            for (String key : new String[] {"TextPane.background", "TextPane.inactiveBackground"}) {
+                Color background = flat.getColor(key);
+                assertNotNull(background, "FlatDarkLaf no longer defines " + key);
+                for (Color colour : colours) {
+                    double ratio = contrast(colour, background);
+                    assertTrue(ratio >= 4.5, String.format("#%06X is %.2f:1 on %s #%06X, below WCAG AA",
+                        colour.getRGB() & 0xFFFFFF, ratio, key, background.getRGB() & 0xFFFFFF));
+                }
+            }
+        });
+    }
+
+    private interface SwingWork {
+        void run() throws Exception;
+    }
+
+    /** Run on the EDT and rethrow what it threw, assertion failures included. */
+    private static void onEdt(SwingWork work) throws Exception {
+        try {
+            SwingUtilities.invokeAndWait(() -> {
+                try {
+                    work.run();
+                } catch (RuntimeException | Error e) {
+                    throw e;
+                } catch (Exception e) {
+                    throw new IllegalStateException(e);
+                }
+            });
+        } catch (InvocationTargetException e) {
+            Throwable cause = e.getCause();
+            if (cause instanceof Error) {
+                throw (Error) cause;
+            }
+            if (cause instanceof Exception) {
+                throw (Exception) cause;
+            }
+            throw e;
         }
     }
 
