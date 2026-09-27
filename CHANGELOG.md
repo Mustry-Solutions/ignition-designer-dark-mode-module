@@ -27,6 +27,13 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   (no FlatLaf in either save, and it reopens intact after a relaunch), and
   the three fixes below on that line — the project dialog's OPEN buttons,
   one set of Tools items after switching projects, and the console banner.
+- **Ignition Maker Edition support.** The gateway hook now declares
+  `isMakerEditionCompatible()`, in both the 8.3 and the 8.1 file. Before
+  this, a Maker Edition gateway refused the module at startup with "Not
+  eligible for use with Ignition Maker Edition" (seen with 0.5.0 on 8.3.9).
+  The SDK default is `false`, and `isFreeModule()` only covers licensing, so
+  the module has to say so itself. The licence's Data section, which says
+  what the gateway-side code does, now names this too.
 
 ### Changed
 

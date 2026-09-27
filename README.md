@@ -146,13 +146,16 @@ are built from the same code. Upgrading is the same flow — install the newer
 `.modl` over the old one and relaunch the Designer. When you move a gateway
 from 8.1 to 8.3, install the 8.3 file after the upgrade.
 
+Both files declare themselves compatible with Ignition **Maker Edition**. A
+Maker Edition gateway refuses to start any module that does not.
+
 Everything this module does happens inside the Designer. It adds no gateway
 service, no tags, and no scripting functions, and it changes nothing for
 Perspective sessions, Vision clients, or anyone else using your gateway. (It
-does carry a tiny gateway-scope hook whose only job is to tell the gateway the
-module is free, so **Config → Modules** lists it as *Free* rather than
-*Trial*.) To remove it: **Config → Modules → Uninstall**, and relaunch the
-Designer.
+does carry a tiny gateway-scope hook whose only jobs are to tell the gateway
+the module is free, so **Config → Modules** lists it as *Free* rather than
+*Trial*, and that it may run on Maker Edition.) To remove it:
+**Config → Modules → Uninstall**, and relaunch the Designer.
 
 ## Where the setting is stored
 
