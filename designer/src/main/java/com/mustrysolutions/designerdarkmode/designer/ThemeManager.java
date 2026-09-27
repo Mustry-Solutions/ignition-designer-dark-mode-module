@@ -1933,22 +1933,68 @@ public class ThemeManager {
      * predicate and touches only components still wearing a dark look-and-feel
      * colour. It exists because the state it cleans up is OURS — a Designer
      * that never went dark never has it.
+     *
+     * <p>It also catches the one thing a tree walk can never reach: a renderer
+     * component the renderer KEEPS, built while the Designer was dark. Vision's
+     * property editor is the case this was found on — its
+     * {@code PropertyValueEditor} holds one editor panel per property type and
+     * hands the same panel back for every paint, so the panel has no parent
+     * when the restore walks the windows. Probed live on 8.1.50 after a
+     * dark → light switch, it still had {@code FlatPanelUI} /
+     * {@code FlatTextFieldUI} and FlatLaf's #DDDDDD foreground: the value
+     * column read 1.23:1. While dark, {@code SanitizingCellRendererPane}
+     * refreshes such a component on the paint that shows it; this is the light
+     * counterpart. A {@code CellRendererPane} ADDS each renderer component to
+     * itself to paint it, so the watcher already hears it: each attached
+     * component is looked at once per light session, and one still on FlatLaf
+     * delegates is refreshed on the next tick and its table repainted.
      */
     private AWTEventListener lightWatcher;
     private Timer lightWatcherTimer;
+
+    /**
+     * Components attached since the last tick, with the container they were
+     * attached to (a renderer pane's parent is the table to repaint). Weak on
+     * both ends: nothing here may keep a closed window's tree alive.
+     */
+    private final java.util.Map<java.awt.Component, java.lang.ref.WeakReference<java.awt.Container>>
+        lightAttachedPending = new java.util.WeakHashMap<>();
+
+    /**
+     * Components already looked at in this light session. A table paints its
+     * renderers on every repaint, so without this every paint would re-check
+     * every cell. Cleared on each restore: a component refreshed to FlatLaf in
+     * the dark session in between is stale again.
+     */
+    private final java.util.Set<java.awt.Component> lightAttachedSeen =
+        java.util.Collections.newSetFromMap(new java.util.WeakHashMap<>());
 
     private void installLightLeftoverWatcher() {
         if (lightWatcher != null) {
             return;
         }
+        lightAttachedSeen.clear();
+        lightAttachedPending.clear();
         lightWatcherTimer = new Timer(150, e -> {
             if (!isDarkActive()) {
+                refreshAttachedStale();
                 refreshComponentsLeftDark();
             }
         });
         lightWatcherTimer.setRepeats(false);
         lightWatcher = event -> {
             if (event.getID() == ContainerEvent.COMPONENT_ADDED) {
+                ContainerEvent added = (ContainerEvent) event;
+                java.awt.Component child = added.getChild();
+                java.awt.Container container = added.getContainer();
+                // A container event is dispatched on the thread that called
+                // add, which need not be the EDT; the two maps are only ever
+                // touched on the EDT, where the tick reads them.
+                if (SwingUtilities.isEventDispatchThread()) {
+                    noteLightAttached(child, container);
+                } else {
+                    SwingUtilities.invokeLater(() -> noteLightAttached(child, container));
+                }
                 lightWatcherTimer.restart();
             }
         };
@@ -1957,7 +2003,137 @@ public class ThemeManager {
         DebugLog.detail("Light restore: watching for subtrees attached later.");
     }
 
+    /** Record one attached component for the next tick, once per light session. EDT only. */
+    private void noteLightAttached(java.awt.Component child, java.awt.Container container) {
+        if (lightWatcher != null && child instanceof javax.swing.JComponent
+                && lightAttachedSeen.add(child)) {
+            lightAttachedPending.put(child, new java.lang.ref.WeakReference<>(container));
+        }
+    }
+
+    /**
+     * The watcher's tick: refresh what was attached still on FlatLaf delegates,
+     * and repaint where it was painted. The Vision workspace is skipped, as
+     * everywhere else: its content is the user's, drawn with the client's look.
+     */
+    private void refreshAttachedStale() {
+        var attached = new java.util.ArrayList<>(lightAttachedPending.entrySet());
+        lightAttachedPending.clear();
+        // A child and its ancestor can both be pending (an editor panel and
+        // the field in it). Refresh from the top only: a child refreshed first
+        // leaves the ancestor looking fresh, and the ancestor's own context
+        // (was it a renderer?) would never be applied.
+        java.util.Set<java.awt.Component> pending =
+            java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
+        attached.forEach(entry -> pending.add(entry.getKey()));
+        java.util.Set<java.awt.Component> repaint =
+            java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
+        int refreshed = 0;
+        for (var entry : attached) {
+            java.awt.Component component = entry.getKey();
+            java.awt.Container where = entry.getValue().get();
+            // The component's own chain too: the container it was attached to
+            // may be gone, and the component may have moved since.
+            if (component == null || insideVisionWorkspace(component)
+                    || (where != null && insideVisionWorkspace(where))
+                    || hasPendingAncestor(component, pending)) {
+                continue;
+            }
+            boolean renderer = where instanceof javax.swing.CellRendererPane;
+            if (refreshStaleAttached(component, renderer) > 0) {
+                refreshed++;
+                // A renderer pane is never painted itself; its table is. Any
+                // other component was repainted by its own refresh.
+                if (renderer && where.getParent() != null) {
+                    repaint.add(where.getParent());
+                }
+            }
+        }
+        repaint.forEach(java.awt.Component::repaint);
+        if (refreshed > 0) {
+            DebugLog.detail("Light restore: refreshed " + refreshed
+                + " component(s) attached still on FlatLaf delegates (cached renderers, late panels).");
+        }
+    }
+
+    /**
+     * Refresh one component whose subtree still holds a FlatLaf delegate under
+     * the light look and feel. Package-private so the harness can drive it.
+     *
+     * <p>A refresh gives back more than the delegate: {@code installBorder}
+     * treats a {@code null} border like a look-and-feel one and fills it in.
+     * Vision's {@code EditorTextField} sets its border to {@code null} in its
+     * constructor, so a stock-built one has none; refreshed from FlatLaf it got
+     * a {@code SynthBorder}, and the property editor's Name value sat in a box
+     * a never-dark Designer does not draw. So every component in the subtree
+     * that had no border before the refresh is compared with a fresh instance
+     * of its class, built under the look and feel now in force, the yardstick
+     * {@link VisionConstructionBorders} already uses for saves — a class that
+     * clears its border in its constructor gets {@code null} back, and a plain
+     * label keeps the look and feel's border. Only those components are
+     * compared, so only their classes are ever constructed — and only for a
+     * renderer component, one the watcher saw attached to a
+     * {@code CellRendererPane}, which is the case this was found on (by the
+     * tick it has no parent: {@code BasicTableUI} empties its renderer pane
+     * after every paint). A late-attached dock panel is Designer
+     * chrome whose classes' constructors may register listeners or start
+     * timers; its borders are left as the refresh makes them, as the docking
+     * framework's own tree update would.
+     *
+     * @param renderer whether it was attached to a {@code CellRendererPane};
+     *        only then are its borderless classes compared with fresh ones
+     * @return 1 if it was stale and refreshed, 0 if there was nothing to do
+     */
+    int refreshStaleAttached(java.awt.Component component, boolean renderer) {
+        if (!(component instanceof javax.swing.JComponent) || isDarkActive()
+                || !hasStaleUi(component, false)) {
+            return 0;
+        }
+        java.util.List<javax.swing.JComponent> borderless = new java.util.ArrayList<>();
+        if (renderer) {
+            collectBorderless(component, borderless);
+        }
+        java.util.Set<String> failed = new java.util.LinkedHashSet<>();
+        int failures = updateComponentTreeUiResiliently(component, failed);
+        if (failures > 0) {
+            DebugLog.log("Light restore: updateUI failed on " + failures + " component(s) under "
+                + component.getClass().getName() + ": " + failed + ". Their subtrees were still walked.");
+        }
+        for (javax.swing.JComponent child : borderless) {
+            if (child.getBorder() != null) {
+                VisionConstructionBorders.alignWithFresh(child,
+                    VisionConstructionBorders.freshBorder(child.getClass()));
+            }
+        }
+        return 1;
+    }
+
+    private static boolean hasPendingAncestor(java.awt.Component component,
+            java.util.Set<java.awt.Component> pending) {
+        for (java.awt.Container p = component.getParent(); p != null; p = p.getParent()) {
+            if (pending.contains(p)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static void collectBorderless(java.awt.Component component,
+            java.util.List<javax.swing.JComponent> into) {
+        if (component instanceof javax.swing.JComponent
+                && ((javax.swing.JComponent) component).getBorder() == null) {
+            into.add((javax.swing.JComponent) component);
+        }
+        if (component instanceof java.awt.Container) {
+            for (java.awt.Component child : ((java.awt.Container) component).getComponents()) {
+                collectBorderless(child, into);
+            }
+        }
+    }
+
     private void uninstallLightLeftoverWatcher() {
+        lightAttachedSeen.clear();
+        lightAttachedPending.clear();
         if (lightWatcher != null) {
             Toolkit.getDefaultToolkit().removeAWTEventListener(lightWatcher);
             lightWatcher = null;
