@@ -45,6 +45,23 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ### Fixed
 
+- **The override icons on inherited alarms and event scripts work in dark mode
+  again**
+  ([#135](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/135),
+  [#136](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/136)).
+  In the Tag Editor on a UDT instance, clicking the icon that overrides an
+  inherited alarm, or an inherited event script, did nothing while dark. The
+  alarm list and the event-scripts tree each work out where the icon is by
+  casting their own cell renderer back to its class, and the module's
+  renderer wrapper broke that cast. As for the File → Open… buttons below
+  (#130), a list renderer declared by the list's own panel is now left
+  unwrapped and themed through the list's renderer pane instead. The event
+  tree's renderer is left unwrapped by name and its icons are recoloured as
+  each row is painted. Every other tree, the Project Browser included, keeps
+  the wrapper. A sweep of the 8.3.8 and 8.1.33 jars found no other owner
+  casting a list or tree renderer. Proven by clicking the real panels in the
+  windowed harness; not yet seen in a live Designer.
+
 - **Unloading the module no longer leaves a listener running in the Designer**
   ([#147](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/147)).
   Module shutdown puts the stock theme back, and that restore installed the

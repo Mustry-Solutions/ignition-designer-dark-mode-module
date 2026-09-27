@@ -31,18 +31,6 @@ import org.junit.jupiter.api.Test;
  */
 class ListRendererWrappingTest {
 
-    /** Renders one fixed component, so pass-through is an identity check. */
-    static final class MarkerRenderer implements ListCellRenderer<Object> {
-
-        final JLabel component = new JLabel("marker");
-
-        @Override
-        public Component getListCellRendererComponent(JList<?> list, Object value,
-                int index, boolean isSelected, boolean cellHasFocus) {
-            return component;
-        }
-    }
-
     /**
      * A JIDE {@code CheckBoxList} in miniature: {@code getCellRenderer()}
      * returns a decorator whose delegate is re-read from JList's own field
@@ -119,7 +107,7 @@ class ListRendererWrappingTest {
     @DisplayName("an ordinary list gets its renderer wrapped, and still renders it")
     void wrapsOrdinaryList() {
         JList<Object> list = new JList<>();
-        MarkerRenderer marker = new MarkerRenderer();
+        ListMarkerRenderer marker = new ListMarkerRenderer();
         CellRendererSanitizer sanitizer = new CellRendererSanitizer();
 
         sanitizer.installIn(panelWith(list, marker));
@@ -138,7 +126,7 @@ class ListRendererWrappingTest {
     @DisplayName("a decorating list renders without recursing between wrapper and decorator")
     void doesNotRecurseOnDecoratingList() {
         DecoratingList list = new DecoratingList();
-        MarkerRenderer marker = new MarkerRenderer();
+        ListMarkerRenderer marker = new ListMarkerRenderer();
         CellRendererSanitizer sanitizer = new CellRendererSanitizer();
 
         sanitizer.installIn(panelWith(list, marker));
@@ -156,7 +144,7 @@ class ListRendererWrappingTest {
     @DisplayName("a decorating list whose real renderer is unreachable is left alone")
     void skipsOpaqueDecoratingList() {
         OpaqueDecoratingList list = new OpaqueDecoratingList();
-        MarkerRenderer marker = new MarkerRenderer();
+        ListMarkerRenderer marker = new ListMarkerRenderer();
         CellRendererSanitizer sanitizer = new CellRendererSanitizer();
 
         sanitizer.installIn(panelWith(list, marker));
@@ -170,7 +158,7 @@ class ListRendererWrappingTest {
     @DisplayName("uninstall puts a decorating list's own renderer back")
     void restoresDecoratingList() {
         DecoratingList list = new DecoratingList();
-        MarkerRenderer marker = new MarkerRenderer();
+        ListMarkerRenderer marker = new ListMarkerRenderer();
         CellRendererSanitizer sanitizer = new CellRendererSanitizer();
 
         sanitizer.installIn(panelWith(list, marker));
@@ -178,5 +166,23 @@ class ListRendererWrappingTest {
 
         assertSame(marker, list.getActualCellRenderer(),
             "the restore looks under the decorator, where the wrapper went");
+    }
+}
+
+/**
+ * Renders one fixed component, so pass-through is an identity check.
+ *
+ * <p>Top level, not nested in the test: the lists above are nested there, and
+ * a renderer declared inside a list's own class is one the sanitizer leaves
+ * unwrapped on purpose (#135), since that class may cast it back.
+ */
+final class ListMarkerRenderer implements ListCellRenderer<Object> {
+
+    final JLabel component = new JLabel("marker");
+
+    @Override
+    public Component getListCellRendererComponent(JList<?> list, Object value,
+            int index, boolean isSelected, boolean cellHasFocus) {
+        return component;
     }
 }
