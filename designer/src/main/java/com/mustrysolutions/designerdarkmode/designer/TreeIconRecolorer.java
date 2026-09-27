@@ -129,6 +129,13 @@ public class TreeIconRecolorer {
             if (castsItsRenderer(tree)) {
                 continue;
             }
+            // A renderer its owner casts from a listener, where no shape
+            // check can see it (#136). Recolour those cells as they are
+            // painted instead of wrapping the renderer.
+            if (CAST_BY_THEIR_OWNER.contains(current.getClass().getName())) {
+                recolorThroughPane(tree, current);
+                continue;
+            }
             wrappedTrees.put(tree, current);
             // Assigned, not accumulated: the watcher re-wraps the same tree
             // for the whole dark session, and a tree that HAD the look and
@@ -196,6 +203,9 @@ public class TreeIconRecolorer {
      * WindowedCycleTest's pixel test catches either half being dropped.
      */
     public void unwrap() {
+        // Before the tree update that discards the panes: a paint in between
+        // must not re-tint an icon the restore is about to put back.
+        paneRecoloring = false;
         wrappedTrees.forEach((tree, original) -> {
             if (tree.getCellRenderer() instanceof RecoloringRenderer) {
                 tree.setCellRenderer(lafCreatedRenderers.contains(tree) ? null : original);
@@ -758,7 +768,99 @@ public class TreeIconRecolorer {
     private final Map<Component, java.beans.PropertyChangeListener> iconWatchers =
         new WeakHashMap<>();
 
-    /** Delegates to the original renderer, then adapts colors and icons. */
+    /**
+     * Tree renderers their owner casts back from a listener.
+     * {@code EventScriptEditor.onOverrideIcon} does
+     * {@code (EventScriptEditor$Renderer) tree.getCellRenderer()} on a press
+     * in the Tag Editor's event-scripts tree, so with the renderer wrapped a
+     * click on an inherited script's override icon did nothing (#136).
+     *
+     * <p>Listed by name, not found by the ownership rule tables and lists use
+     * ({@code CellRendererSanitizer.ownedByItsComponent}). That rule is
+     * cheap there, because a skipped table or list is still sanitized
+     * through its renderer pane, the same net every table already paints
+     * through. Here it would move 17 other trees off the wrapper onto the
+     * paint-time path below, the Project Browser ({@code NavTreePanel})
+     * among them, to fix one icon. A sweep of the 8.3.8 and 8.1.33 jars for
+     * a cast applied to a fetched tree renderer found this one and
+     * {@code TagBrowserTree}'s, which {@link #castsItsRenderer} covers.
+     */
+    private static final Set<String> CAST_BY_THEIR_OWNER = Set.of(
+        "com.inductiveautomation.ignition.designer.tags.editing.propeditors.events."
+            + "EventScriptEditor$Renderer");
+
+    /**
+     * Recolour an owned tree's cells at paint time, through its UI's
+     * {@code CellRendererPane}, instead of wrapping a renderer its owner casts
+     * (#136). Every row {@code BasicTreeUI} paints goes through that pane with
+     * the configured renderer component, so the pane does what
+     * {@link RecoloringRenderer} does after its delegate: tint the icons and
+     * lift a white background. The renderer's cached colours are pushed on
+     * every paint too; they apply from the next row configured, and the
+     * repaint below covers the first.
+     *
+     * <p>Re-checked on every pass rather than once per tree: a UI refresh
+     * installs a fresh pane. The light restore's tree update discards the
+     * pane with the UI, so nothing needs putting back beyond the renderer
+     * colours {@link #uninstall()} re-syncs.
+     */
+    private void recolorThroughPane(JTree tree, TreeCellRenderer renderer) {
+        paneRecoloring = true;
+        if (paneUnavailable || !(tree.getUI() instanceof javax.swing.plaf.basic.BasicTreeUI)) {
+            return;
+        }
+        try {
+            java.lang.reflect.Field paneField =
+                javax.swing.plaf.basic.BasicTreeUI.class.getDeclaredField("rendererPane");
+            paneField.setAccessible(true);
+            javax.swing.CellRendererPane original =
+                (javax.swing.CellRendererPane) paneField.get(tree.getUI());
+            if (original == null || original instanceof RecoloringPane) {
+                return;
+            }
+            touchedRenderers.add(renderer);
+            syncRendererColors(renderer);
+            javax.swing.CellRendererPane replacement = new RecoloringPane();
+            paneField.set(tree.getUI(), replacement);
+            tree.remove(original);
+            tree.add(replacement);
+            tree.repaint();
+            DebugLog.detail("TreeIconRecolorer: recolouring " + tree.getClass().getName()
+                + " at paint time; its owner may cast " + renderer.getClass().getName() + ".");
+        } catch (Throwable t) {
+            paneUnavailable = true;
+            DebugLog.log("TreeIconRecolorer: tree renderer pane unavailable; owned trees keep "
+                + "their stock colours.", t);
+        }
+    }
+
+    /** False from {@link #unwrap()} on, so a stale pane paints stock. */
+    private boolean paneRecoloring;
+
+    /** Logged once: the field is protected, and a JVM that keeps it closed skips owned trees. */
+    private boolean paneUnavailable;
+
+    /** Does for an owned tree's painted cells what RecoloringRenderer does for the rest. */
+    private class RecoloringPane extends javax.swing.CellRendererPane {
+        @Override
+        public void paintComponent(java.awt.Graphics g, Component c, Container p,
+                int x, int y, int w, int h, boolean shouldValidate) {
+            if (paneRecoloring && c != null && p instanceof JTree) {
+                try {
+                    TreeCellRenderer renderer = ((JTree) p).getCellRenderer();
+                    if (renderer != null) {
+                        touchedRenderers.add(renderer);
+                        syncRendererColors(renderer);
+                    }
+                    processComponent(c);
+                } catch (Throwable ignored) {
+                    // Never let theming break a paint.
+                }
+            }
+            super.paintComponent(g, c, p, x, y, w, h, shouldValidate);
+        }
+    }
+
     /**
      * Does this tree hand its renderer back through a typed accessor?
      *
@@ -796,6 +898,7 @@ public class TreeIconRecolorer {
         return false;
     }
 
+    /** Delegates to the original renderer, then adapts colors and icons. */
     private class RecoloringRenderer implements TreeCellRenderer {
 
         private final TreeCellRenderer delegate;

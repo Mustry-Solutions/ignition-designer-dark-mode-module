@@ -148,6 +148,7 @@ point of the first run.
 | Tag Browser filter field | Top of the Tag Browser | `pass` | `2026-08-31` | |
 | Tag Editor | Double-click a tag | `pass` | `2026-08-31` | incl. the JIDE property table and category list |
 | Tag data type / binding sub-editors | Inside the Tag Editor | `pass` | `2026-08-31` | |
+| Override icons on inherited alarms and event scripts | Tag Editor on a UDT instance member → Alarms, and → Tag Events | `fixed` | — | [#135](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/135), [#136](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/136): found by a bytecode sweep, never seen live. Each click casts the list's or tree's own renderer, and the module's wrapper broke the cast, so a click on the icon did nothing while dark. Pinned by `OwnedRendererCastTest`, which clicks the real panels in the windowed harness. **Not yet confirmed live:** on an inherited alarm, and on an inherited event script with that event selected, click the override icon while dark and compare against light. Both should toggle the override, and the icons should read on the dark rows |
 | UDT definition editor | Tag Browser → UDT Definitions | — | — | |
 | Tag import/export dialogs | Tag Browser hamburger menu | — | — | |
 

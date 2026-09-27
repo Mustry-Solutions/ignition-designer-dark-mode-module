@@ -250,8 +250,12 @@ public class CellRendererSanitizer {
             } else if (child instanceof JTableHeader) {
                 wrapHeader((JTableHeader) child);
             } else if (child instanceof JList) {
-                wrapList((JList<?>) child);
-                wrapGroupRenderer((JList<?>) child);
+                JList<?> list = (JList<?>) child;
+                wrapList(list);
+                if (ownedLists.containsKey(list)) {
+                    interceptListRendererPane(list);
+                }
+                wrapGroupRenderer(list);
             }
             if (child instanceof Container) {
                 installIn((Container) child);
@@ -421,7 +425,7 @@ public class CellRendererSanitizer {
             TableColumn column = table.getColumnModel().getColumn(i);
             TableCellRenderer renderer = column.getCellRenderer();
             if (renderer != null && !(renderer instanceof SanitizingTableRenderer)
-                    && !ownedByTheTable(table, renderer)) {
+                    && !ownedByItsComponent(table, renderer)) {
                 originals[i] = renderer;
                 rememberColorsAtWrapTime(renderer);
                 column.setCellRenderer(new SanitizingTableRenderer(renderer));
@@ -434,7 +438,7 @@ public class CellRendererSanitizer {
         for (Class<?> valueClass : DEFAULT_RENDERER_CLASSES) {
             TableCellRenderer renderer = table.getDefaultRenderer(valueClass);
             if (renderer != null && !(renderer instanceof SanitizingTableRenderer)
-                    && !ownedByTheTable(table, renderer)) {
+                    && !ownedByItsComponent(table, renderer)) {
                 defaults.put(valueClass, renderer);
                 rememberColorsAtWrapTime(renderer);
                 table.setDefaultRenderer(valueClass, new SanitizingTableRenderer(renderer));
@@ -471,23 +475,32 @@ public class CellRendererSanitizer {
      * net, and the one header cast found (Vision's {@code ColumnCustomizer})
      * runs at construction, before any wrap, so {@link #wrapHeader} does not
      * use this.
+     *
+     * <p>Lists follow the same rule. {@code AlarmListPanel.isOverrideClicked}
+     * casts its list's renderer to {@code AlarmRenderer} from a
+     * {@code mousePressed}, so a click on an inherited alarm's override icon
+     * in the Tag Editor did nothing in dark mode (#135). A skipped list is
+     * sanitized through its renderer pane instead
+     * ({@link #interceptListRendererPane}), so the trade is as cheap as for
+     * tables. Trees are {@code TreeIconRecolorer}'s, which names the one
+     * owner cast found rather than using this rule (#136).
      */
-    private static boolean ownedByTheTable(JTable table, TableCellRenderer renderer) {
-        Class<?> owner = declaringOwner(table, renderer.getClass());
+    private static boolean ownedByItsComponent(Component component, Object renderer) {
+        Class<?> owner = declaringOwner(component, renderer.getClass());
         if (owner != null && reportedOwnedRenderers.add(renderer.getClass().getName())) {
-            DebugLog.detail("Table renderer left unwrapped (owned by " + owner.getName()
+            DebugLog.detail("Renderer left unwrapped (owned by " + owner.getName()
                 + ", which may cast it): " + renderer.getClass().getName());
         }
         return owner != null;
     }
 
     /**
-     * The class in the table's ownership chain that declares {@code type} as
-     * a nested class, or null: the table's class, the class enclosing it, or
-     * the class of a component the table sits in, or one of their
+     * The class in the component's ownership chain that declares {@code type}
+     * as a nested class, or null: the component's class, the class enclosing
+     * it, or the class of a component it sits in, or one of their
      * superclasses. JDK classes never count as owners.
      */
-    private static Class<?> declaringOwner(JTable table, Class<?> type) {
+    private static Class<?> declaringOwner(Component component, Class<?> type) {
         try {
             java.util.Set<Class<?>> declaredIn = new java.util.HashSet<>();
             for (Class<?> outer = type.getEnclosingClass(); outer != null;
@@ -497,7 +510,7 @@ public class CellRendererSanitizer {
             if (declaredIn.isEmpty()) {
                 return null;
             }
-            for (Component owner = table; owner != null; owner = owner.getParent()) {
+            for (Component owner = component; owner != null; owner = owner.getParent()) {
                 for (Class<?> ownerType = owner.getClass();
                         ownerType != null && !ownerType.getName().startsWith("java");
                         ownerType = ownerType.getSuperclass()) {
@@ -581,7 +594,7 @@ public class CellRendererSanitizer {
     private static final java.util.Set<String> reportedReorderedTables =
         new java.util.HashSet<>();
 
-    /** Renderer classes ownedByTheTable has declined, to log each once. */
+    /** Renderer classes ownedByItsComponent has declined, to log each once. */
     private static final java.util.Set<String> reportedOwnedRenderers =
         new java.util.HashSet<>();
 
@@ -599,7 +612,8 @@ public class CellRendererSanitizer {
 
     @SuppressWarnings({"unchecked", "rawtypes"})
     private void wrapList(JList<?> list) {
-        if (wrappedLists.containsKey(list) || skippedLists.containsKey(list)) {
+        if (wrappedLists.containsKey(list) || skippedLists.containsKey(list)
+                || ownedLists.containsKey(list)) {
             return;
         }
         ListCellRenderer<?> renderer = installedRenderer(list);
@@ -610,10 +624,53 @@ public class CellRendererSanitizer {
         if (renderer instanceof SanitizingListRenderer) {
             return;
         }
+        if (ownedByItsComponent(list, renderer)) {
+            ownedLists.put(list, Boolean.TRUE);
+            return;
+        }
         wrappedLists.put(list, renderer);
         rememberColorsAtWrapTime(renderer);
         list.setCellRenderer(new SanitizingListRenderer(renderer));
         list.repaint();
+    }
+
+    /**
+     * Lists whose renderer is declared by the list's owner, which may cast it
+     * back (#135). Never wrapped; installIn sanitizes them at paint time
+     * through their renderer pane instead.
+     */
+    private final Map<JList<?>, Boolean> ownedLists = new WeakHashMap<>();
+
+    /**
+     * The list counterpart of {@link #interceptRendererPane}, for a list whose
+     * renderer {@link #wrapList} left alone. {@code BasicListUI} paints every
+     * cell through its protected {@code rendererPane}, and FlatLaf's list UI
+     * extends it. Re-checked on every pass for the same reason as the table's:
+     * a UI refresh installs a fresh pane.
+     */
+    private void interceptListRendererPane(JList<?> list) {
+        if (rendererPaneUnavailable
+                || !(list.getUI() instanceof javax.swing.plaf.basic.BasicListUI)) {
+            return;
+        }
+        try {
+            java.lang.reflect.Field paneField =
+                javax.swing.plaf.basic.BasicListUI.class.getDeclaredField("rendererPane");
+            paneField.setAccessible(true);
+            javax.swing.CellRendererPane original =
+                (javax.swing.CellRendererPane) paneField.get(list.getUI());
+            if (original == null || original instanceof SanitizingCellRendererPane) {
+                return;
+            }
+            javax.swing.CellRendererPane replacement = new SanitizingCellRendererPane();
+            paneField.set(list.getUI(), replacement);
+            list.remove(original);
+            list.add(replacement);
+            list.repaint();
+        } catch (Throwable t) {
+            rendererPaneUnavailable = true;
+            DebugLog.log("CellRendererPane interception unavailable.", t);
+        }
     }
 
     /** Lists skipped by installedRenderer, to log each class once. */
@@ -743,6 +800,7 @@ public class CellRendererSanitizer {
         wrappedLists.forEach(this::restoreList);
         wrappedLists.clear();
         skippedLists.clear();
+        ownedLists.clear();
         wrappedGroupRenderers.forEach(this::restoreGroupRenderer);
         wrappedGroupRenderers.clear();
         skippedGroupLists.clear();
