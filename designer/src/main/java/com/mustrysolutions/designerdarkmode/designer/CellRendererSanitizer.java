@@ -543,7 +543,7 @@ public class CellRendererSanitizer {
         java.util.List<java.awt.event.MouseListener> owned = new java.util.ArrayList<>();
         boolean outOfOrder = false;
         for (java.awt.event.MouseListener listener : listeners) {
-            if (declaringOwner(table, listener.getClass()) != null) {
+            if (ownedListener(table, listener)) {
                 owned.add(listener);
             } else if (!owned.isEmpty()) {
                 outOfOrder = true;
@@ -561,6 +561,21 @@ public class CellRendererSanitizer {
                 + "look and feel's on " + table.getClass().getName());
         }
     }
+
+    /**
+     * Whether a mouse listener belongs to the table's owner, decided once per
+     * listener: this runs for every table on every rescan, and the answer is
+     * a reflective walk of enclosing classes and the parent chain. A listener
+     * is added by the code that built its table and stays with it, so the
+     * first answer holds. Weak keys: a closed dialog's listeners must go.
+     */
+    private static boolean ownedListener(JTable table, java.awt.event.MouseListener listener) {
+        return OWNED_LISTENERS.computeIfAbsent(listener,
+            l -> declaringOwner(table, l.getClass()) != null);
+    }
+
+    private static final Map<java.awt.event.MouseListener, Boolean> OWNED_LISTENERS =
+        new java.util.WeakHashMap<>();
 
     /** Table classes whose listeners were reordered, to log each once. */
     private static final java.util.Set<String> reportedReorderedTables =

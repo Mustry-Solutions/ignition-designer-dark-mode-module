@@ -2022,8 +2022,11 @@ public class ThemeManager {
         lightAttachedSeen.clear();
         lightAttachedPending.clear();
         lightWatcherTimer = new Timer(150, e -> {
-            if (!isDarkActive()) {
-                refreshAttachedStale();
+            // The window walk only when there is something for it: a
+            // non-renderer attached, or a refresh done. Every table paint
+            // attaches renderer components, and walking every window after
+            // each paint burst would cost a light Designer for good.
+            if (!isDarkActive() && refreshAttachedStale()) {
                 refreshComponentsLeftDark();
             }
         });
@@ -2041,7 +2044,8 @@ public class ThemeManager {
                 } else {
                     SwingUtilities.invokeLater(() -> noteLightAttached(child, container));
                 }
-                lightWatcherTimer.restart();
+                // The countdown restarts in noteLightAttached, and only for a
+                // component not seen before (see there).
             }
         };
         Toolkit.getDefaultToolkit().addAWTEventListener(
@@ -2049,11 +2053,22 @@ public class ThemeManager {
         DebugLog.detail("Light restore: watching for subtrees attached later.");
     }
 
-    /** Record one attached component for the next tick, once per light session. EDT only. */
+    /**
+     * Record one attached component for the next tick, once per light session,
+     * and restart the debounce for it. EDT only.
+     *
+     * <p>Only a component not seen before restarts the countdown. Every table
+     * paint re-attaches its renderer components, and restarting on every add
+     * let a table repainting faster than the delay postpone the tick for as
+     * long as it kept painting, so a cached editor stayed on FlatLaf. A
+     * repaint re-attaches what the watcher has already seen, so it no longer
+     * counts; a burst of genuinely new components still debounces.
+     */
     private void noteLightAttached(java.awt.Component child, java.awt.Container container) {
         if (lightWatcher != null && child instanceof javax.swing.JComponent
                 && lightAttachedSeen.add(child)) {
             lightAttachedPending.put(child, new Attached(container));
+            lightWatcherTimer.restart();
         }
     }
 
@@ -2061,8 +2076,12 @@ public class ThemeManager {
      * The watcher's tick: refresh what was attached still on FlatLaf delegates,
      * and repaint where it was painted. The Vision workspace is skipped, as
      * everywhere else: its content is the user's, drawn with the client's look.
+     *
+     * @return whether the dark-leftover walk over the windows is worth running:
+     *         something other than a renderer was attached, or something was
+     *         refreshed
      */
-    private void refreshAttachedStale() {
+    private boolean refreshAttachedStale() {
         var attached = new java.util.ArrayList<>(lightAttachedPending.entrySet());
         lightAttachedPending.clear();
         // A child and its ancestor can both be pending (an editor panel and
@@ -2075,9 +2094,11 @@ public class ThemeManager {
         java.util.Set<java.awt.Component> repaint =
             java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
         int refreshed = 0;
+        boolean nonRenderer = false;
         for (var entry : attached) {
             java.awt.Component component = entry.getKey();
             java.awt.Container where = entry.getValue().where.get();
+            nonRenderer |= !entry.getValue().renderer;
             // The component's own chain too: the container it was attached to
             // may be gone, and the component may have moved since.
             if (component == null || insideVisionWorkspace(component)
@@ -2101,6 +2122,7 @@ public class ThemeManager {
             DebugLog.detail("Light restore: refreshed " + refreshed
                 + " component(s) attached still on FlatLaf delegates (cached renderers, late panels).");
         }
+        return nonRenderer || refreshed > 0;
     }
 
     /**
@@ -2114,10 +2136,12 @@ public class ThemeManager {
      * a {@code SynthBorder}, and the property editor's Name value sat in a box
      * a never-dark Designer does not draw. So every component in the subtree
      * that had no border before the refresh is compared with a fresh instance
-     * of its class, built under the look and feel now in force, the yardstick
-     * {@link VisionConstructionBorders} already uses for saves — a class that
-     * clears its border in its constructor gets {@code null} back, and a plain
-     * label keeps the look and feel's border. Only those components are
+     * of its class, built under the look and feel now in force, by
+     * {@link RendererBorders} (the same yardstick {@link VisionConstructionBorders}
+     * uses for saves, with its own cache and a constructor fallback the save
+     * path deliberately lacks) — a class that clears its border in its
+     * constructor gets {@code null} back, and a plain label keeps the look and
+     * feel's border. Only those components are
      * compared, so only their classes are ever constructed — and only for a
      * renderer component, one the watcher saw attached to a
      * {@code CellRendererPane}, which is the case this was found on (by the
