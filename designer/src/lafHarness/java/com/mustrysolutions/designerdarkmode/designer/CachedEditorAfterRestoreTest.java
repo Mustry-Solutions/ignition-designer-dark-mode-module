@@ -246,6 +246,82 @@ class CachedEditorAfterRestoreTest {
                 + "restore (Vision's Titlebar Height, Width, Height): " + field.getBorder());
     }
 
+    @Test
+    @DisplayName("a table repainting faster than the debounce does not postpone the refresh")
+    void aRepaintingTableDoesNotStarveTheWatcher() throws Exception {
+        CachingRenderer renderer = new CachingRenderer();
+        JTable table = table(renderer);
+        JPanel host = host(table);
+        SwingUtilities.invokeAndWait(() -> {
+            manager.apply(true);
+            SwingUtilities.updateComponentTreeUI(host);
+            renderers.installIn(host);
+            paint(table);
+        });
+        JTextField field = renderer.cachedField();
+        SwingUtilities.invokeAndWait(() -> {
+            renderers.unwrap();
+            manager.apply(false);
+            SwingUtilities.updateComponentTreeUI(host);
+            renderers.uninstall();
+        });
+
+        // Every paint re-attaches the cached editor. When each attach
+        // restarted the 150 ms countdown, a table painting every 50 ms kept
+        // the tick from ever firing, and the editor stayed on FlatLaf for as
+        // long as the table kept painting (#151 finding 1).
+        boolean[] stale = new boolean[1];
+        for (int i = 0; i < 20; i++) {
+            SwingUtilities.invokeAndWait(() -> paint(table));
+            Thread.sleep(50);
+        }
+        SwingUtilities.invokeAndWait(() -> {
+            paint(table);
+            stale[0] = ThemeManager.hasStaleUi(field, false);
+        });
+
+        assertFalse(stale[0],
+            "a second of repaints every 50 ms, and the cached editor is still on a FlatLaf "
+                + "delegate: repaints are postponing the watcher's tick again");
+    }
+
+    @Test
+    @DisplayName("a tick that only saw stock renderers does not walk the windows")
+    void aRendererOnlyTickDoesNotWalkTheWindows() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            manager.apply(true);
+            manager.apply(false);
+        });
+        // Built under light, so the table's renderers are on stock delegates.
+        // Building it attaches a renderer pane, viewport and so on: not
+        // renderers, so that tick walks.
+        JTable[] table = new JTable[1];
+        JPanel[] host = new JPanel[1];
+        SwingUtilities.invokeAndWait(() -> {
+            table[0] = new JTable(new DefaultTableModel(
+                new Object[][] {{"Name", "Table"}}, new Object[] {"Property", "Value"}));
+            table[0].setSize(300, 60);
+            host[0] = host(table[0]);
+        });
+        waitForWatcherTick();
+        int walks = manager.lightLeftoverWalks();
+
+        // Painting attaches only renderer components, none of them stale.
+        SwingUtilities.invokeAndWait(() -> paint(table[0]));
+        waitForWatcherTick();
+        assertEquals(walks, manager.lightLeftoverWalks(),
+            "a tick that saw only stock renderer components walked every window for dark "
+                + "leftovers, which every table paint in a light Designer would then pay for "
+                + "(#151 finding 2)");
+
+        // Control: a non-renderer attached does walk, so the count is live.
+        SwingUtilities.invokeAndWait(() -> host[0].add(new JPanel(), BorderLayout.SOUTH));
+        waitForWatcherTick();
+        assertTrue(manager.lightLeftoverWalks() > walks,
+            "a non-renderer attached after the restore did not walk the windows, so the "
+                + "assertion above proves nothing");
+    }
+
     /** Counts its constructions; clears its border like Vision's EditorTextField. */
     static final class CountingField extends JTextField {
         static int constructed;
