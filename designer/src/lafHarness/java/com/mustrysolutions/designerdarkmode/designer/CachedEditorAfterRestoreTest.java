@@ -230,8 +230,13 @@ class CachedEditorAfterRestoreTest {
             manager.apply(false);
             SwingUtilities.updateComponentTreeUI(host);
             renderers.uninstall();
-            paint(table);
         });
+        // The restore swapped the dark renderer pane out, and the watcher
+        // holds containers weakly. Collect it before the light paint: whether
+        // the editor was a renderer must not depend on that pane still being
+        // reachable at the tick. The macOS CI runner hit exactly this.
+        collectGarbage();
+        SwingUtilities.invokeAndWait(() -> paint(table));
         waitForWatcherTick();
 
         assertFalse(ThemeManager.hasStaleUi(field, false),
@@ -341,6 +346,14 @@ class CachedEditorAfterRestoreTest {
             table.paint(g);
         } finally {
             g.dispose();
+        }
+    }
+
+    /** A best-effort collection; enough to clear a weakly held, unreachable pane. */
+    private static void collectGarbage() throws InterruptedException {
+        for (int i = 0; i < 5; i++) {
+            System.gc();
+            Thread.sleep(50);
         }
     }
 
