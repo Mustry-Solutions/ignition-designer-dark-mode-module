@@ -594,12 +594,14 @@ public class ThemeManager {
                 lafColors.captureDark();
                 visionConstruction.captureDark();
                 VisionConstructionBorders.clear();
+                RendererBorders.clear();
             });
         } else {
             safely("darkColors", () -> {
                 lafColors.clear();
                 visionConstruction.clear();
                 VisionConstructionBorders.clear();
+                RendererBorders.clear();
             });
         }
         if (dark) {
@@ -2089,22 +2091,15 @@ public class ThemeManager {
                 || !hasStaleUi(component, false)) {
             return 0;
         }
-        java.util.List<javax.swing.JComponent> borderless = new java.util.ArrayList<>();
-        if (renderer) {
-            collectBorderless(component, borderless);
-        }
+        java.util.List<javax.swing.JComponent> borderless = renderer
+            ? RendererBorders.borderless(component) : java.util.List.of();
         java.util.Set<String> failed = new java.util.LinkedHashSet<>();
         int failures = updateComponentTreeUiResiliently(component, failed);
         if (failures > 0) {
             DebugLog.log("Light restore: updateUI failed on " + failures + " component(s) under "
                 + component.getClass().getName() + ": " + failed + ". Their subtrees were still walked.");
         }
-        for (javax.swing.JComponent child : borderless) {
-            if (child.getBorder() != null) {
-                VisionConstructionBorders.alignWithFresh(child,
-                    VisionConstructionBorders.freshBorder(child.getClass()));
-            }
-        }
+        RendererBorders.restore(borderless);
         return 1;
     }
 
@@ -2116,19 +2111,6 @@ public class ThemeManager {
             }
         }
         return false;
-    }
-
-    private static void collectBorderless(java.awt.Component component,
-            java.util.List<javax.swing.JComponent> into) {
-        if (component instanceof javax.swing.JComponent
-                && ((javax.swing.JComponent) component).getBorder() == null) {
-            into.add((javax.swing.JComponent) component);
-        }
-        if (component instanceof java.awt.Container) {
-            for (java.awt.Component child : ((java.awt.Container) component).getComponents()) {
-                collectBorderless(child, into);
-            }
-        }
     }
 
     private void uninstallLightLeftoverWatcher() {

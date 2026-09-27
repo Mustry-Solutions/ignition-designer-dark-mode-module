@@ -193,12 +193,17 @@ public class CellRendererSanitizer {
      * {@code DefaultTableCellRenderer} nulls both colours (see
      * {@link #stockRendererColors}). Snapshotting around the call keeps the
      * refresh to what it is for — the delegate — and leaves the colours to
-     * {@link #sanitize}, which tracks what it changes.
+     * {@link #sanitize}, which tracks what it changes. A component's own
+     * {@code null} border is kept the same way ({@link RendererBorders}):
+     * without it a stock-built Vision value editor came out of the refresh
+     * with FlatLaf's border, and the box followed it back to light.
      */
     private void refreshDelegatePreservingColors(javax.swing.JComponent renderer) {
         Map<Component, Color[]> before = new java.util.LinkedHashMap<>();
         snapshotColors(renderer, before);
+        java.util.List<javax.swing.JComponent> borderless = RendererBorders.borderless(renderer);
         ThemeManager.refreshStaleUiDelegates(renderer);
+        RendererBorders.restore(borderless);
         before.forEach((component, colors) -> {
             component.setBackground(colors[0]);
             component.setForeground(colors[1]);

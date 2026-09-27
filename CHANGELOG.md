@@ -49,8 +49,13 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   same, from the watcher that already runs after a restore — and puts back
   the borderless look of an editor that clears its own border, which a bare
   refresh would have drawn as a box. Found and measured in a live 8.1.50
-  Designer, where the fixed editor now probes identical to a never-dark one;
-  the property table is the same on 8.3, so it very likely had it too.
+  Designer, where the fixed editor now probes identical to a never-dark one,
+  and confirmed on 8.3.6, which had it too. The borderless look is now kept
+  by every refresh of such an editor, not only the light one: a Designer
+  that started light boxed the Title value on the way into dark mode and
+  kept the box after switching back, and number values (Titlebar Height,
+  Width, Height) were boxed after any switch because their editor class has
+  no no-argument constructor to compare against.
 
 - **The OPEN buttons in File → Open… work in dark mode again**
   ([#130](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/130)).
