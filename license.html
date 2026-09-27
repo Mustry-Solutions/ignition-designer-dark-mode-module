@@ -29,10 +29,10 @@ and is available at
 <a href="https://www.apache.org/licenses/LICENSE-2.0">https://www.apache.org/licenses/LICENSE-2.0</a>.</p>
 
 <h2>2. What This Software Does</h2>
-<p>Designer Dark Mode changes the appearance of the Ignition Designer on the machine
-where it is installed. It restyles the Designer's own user interface and does not
-modify, migrate, or rewrite your projects, views, windows, tags, or any other
-gateway resource. Turning the theme off restores the Designer's stock appearance.</p>
+<p>Designer Dark Mode changes the appearance of the Ignition Designer. It is
+installed on the gateway and restyles only the Designer's own user interface; it
+does not modify, migrate, or rewrite your projects, views, windows, tags, or any
+other gateway resource. Turning the theme off restores the Designer's stock appearance.</p>
 
 <h2>3. Relationship to Inductive Automation</h2>
 <p>Designer Dark Mode is an independent third-party module. It is not produced,
@@ -76,9 +76,12 @@ excludes or limits any liability that cannot be excluded or limited under
 applicable law.</p>
 
 <h2>8. Data</h2>
-<p>The Software runs entirely within the Ignition Designer on your own machine. It
-collects and transmits no data to Mustry Solutions BV. Its only persisted state is
-your theme preference, stored locally via the Java preferences API.</p>
+<p>Everything the Software does happens within the Ignition Designer on your own
+machine; its only gateway-side code tells the gateway the module is free. It
+collects and transmits no data to Mustry Solutions BV. It persists only your theme
+preference, stored locally via the Java preferences API, and a local diagnostic
+log (<code>~/.ignition/designer-dark-mode.log</code>) that never leaves your
+machine unless you share it.</p>
 
 <p><em>Questions, or work you would like us to take on:
 <a href="https://mustrysolutions.com/contact-us">mustrysolutions.com/contact-us</a>
