@@ -2031,11 +2031,12 @@ public class ThemeManager {
                     || (where != null && insideVisionWorkspace(where))) {
                 continue;
             }
-            if (refreshStaleAttached(component) > 0) {
+            boolean renderer = where instanceof javax.swing.CellRendererPane;
+            if (refreshStaleAttached(component, renderer) > 0) {
                 refreshed++;
                 // A renderer pane is never painted itself; its table is. Any
                 // other component was repainted by its own refresh.
-                if (where instanceof javax.swing.CellRendererPane && where.getParent() != null) {
+                if (renderer && where.getParent() != null) {
                     repaint.add(where.getParent());
                 }
             }
@@ -2063,21 +2064,25 @@ public class ThemeManager {
      * clears its border in its constructor gets {@code null} back, and a plain
      * label keeps the look and feel's border. Only those components are
      * compared, so only their classes are ever constructed — and only for a
-     * renderer component, one attached to a {@code CellRendererPane}, which is
-     * the case this was found on. A late-attached dock panel is Designer
+     * renderer component, one the watcher saw attached to a
+     * {@code CellRendererPane}, which is the case this was found on (by the
+     * tick it has no parent: {@code BasicTableUI} empties its renderer pane
+     * after every paint). A late-attached dock panel is Designer
      * chrome whose classes' constructors may register listeners or start
      * timers; its borders are left as the refresh makes them, as the docking
      * framework's own tree update would.
      *
+     * @param renderer whether it was attached to a {@code CellRendererPane};
+     *        only then are its borderless classes compared with fresh ones
      * @return 1 if it was stale and refreshed, 0 if there was nothing to do
      */
-    int refreshStaleAttached(java.awt.Component component) {
+    int refreshStaleAttached(java.awt.Component component, boolean renderer) {
         if (!(component instanceof javax.swing.JComponent) || isDarkActive()
                 || !hasStaleUi(component, false)) {
             return 0;
         }
         java.util.List<javax.swing.JComponent> borderless = new java.util.ArrayList<>();
-        if (component.getParent() instanceof javax.swing.CellRendererPane) {
+        if (renderer) {
             collectBorderless(component, borderless);
         }
         java.util.Set<String> failed = new java.util.LinkedHashSet<>();

@@ -136,7 +136,7 @@ class CachedEditorAfterRestoreTest {
         JTextField field = renderer.cachedField();
         Object stockUi = field.getUI();
 
-        assertEquals(0, manager.refreshStaleAttached(renderer.cachedPanel()),
+        assertEquals(0, manager.refreshStaleAttached(renderer.cachedPanel(), true),
             "a component that was never on FlatLaf was counted as stale");
         assertTrue(stockUi == field.getUI(),
             "a component already on stock delegates was given new ones anyway");
