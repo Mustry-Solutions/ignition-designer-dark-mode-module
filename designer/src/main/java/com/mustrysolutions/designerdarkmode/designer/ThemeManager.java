@@ -1986,9 +1986,14 @@ public class ThemeManager {
             if (event.getID() == ContainerEvent.COMPONENT_ADDED) {
                 ContainerEvent added = (ContainerEvent) event;
                 java.awt.Component child = added.getChild();
-                if (child instanceof javax.swing.JComponent && lightAttachedSeen.add(child)) {
-                    lightAttachedPending.put(child,
-                        new java.lang.ref.WeakReference<>(added.getContainer()));
+                java.awt.Container container = added.getContainer();
+                // A container event is dispatched on the thread that called
+                // add, which need not be the EDT; the two maps are only ever
+                // touched on the EDT, where the tick reads them.
+                if (SwingUtilities.isEventDispatchThread()) {
+                    noteLightAttached(child, container);
+                } else {
+                    SwingUtilities.invokeLater(() -> noteLightAttached(child, container));
                 }
                 lightWatcherTimer.restart();
             }
@@ -1998,28 +2003,40 @@ public class ThemeManager {
         DebugLog.detail("Light restore: watching for subtrees attached later.");
     }
 
+    /** Record one attached component for the next tick, once per light session. EDT only. */
+    private void noteLightAttached(java.awt.Component child, java.awt.Container container) {
+        if (lightWatcher != null && child instanceof javax.swing.JComponent
+                && lightAttachedSeen.add(child)) {
+            lightAttachedPending.put(child, new java.lang.ref.WeakReference<>(container));
+        }
+    }
+
     /**
      * The watcher's tick: refresh what was attached still on FlatLaf delegates,
      * and repaint where it was painted. The Vision workspace is skipped, as
      * everywhere else: its content is the user's, drawn with the client's look.
      */
     private void refreshAttachedStale() {
-        java.util.List<java.util.Map.Entry<java.awt.Component, java.lang.ref.WeakReference<java.awt.Container>>> attached =
-            new java.util.ArrayList<>(lightAttachedPending.entrySet());
+        var attached = new java.util.ArrayList<>(lightAttachedPending.entrySet());
         lightAttachedPending.clear();
         java.util.Set<java.awt.Component> repaint =
             java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
         int refreshed = 0;
-        for (java.util.Map.Entry<java.awt.Component, java.lang.ref.WeakReference<java.awt.Container>> entry : attached) {
+        for (var entry : attached) {
+            java.awt.Component component = entry.getKey();
             java.awt.Container where = entry.getValue().get();
-            if (where != null && insideVisionWorkspace(where)) {
+            // The component's own chain too: the container it was attached to
+            // may be gone, and the component may have moved since.
+            if (component == null || insideVisionWorkspace(component)
+                    || (where != null && insideVisionWorkspace(where))) {
                 continue;
             }
-            if (refreshStaleAttached(entry.getKey()) > 0) {
+            if (refreshStaleAttached(component) > 0) {
                 refreshed++;
-                if (where != null) {
-                    // A renderer pane is never painted itself; its table is.
-                    repaint.add(where.getParent() != null ? where.getParent() : where);
+                // A renderer pane is never painted itself; its table is. Any
+                // other component was repainted by its own refresh.
+                if (where instanceof javax.swing.CellRendererPane && where.getParent() != null) {
+                    repaint.add(where.getParent());
                 }
             }
         }
@@ -2045,7 +2062,12 @@ public class ThemeManager {
      * {@link VisionConstructionBorders} already uses for saves — a class that
      * clears its border in its constructor gets {@code null} back, and a plain
      * label keeps the look and feel's border. Only those components are
-     * compared, so only their classes are ever constructed.
+     * compared, so only their classes are ever constructed — and only for a
+     * renderer component, one attached to a {@code CellRendererPane}, which is
+     * the case this was found on. A late-attached dock panel is Designer
+     * chrome whose classes' constructors may register listeners or start
+     * timers; its borders are left as the refresh makes them, as the docking
+     * framework's own tree update would.
      *
      * @return 1 if it was stale and refreshed, 0 if there was nothing to do
      */
@@ -2055,7 +2077,9 @@ public class ThemeManager {
             return 0;
         }
         java.util.List<javax.swing.JComponent> borderless = new java.util.ArrayList<>();
-        collectBorderless(component, borderless);
+        if (component.getParent() instanceof javax.swing.CellRendererPane) {
+            collectBorderless(component, borderless);
+        }
         java.util.Set<String> failed = new java.util.LinkedHashSet<>();
         int failures = updateComponentTreeUiResiliently(component, failed);
         if (failures > 0) {

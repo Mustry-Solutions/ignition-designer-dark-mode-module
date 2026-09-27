@@ -50,7 +50,7 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   the borderless look of an editor that clears its own border, which a bare
   refresh would have drawn as a box. Found and measured in a live 8.1.50
   Designer, where the fixed editor now probes identical to a never-dark one;
-  the property table is the same on 8.3.
+  the property table is the same on 8.3, so it very likely had it too.
 
 - **The OPEN buttons in File → Open… work in dark mode again**
   ([#130](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/130)).

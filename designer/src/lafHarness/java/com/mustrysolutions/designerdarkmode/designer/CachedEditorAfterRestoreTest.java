@@ -142,6 +142,43 @@ class CachedEditorAfterRestoreTest {
             "a component already on stock delegates was given new ones anyway");
     }
 
+    @Test
+    @DisplayName("a late-attached panel outside a renderer pane is refreshed without constructing its classes")
+    void aLatePanelIsRefreshedWithoutFreshInstances() throws Exception {
+        JPanel host = new JPanel(new BorderLayout());
+        JPanel[] late = new JPanel[1];
+        SwingUtilities.invokeAndWait(() -> {
+            manager.apply(true);
+            late[0] = new JPanel(new BorderLayout());
+            late[0].add(new CountingField(), BorderLayout.CENTER);
+            manager.apply(false);
+        });
+        assertTrue(ThemeManager.hasStaleUi(late[0], false),
+            "the panel built under dark mode is not on FlatLaf delegates, so this test "
+                + "reproduces nothing");
+        int constructedBefore = CountingField.constructed;
+
+        // Attached after the restore, the way a dock panel detached during it is.
+        SwingUtilities.invokeAndWait(() -> host.add(late[0], BorderLayout.CENTER));
+        waitForWatcherTick();
+
+        assertFalse(ThemeManager.hasStaleUi(late[0], false),
+            "the late-attached panel still has a FlatLaf delegate in a light Designer");
+        assertEquals(constructedBefore, CountingField.constructed,
+            "the refresh built a fresh instance of a class outside a renderer pane: "
+                + "Designer chrome whose constructor may have side effects");
+    }
+
+    /** Counts its constructions; clears its border like Vision's EditorTextField. */
+    static final class CountingField extends JTextField {
+        static int constructed;
+
+        CountingField() {
+            constructed++;
+            setBorder(null);
+        }
+    }
+
     // --- the shape of Vision's PropertyValueEditor ---------------------------
 
     /** One editor panel per value type, built on first use and handed back as-is. */
