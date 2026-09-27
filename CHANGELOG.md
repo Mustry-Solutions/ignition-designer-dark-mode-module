@@ -30,6 +30,14 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ### Changed
 
+- **The licence no longer says the module runs entirely in the Designer**
+  ([#127](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/127)).
+  Since 0.4.2 it has had a gateway hook, which only tells the gateway the
+  module is free. `license.html` now says so, and its Data section also names
+  the local debug log alongside the theme preference. Nothing the module does
+  has changed, but the licence text has, so the gateway asks for it to be
+  accepted again on upgrade.
+
 - **Debug log timestamps are UTC, and say so.** The docs always claimed UTC,
   but `~/.ignition/designer-dark-mode.log` was stamped in the Designer JVM's
   own zone. Each line now ends its timestamp with `Z`, so a log pasted into a
