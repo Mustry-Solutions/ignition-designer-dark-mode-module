@@ -10,6 +10,13 @@ on:
 permissions:
   contents: read
 
+# A new push to a PR makes the run for the previous head moot: cancel it
+# rather than let it keep a dozen runners busy to the end. Pushes to
+# main are left to finish, so every merge keeps its own result.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   build:
     name: Build & test
@@ -94,7 +101,7 @@ jobs:
           check designer-dark-mode-8.1.unsigned.modl 8.1.33
 
   harness:
-    name: LaF harness (${{ matrix.os }})
+    name: LaF harness (${{ matrix.os }}, ${{ matrix.sdk.name }})
     # Not part of `build`: the harness resolves the whole Designer dependency
     # tree at runtime and needs its own JDK module openings, so `check` should
     # not drag it in by accident. It still has to run somewhere, or it rots —
@@ -112,16 +119,33 @@ jobs:
     # watched on macOS and the things that differ per platform — which JDK
     # packages the JVM opens, which font FlatLaf resolves, how Java2D
     # rasterises — are things the harness sees and a Linux-only run does not.
-    # fail-fast is off so one platform's failure still shows the other two.
+    #
+    # Against four SDKs (#53). The module reaches Ignition and JIDE internals
+    # by NAME — classes, fields, methods that no compiler checks — so it has
+    # to be exercised against both ends of what each line claims to support:
+    # the floor in requiredIgnitionVersion, and the current release, which is
+    # what people actually run. A rename in a recent 8.x is invisible if you
+    # only ever test the floor. On the 8.1 line, 8.1.55 is the newest 8.1
+    # with jars on IA's Nexus and 8.1.33 the floor; two harness tests are
+    # about 8.3-only surfaces and are left out there (designer/build.gradle.kts).
+    #
+    # One job per OS and SDK rather than the four SDKs in sequence: each run
+    # is ~2 min of tests (~3.5 on Windows) in a single JVM, so running them
+    # back to back made the Windows row alone take a quarter of an hour.
+    # fail-fast is off so one failure still shows every other row.
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
+        sdk:
+          - { id: 8.3-current, name: 8.3 current, args: "" }
+          - { id: 8.3-floor, name: 8.3 support floor, args: "-Pharness.sdk=8.3.0" }
+          - { id: 8.1-current, name: 8.1 current, args: "-Pignition.line=8.1" }
+          - { id: 8.1-floor, name: 8.1 support floor, args: "-Pignition.line=8.1 -Pharness.sdk=8.1.33" }
     runs-on: ${{ matrix.os }}
-    # Resolving the Designer's dependency tree is the slow part, and the
-    # Windows runner is the slow platform. Four runs now (8.3 and 8.1, each at
-    # current and floor), two dependency trees to resolve cold.
-    timeout-minutes: 45
+    # One harness run: the watchdog's 15-minute deadline below, plus set-up
+    # and a cold dependency download on the slow (Windows) runner.
+    timeout-minutes: 25
     defaults:
       run:
         # Git Bash on Windows, so `./gradlew` and the flags read the same on
@@ -136,14 +160,21 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+      # Per SDK as well as per OS: each row resolves a different Designer
+      # dependency tree, and actions/cache never re-saves a key it restored.
+      # A shared key would be written by whichever row finished first and
+      # leave the other three downloading cold on every run. The fallback
+      # still starts a new key from whatever this OS last cached.
       - name: Cache Gradle
         uses: actions/cache@v6
         with:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*') }}
-          restore-keys: gradle-${{ runner.os }}-
+          key: gradle-${{ runner.os }}-harness-${{ matrix.sdk.id }}-${{ hashFiles('**/*.gradle*') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-harness-${{ matrix.sdk.id }}-
+            gradle-${{ runner.os }}-
 
       - name: Install Xvfb
         if: runner.os == 'Linux'
@@ -151,13 +182,6 @@ jobs:
           sudo apt-get update -q
           sudo apt-get install -y -q xvfb
 
-      # Twice, on purpose (#53). The module reaches Ignition and JIDE internals
-      # by NAME — classes, fields, methods that no compiler checks — so it has
-      # to be exercised against both ends of what it claims to support:
-      # 8.3.0 is the floor in requiredIgnitionVersion, and the default is the
-      # current release, which is what people actually run. A rename in a
-      # recent 8.3.x is invisible if you only ever test the floor.
-      #
       # Through a watchdog, not plain gradlew (#94): a hang used to sit until
       # the job cap cancelled it, leaving nothing to read. The wrapper
       # thread-dumps every Gradle JVM after the deadline and fails the step.
@@ -167,38 +191,15 @@ jobs:
       # missing (Git Bash on Windows) the watchdog still fails the step, just
       # without a jstack — JUnit's own per-test timeout dump, which runs
       # inside the test JVM, covers that case on every platform.
-      - name: Windowed look-and-feel harness (8.3 current)
+      - name: Windowed look-and-feel harness (${{ matrix.sdk.name }})
         # eval, so the wrapper's quoted screen argument survives as one word.
-        run: eval "$DISPLAY_WRAPPER ops/laf-harness-watchdog.sh -Pharness.windowed=true"
+        run: eval "$DISPLAY_WRAPPER ops/laf-harness-watchdog.sh -Pharness.windowed=true $SDK_ARGS"
         env:
           # xvfb-run -a picks a free display number; the screen only has to
           # exist, nothing is ever shown on it. 24-bit, or Java2D is handed
           # an 8-bit visual and renders through a palette.
           DISPLAY_WRAPPER: ${{ runner.os == 'Linux' && 'xvfb-run -a -s "-screen 0 1280x1024x24"' || '' }}
-          HARNESS_DEADLINE_SECONDS: "900"
-          ORG_GRADLE_PROJECT_org.gradle.java.installations.auto-download: "false"
-
-      - name: Windowed look-and-feel harness (8.3 support floor)
-        run: eval "$DISPLAY_WRAPPER ops/laf-harness-watchdog.sh -Pharness.windowed=true -Pharness.sdk=8.3.0"
-        env:
-          DISPLAY_WRAPPER: ${{ runner.os == 'Linux' && 'xvfb-run -a -s "-screen 0 1280x1024x24"' || '' }}
-          HARNESS_DEADLINE_SECONDS: "900"
-          ORG_GRADLE_PROJECT_org.gradle.java.installations.auto-download: "false"
-
-      # The 8.1 line, the same two ends: 8.1.55 is the newest 8.1 with jars
-      # on IA's Nexus, 8.1.33 the floor. Two harness tests are about 8.3-only
-      # surfaces and are left out here (designer/build.gradle.kts).
-      - name: Windowed look-and-feel harness (8.1 current)
-        run: eval "$DISPLAY_WRAPPER ops/laf-harness-watchdog.sh -Pharness.windowed=true -Pignition.line=8.1"
-        env:
-          DISPLAY_WRAPPER: ${{ runner.os == 'Linux' && 'xvfb-run -a -s "-screen 0 1280x1024x24"' || '' }}
-          HARNESS_DEADLINE_SECONDS: "900"
-          ORG_GRADLE_PROJECT_org.gradle.java.installations.auto-download: "false"
-
-      - name: Windowed look-and-feel harness (8.1 support floor)
-        run: eval "$DISPLAY_WRAPPER ops/laf-harness-watchdog.sh -Pharness.windowed=true -Pignition.line=8.1 -Pharness.sdk=8.1.33"
-        env:
-          DISPLAY_WRAPPER: ${{ runner.os == 'Linux' && 'xvfb-run -a -s "-screen 0 1280x1024x24"' || '' }}
+          SDK_ARGS: ${{ matrix.sdk.args }}
           HARNESS_DEADLINE_SECONDS: "900"
           ORG_GRADLE_PROJECT_org.gradle.java.installations.auto-download: "false"
 
@@ -210,7 +211,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: laf-harness-${{ matrix.os }}
+          name: laf-harness-${{ matrix.os }}-${{ matrix.sdk.id }}
           if-no-files-found: ignore
           path: |
             build/laf-harness-threads-*.txt
