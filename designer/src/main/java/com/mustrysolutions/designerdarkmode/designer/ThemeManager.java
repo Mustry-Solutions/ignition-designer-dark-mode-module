@@ -2019,6 +2019,13 @@ public class ThemeManager {
     private void refreshAttachedStale() {
         var attached = new java.util.ArrayList<>(lightAttachedPending.entrySet());
         lightAttachedPending.clear();
+        // A child and its ancestor can both be pending (an editor panel and
+        // the field in it). Refresh from the top only: a child refreshed first
+        // leaves the ancestor looking fresh, and the ancestor's own context
+        // (was it a renderer?) would never be applied.
+        java.util.Set<java.awt.Component> pending =
+            java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
+        attached.forEach(entry -> pending.add(entry.getKey()));
         java.util.Set<java.awt.Component> repaint =
             java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
         int refreshed = 0;
@@ -2028,7 +2035,8 @@ public class ThemeManager {
             // The component's own chain too: the container it was attached to
             // may be gone, and the component may have moved since.
             if (component == null || insideVisionWorkspace(component)
-                    || (where != null && insideVisionWorkspace(where))) {
+                    || (where != null && insideVisionWorkspace(where))
+                    || hasPendingAncestor(component, pending)) {
                 continue;
             }
             boolean renderer = where instanceof javax.swing.CellRendererPane;
@@ -2098,6 +2106,16 @@ public class ThemeManager {
             }
         }
         return 1;
+    }
+
+    private static boolean hasPendingAncestor(java.awt.Component component,
+            java.util.Set<java.awt.Component> pending) {
+        for (java.awt.Container p = component.getParent(); p != null; p = p.getParent()) {
+            if (pending.contains(p)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static void collectBorderless(java.awt.Component component,
