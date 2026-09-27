@@ -169,6 +169,83 @@ class CachedEditorAfterRestoreTest {
                 + "Designer chrome whose constructor may have side effects");
     }
 
+    @Test
+    @DisplayName("an editor built under stock keeps its own null border through a dark → light cycle")
+    void aStockBuiltEditorKeepsItsNullBorderThroughACycle() throws Exception {
+        CachingRenderer renderer = new CachingRenderer();
+        JTable table = table(renderer);
+        JPanel host = host(table);
+
+        // Stock first: the editor is built now, border cleared by its constructor.
+        SwingUtilities.invokeAndWait(() -> paint(table));
+        JTextField field = renderer.cachedField();
+        assertNull(field.getBorder(), "the stock-built field has a border, so this test reproduces nothing");
+
+        // Dark: the renderer pane refreshes the stock editor on the paint that shows it.
+        SwingUtilities.invokeAndWait(() -> {
+            manager.apply(true);
+            SwingUtilities.updateComponentTreeUI(host);
+            renderers.installIn(host);
+            paint(table);
+        });
+        assertFalse(ThemeManager.hasStaleUi(field, true),
+            "the dark paint did not refresh the stock-built editor, so this test reproduces nothing: "
+                + field.getUI().getClass().getName());
+        assertNull(field.getBorder(),
+            "the dark refresh gave a field that clears its own border FlatLaf's border, the box "
+                + "that then follows it back to light: " + field.getBorder());
+
+        // And back to light.
+        SwingUtilities.invokeAndWait(() -> {
+            renderers.unwrap();
+            manager.apply(false);
+            SwingUtilities.updateComponentTreeUI(host);
+            renderers.uninstall();
+            paint(table);
+        });
+        waitForWatcherTick();
+        assertFalse(ThemeManager.hasStaleUi(field, false),
+            "the editor is not back on stock delegates: " + field.getUI().getClass().getName());
+        assertNull(field.getBorder(),
+            "after a dark → light cycle the field sits in a box a never-dark Designer does not "
+                + "draw: " + field.getBorder());
+    }
+
+    @Test
+    @DisplayName("a field with no no-arg constructor that clears its border keeps it cleared")
+    void aFieldWithoutANoArgConstructorKeepsItsNullBorder() throws Exception {
+        CachingRenderer renderer = new CachingRenderer(() -> new BorderlessFormattedField(20));
+        JTable table = table(renderer);
+        JPanel host = host(table);
+
+        SwingUtilities.invokeAndWait(() -> {
+            manager.apply(true);
+            SwingUtilities.updateComponentTreeUI(host);
+            renderers.installIn(host);
+            paint(table);
+        });
+        JTextField field = renderer.cachedField();
+        SwingUtilities.invokeAndWait(() -> {
+            renderers.unwrap();
+            manager.apply(false);
+            SwingUtilities.updateComponentTreeUI(host);
+            renderers.uninstall();
+        });
+        // The restore swapped the dark renderer pane out, and the watcher
+        // holds containers weakly. Collect it before the light paint: whether
+        // the editor was a renderer must not depend on that pane still being
+        // reachable at the tick. The macOS CI runner hit exactly this.
+        collectGarbage();
+        SwingUtilities.invokeAndWait(() -> paint(table));
+        waitForWatcherTick();
+
+        assertFalse(ThemeManager.hasStaleUi(field, false),
+            "the editor is not back on stock delegates: " + field.getUI().getClass().getName());
+        assertNull(field.getBorder(),
+            "a formatted field whose constructors all take an argument sits in a box after the "
+                + "restore (Vision's Titlebar Height, Width, Height): " + field.getBorder());
+    }
+
     /** Counts its constructions; clears its border like Vision's EditorTextField. */
     static final class CountingField extends JTextField {
         static int constructed;
@@ -184,13 +261,22 @@ class CachedEditorAfterRestoreTest {
     /** One editor panel per value type, built on first use and handed back as-is. */
     private static final class CachingRenderer implements TableCellRenderer {
         private final Map<Class<?>, JPanel> editors = new HashMap<>();
+        private final java.util.function.Supplier<JTextField> fields;
+
+        CachingRenderer() {
+            this(BorderlessField::new);
+        }
+
+        CachingRenderer(java.util.function.Supplier<JTextField> fields) {
+            this.fields = fields;
+        }
 
         @Override
         public Component getTableCellRendererComponent(JTable table, Object value,
                 boolean isSelected, boolean hasFocus, int row, int column) {
             JPanel panel = editors.computeIfAbsent(String.class, type -> {
                 JPanel editor = new JPanel(new BorderLayout());
-                JTextField text = new BorderlessField();
+                JTextField text = fields.get();
                 text.setOpaque(false);
                 editor.add(text, BorderLayout.CENTER);
                 editor.add(new JLabel("..."), BorderLayout.EAST);
@@ -224,6 +310,18 @@ class CachedEditorAfterRestoreTest {
         }
     }
 
+    /**
+     * Vision's {@code EditorFormattedField}: every constructor takes an
+     * argument and clears the border (through {@code init()}), so there is no
+     * no-arg constructor to build a fresh one with.
+     */
+    public static final class BorderlessFormattedField extends javax.swing.JFormattedTextField {
+        public BorderlessFormattedField(Object value) {
+            super(value);
+            setBorder(null);
+        }
+    }
+
     private static JTable table(TableCellRenderer renderer) {
         JTable table = new JTable(new DefaultTableModel(
             new Object[][] {{"Name", "Table"}}, new Object[] {"Property", "Value"}));
@@ -248,6 +346,14 @@ class CachedEditorAfterRestoreTest {
             table.paint(g);
         } finally {
             g.dispose();
+        }
+    }
+
+    /** A best-effort collection; enough to clear a weakly held, unreachable pane. */
+    private static void collectGarbage() throws InterruptedException {
+        for (int i = 0; i < 5; i++) {
+            System.gc();
+            Thread.sleep(50);
         }
     }
 

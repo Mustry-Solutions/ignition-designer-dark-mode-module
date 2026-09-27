@@ -594,12 +594,14 @@ public class ThemeManager {
                 lafColors.captureDark();
                 visionConstruction.captureDark();
                 VisionConstructionBorders.clear();
+                RendererBorders.clear();
             });
         } else {
             safely("darkColors", () -> {
                 lafColors.clear();
                 visionConstruction.clear();
                 VisionConstructionBorders.clear();
+                RendererBorders.clear();
             });
         }
         if (dark) {
@@ -1953,12 +1955,32 @@ public class ThemeManager {
     private Timer lightWatcherTimer;
 
     /**
-     * Components attached since the last tick, with the container they were
-     * attached to (a renderer pane's parent is the table to repaint). Weak on
-     * both ends: nothing here may keep a closed window's tree alive.
+     * Components attached since the last tick, with where they were attached
+     * (a renderer pane's parent is the table to repaint). Weak on both ends:
+     * nothing here may keep a closed window's tree alive.
      */
-    private final java.util.Map<java.awt.Component, java.lang.ref.WeakReference<java.awt.Container>>
+    private final java.util.Map<java.awt.Component, Attached>
         lightAttachedPending = new java.util.WeakHashMap<>();
+
+    /**
+     * Where a component was attached, and whether that was a renderer pane —
+     * decided when it is attached, not at the tick. The container is held
+     * weakly, and a renderer pane can be collected before the tick: the dark
+     * session's {@code SanitizingCellRendererPane} is swapped out by the
+     * restore. Read from a cleared reference, "was it a renderer?" came out
+     * false, and the cached editor was refreshed without the border step: the
+     * box it exists to prevent. Seen on the macOS CI runner and reproduced
+     * locally by forcing a collection before the light paint.
+     */
+    private static final class Attached {
+        final java.lang.ref.WeakReference<java.awt.Container> where;
+        final boolean renderer;
+
+        Attached(java.awt.Container where) {
+            this.where = new java.lang.ref.WeakReference<>(where);
+            this.renderer = where instanceof javax.swing.CellRendererPane;
+        }
+    }
 
     /**
      * Components already looked at in this light session. A table paints its
@@ -2007,7 +2029,7 @@ public class ThemeManager {
     private void noteLightAttached(java.awt.Component child, java.awt.Container container) {
         if (lightWatcher != null && child instanceof javax.swing.JComponent
                 && lightAttachedSeen.add(child)) {
-            lightAttachedPending.put(child, new java.lang.ref.WeakReference<>(container));
+            lightAttachedPending.put(child, new Attached(container));
         }
     }
 
@@ -2031,7 +2053,7 @@ public class ThemeManager {
         int refreshed = 0;
         for (var entry : attached) {
             java.awt.Component component = entry.getKey();
-            java.awt.Container where = entry.getValue().get();
+            java.awt.Container where = entry.getValue().where.get();
             // The component's own chain too: the container it was attached to
             // may be gone, and the component may have moved since.
             if (component == null || insideVisionWorkspace(component)
@@ -2039,12 +2061,13 @@ public class ThemeManager {
                     || hasPendingAncestor(component, pending)) {
                 continue;
             }
-            boolean renderer = where instanceof javax.swing.CellRendererPane;
+            boolean renderer = entry.getValue().renderer;
             if (refreshStaleAttached(component, renderer) > 0) {
                 refreshed++;
                 // A renderer pane is never painted itself; its table is. Any
-                // other component was repainted by its own refresh.
-                if (renderer && where.getParent() != null) {
+                // other component was repainted by its own refresh. A pane
+                // already collected has no table left to repaint.
+                if (renderer && where != null && where.getParent() != null) {
                     repaint.add(where.getParent());
                 }
             }
@@ -2089,22 +2112,15 @@ public class ThemeManager {
                 || !hasStaleUi(component, false)) {
             return 0;
         }
-        java.util.List<javax.swing.JComponent> borderless = new java.util.ArrayList<>();
-        if (renderer) {
-            collectBorderless(component, borderless);
-        }
+        java.util.List<javax.swing.JComponent> borderless = renderer
+            ? RendererBorders.borderless(component) : java.util.List.of();
         java.util.Set<String> failed = new java.util.LinkedHashSet<>();
         int failures = updateComponentTreeUiResiliently(component, failed);
         if (failures > 0) {
             DebugLog.log("Light restore: updateUI failed on " + failures + " component(s) under "
                 + component.getClass().getName() + ": " + failed + ". Their subtrees were still walked.");
         }
-        for (javax.swing.JComponent child : borderless) {
-            if (child.getBorder() != null) {
-                VisionConstructionBorders.alignWithFresh(child,
-                    VisionConstructionBorders.freshBorder(child.getClass()));
-            }
-        }
+        RendererBorders.restore(borderless);
         return 1;
     }
 
@@ -2116,19 +2132,6 @@ public class ThemeManager {
             }
         }
         return false;
-    }
-
-    private static void collectBorderless(java.awt.Component component,
-            java.util.List<javax.swing.JComponent> into) {
-        if (component instanceof javax.swing.JComponent
-                && ((javax.swing.JComponent) component).getBorder() == null) {
-            into.add((javax.swing.JComponent) component);
-        }
-        if (component instanceof java.awt.Container) {
-            for (java.awt.Component child : ((java.awt.Container) component).getComponents()) {
-                collectBorderless(child, into);
-            }
-        }
     }
 
     private void uninstallLightLeftoverWatcher() {
