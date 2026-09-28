@@ -139,45 +139,16 @@ jobs:
           verify "${{ steps.modl.outputs.v83 }}" 8.3.0
           verify "${{ steps.modl.outputs.v81 }}" 8.1.33
 
-      # The release notes ARE the CHANGELOG section for this version. Generated
-      # notes are a list of commit subjects, which says what was touched but not
-      # what was wrong or why it broke — the part a reader of a release actually
-      # needs. Fail loudly rather than publish a release with no notes.
-      - name: Extract the release notes from the CHANGELOG
+      # The notes are built by ops/release-notes.sh: which file to download,
+      # the CHANGELOG section for this version, and the footer. The script
+      # fails when that section is missing, so no release goes out without
+      # notes. Run it by hand to rewrite an already-published release.
+      - name: Build the release notes
         id: notes
         if: ${{ steps.ver.outputs.publish == 'true' }}
         run: |
-          awk -v ver="${{ steps.ver.outputs.version }}" '
-            index($0, "## [" ver "]") == 1 { found = 1; next }
-            found && index($0, "## [") == 1 { exit }
-            found { print }
-          ' CHANGELOG.md > "$RUNNER_TEMP/changelog.md"
-          if [ ! -s "$RUNNER_TEMP/changelog.md" ]; then
-            echo "::error::CHANGELOG.md has no '## [${{ steps.ver.outputs.version }}]' section. Add one before tagging."
-            exit 1
-          fi
-          # Every release page opens with which file to download, so nobody
-          # has to guess from the two names. Same table as the README.
-          cat > "$RUNNER_TEMP/notes.md" <<'HEADER'
-          **Which file?**
-
-          | Your gateway | Download |
-          |---|---|
-          | Ignition **8.3** | `designer-dark-mode-8.3.modl` |
-          | Ignition **8.1.33** or newer | `designer-dark-mode-8.1.modl` |
-
-          ---
-
-          HEADER
-          cat "$RUNNER_TEMP/changelog.md" >> "$RUNNER_TEMP/notes.md"
-          # Every release page carries the same footer: the Download link in
-          # the README lands here, so this is where a reader learns who made it.
-          cat >> "$RUNNER_TEMP/notes.md" <<'FOOTER'
-
-          ---
-
-          Designer Dark Mode is free and made by [Mustry Solutions](https://mustrysolutions.com), an IT/OT consultancy that builds Ignition systems and modules. We also sell [Ignition 8.3 modules](https://mustrysolutions.com/ignition-modules) (TimescaleDB, AMQP, Observability, Secrets) and build modules to order. [Get in touch](https://mustrysolutions.com/contact-us).
-          FOOTER
+          ops/release-notes.sh "${{ steps.ver.outputs.version }}" > "$RUNNER_TEMP/notes.md" \
+            || { echo "::error::CHANGELOG.md has no '## [${{ steps.ver.outputs.version }}]' section. Add one before tagging."; exit 1; }
           echo "path=$RUNNER_TEMP/notes.md" >> "$GITHUB_OUTPUT"
 
       # Dry run (workflow_dispatch): keep the signed .modl as an artifact
