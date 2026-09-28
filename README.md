@@ -128,7 +128,7 @@ You do not need to build anything.
 
    | Gateway | File |
    |---|---|
-   | Ignition **8.3** | `designer-dark-mode-8.3.modl` |
+   | Ignition **8.3** | `designer-dark-mode-8.3.modl` (`designer-dark-mode.modl` in 0.6.0 and earlier) |
    | Ignition **8.1.33** or newer | `designer-dark-mode-8.1.modl` |
 
    A gateway refuses the other line's file at install, with a message that
