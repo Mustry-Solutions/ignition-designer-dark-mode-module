@@ -578,9 +578,14 @@ public class CellRendererSanitizer {
     /**
      * Whether a mouse listener belongs to the table's owner, decided once per
      * listener: this runs for every table on every rescan, and the answer is
-     * a reflective walk of enclosing classes and the parent chain. A listener
-     * is added by the code that built its table and stays with it, so the
-     * first answer holds. Weak keys: a closed dialog's listeners must go.
+     * a reflective walk of enclosing classes and the parent chain. The cache
+     * is keyed by the listener alone, so it ASSUMES a listener stays with the
+     * table it was first seen on, under the same owner: one listener instance
+     * shared by tables with different owners, or a table moved to a new
+     * owner, keeps the first verdict. Neither is known in the Designer (a
+     * listener is added by the code that built its table, and the sweep only
+     * reaches tables already in a window). Weak keys: a closed dialog's
+     * listeners must go.
      */
     private static boolean ownedListener(JTable table, java.awt.event.MouseListener listener) {
         return OWNED_LISTENERS.computeIfAbsent(listener,

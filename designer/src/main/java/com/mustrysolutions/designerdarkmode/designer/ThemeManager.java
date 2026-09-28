@@ -1978,6 +1978,14 @@ public class ThemeManager {
     private AWTEventListener lightWatcher;
     private Timer lightWatcherTimer;
 
+    /** Watcher ticks that walked the windows for dark leftovers. EDT only. */
+    private int lightLeftoverWalks;
+
+    /** Package-private so the harness can tell a tick that walked from one that did not. */
+    int lightLeftoverWalks() {
+        return lightLeftoverWalks;
+    }
+
     /**
      * Components attached since the last tick, with where they were attached
      * (a renderer pane's parent is the table to repaint). Weak on both ends:
@@ -2027,6 +2035,7 @@ public class ThemeManager {
             // attaches renderer components, and walking every window after
             // each paint burst would cost a light Designer for good.
             if (!isDarkActive() && refreshAttachedStale()) {
+                lightLeftoverWalks++;
                 refreshComponentsLeftDark();
             }
         });
