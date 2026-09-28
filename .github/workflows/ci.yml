@@ -90,7 +90,7 @@ jobs:
           unzip -l "$modl" | grep -q 'license.html' \
             || { echo "::error::license.html was not staged into the .modl"; exit 1; }
           }
-          check designer-dark-mode.unsigned.modl 8.3.0
+          check designer-dark-mode-8.3.unsigned.modl 8.3.0
           check designer-dark-mode-8.1.unsigned.modl 8.1.33
 
   harness:

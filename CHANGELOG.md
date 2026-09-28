@@ -10,6 +10,19 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ## [Unreleased]
 
+### Changed
+
+- **The 8.3 file is now `designer-dark-mode-8.3.modl`**, renamed from
+  `designer-dark-mode.modl`, so each file says which Ignition line it is for
+  (the 8.1 file is still `designer-dark-mode-8.1.modl`). Installing it over the
+  old file is an ordinary upgrade: the gateway knows the module by its ID, not
+  its file name. Two things to check: a script or link that downloads
+  `releases/latest/download/designer-dark-mode.modl` needs the new name, and
+  on a gateway that loads from a modules folder (a mounted folder in Docker,
+  for instance), delete the old file rather than dropping the new one beside
+  it. Each release page now also opens with a table of which file is for
+  which gateway.
+
 ## [0.6.0] - 2026-09-28
 
 Ignition 8.1 support: each release now carries a second file for 8.1.33 and

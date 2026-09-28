@@ -128,7 +128,7 @@ You do not need to build anything.
 
    | Gateway | File |
    |---|---|
-   | Ignition **8.3** | `designer-dark-mode.modl` |
+   | Ignition **8.3** | `designer-dark-mode-8.3.modl` (`designer-dark-mode.modl` in 0.6.0 and earlier) |
    | Ignition **8.1.33** or newer | `designer-dark-mode-8.1.modl` |
 
    A gateway refuses the other line's file at install, with a message that
@@ -206,7 +206,7 @@ module plugin, FlatLaf — is resolved automatically.
 ./gradlew build -Pignition.line=8.1   # Ignition 8.1.33 and later
 ```
 
-The module lands at `build/designer-dark-mode.unsigned.modl`, or
+The module lands at `build/designer-dark-mode-8.3.unsigned.modl`, or
 `build/designer-dark-mode-8.1.unsigned.modl` for 8.1. Builds from source
 are unsigned unless you pass signing credentials (see
 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#signing)), and an 8.3 gateway will

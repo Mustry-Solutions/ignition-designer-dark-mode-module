@@ -23,7 +23,7 @@ how to build, run, and submit changes.
 ./gradlew build
 ```
 
-The module lands at `build/designer-dark-mode.unsigned.modl`. Plain builds are
+The module lands at `build/designer-dark-mode-8.3.unsigned.modl`. Plain builds are
 unsigned; see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#signing) for signing.
 
 ## Run it

@@ -44,7 +44,7 @@ esac
 is_8_1() { [[ "${IGNITION_LINE}" == "8.1" ]]; }
 
 MODULES_DIR="${MAIN_ROOT}/ops/modules${LINE_SUFFIX}"
-MODL_NAME="designer-dark-mode${LINE_SUFFIX}.modl"
+MODL_NAME="designer-dark-mode-${IGNITION_LINE}.modl"
 
 # Local self-signed signing material for development (gitignored). On a fresh
 # gateway the certificate is accepted unattended, by seeding its fingerprint into
@@ -161,6 +161,22 @@ registry_fingerprint() {
 import json, os, sys
 try:
     print(json.load(sys.stdin).get(os.environ["MODULE_ID"], {}).get("certFingerprint", ""))
+except Exception:
+    print("")
+' 2>/dev/null || true
+}
+
+# 8.3 only: the file the registry says the module loads from. Empty on 8.1,
+# whose registry records no file name. The 8.3 build used to be
+# designer-dark-mode.modl, so a gateway set up before the rename points at a
+# file that deploy no longer stages.
+registry_filename() {
+  is_8_1 && return 0
+  docker exec "${CONTAINER_NAME}" cat /usr/local/bin/ignition/data/modules.json 2>/dev/null \
+    | MODULE_ID="${MODULE_ID}" python3 -c '
+import json, os, sys
+try:
+    print(json.load(sys.stdin).get(os.environ["MODULE_ID"], {}).get("filename", ""))
 except Exception:
     print("")
 ' 2>/dev/null || true

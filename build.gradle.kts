@@ -14,7 +14,7 @@ plugins {
 /*
  * Which Ignition line this build is for: 8.3 (the default) or 8.1.
  *
- *     ./gradlew build                       -> build/designer-dark-mode.modl
+ *     ./gradlew build                       -> build/designer-dark-mode-8.3.modl
  *     ./gradlew build -Pignition.line=8.1   -> build/designer-dark-mode-8.1.modl
  *
  * One source tree, two .modl files, because no single requiredIgnitionVersion
@@ -85,7 +85,7 @@ ignitionModule {
     /*
      * Name of the '.modl' file to be created, without file extension.
      */
-    fileName.set(if (is_8_1_line) "designer-dark-mode-8.1" else "designer-dark-mode")
+    fileName.set(if (is_8_1_line) "designer-dark-mode-8.1" else "designer-dark-mode-8.3")
     /*
      * Unique identifier for the module.  Reverse domain convention is recommended (e.g.: com.mycompany.charting-module)
      */

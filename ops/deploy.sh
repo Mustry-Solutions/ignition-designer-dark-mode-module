@@ -33,6 +33,9 @@ if [[ "$(registry_fingerprint)" != "$(dev_cert_fingerprint)" ]]; then
 elif [[ "$(registry_license_hash)" != "$(staged_license_crc)" ]]; then
   warn "license.html changed since the gateway accepted it; re-seeding acceptance."
   accept_staged_module
+elif ! is_8_1 && [[ "$(registry_filename)" != "${MODL_IN_CONTAINER}" ]]; then
+  warn "The gateway's registry points at a different .modl file name; re-seeding acceptance."
+  accept_staged_module
 else
   info "Restarting the gateway to load the new build..."
   "${COMPOSE[@]}" restart gateway
