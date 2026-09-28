@@ -224,3 +224,24 @@ jobs:
             designer/build/test-results/lafHarness/
             designer/build/laf-harness-debug.log
             designer/build/laf-harness-renders/
+
+  harness-gate:
+    name: LaF harness
+    # The one harness check the `main` ruleset requires. The matrix above
+    # names its rows by OS and SDK; requiring each by name meant editing the
+    # ruleset whenever a row was added or renamed, and a renamed row is a
+    # required check that never reports, which blocks every PR. This job
+    # passes only if every row passed, so the ruleset names it alone.
+    #
+    # always(), so a failed or cancelled row fails this check rather than
+    # skipping it: a skipped required check counts as passed.
+    needs: harness
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Every harness row passed
+        run: |
+          echo "harness matrix: ${{ needs.harness.result }}"
+          [ "${{ needs.harness.result }}" = "success" ] \
+            || { echo "::error::One or more LaF harness rows did not pass (${{ needs.harness.result }})"; exit 1; }
