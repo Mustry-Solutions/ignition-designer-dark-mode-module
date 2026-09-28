@@ -122,9 +122,12 @@ publishes the `.modl` via `.github/workflows/release.yml`. In order:
 
 1. **Changelog PR.** Rename `## [Unreleased]` in `CHANGELOG.md` to
    `## [x.y.z] - YYYY-MM-DD` and open a fresh, empty `## [Unreleased]` above it.
-   The release notes *are* that section: the workflow copies it verbatim (plus
-   a fixed footer) and **fails the release** if no `## [x.y.z]` heading
-   matches the tag.
+   The release notes *are* that section (`ops/release-notes.sh` builds them):
+   the text above the first `###` heading stays in view, so put what a reader
+   must not miss (upgrade steps, renamed files) there; each `### Added` /
+   `### Changed` / ... subsection is folded into a collapsible block. The
+   workflow adds the which-file table and a fixed footer, and **fails the
+   release** if no `## [x.y.z]` heading matches the tag.
 2. **Merge it**, and let the **Build & test** check go green on `main`.
 3. **Tag the merge commit** with an annotated `vX.Y.Z` tag and push the tag.
    The version after the `v` must be plain `x.y.z` — Ignition's module version

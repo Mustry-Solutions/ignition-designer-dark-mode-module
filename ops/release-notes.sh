@@ -39,7 +39,27 @@ cat <<'HEADER'
 
 ---
 HEADER
-printf '%s\n' "${section}"
+# The summary above the first `###` heading (what the release is, how to
+# upgrade) stays in view. Each `### Added` / `### Changed` / ... subsection
+# folds into a <details> block titled with its entry count, so the page opens
+# short and the full detail is one click away. GitHub needs a blank line after
+# </summary> and before </details> to render the Markdown inside.
+printf '%s\n' "${section}" | awk '
+  function flush() {
+    if (title == "") return
+    sub(/\n+$/, "", body)
+    printf "<details>\n<summary><b>%s</b>%s</summary>\n\n", title, (n ? " (" n ")" : "")
+    printf "%s\n\n</details>\n\n", body
+    title = ""; body = ""; n = 0
+  }
+  index($0, "### ") == 1 { flush(); title = substr($0, 5); next }
+  title == "" { print; next }
+  # Skip the blank lines right after the heading; <summary> stands in for it.
+  body == "" && $0 ~ /^[ \t]*$/ { next }
+  index($0, "- ") == 1 { n++ }
+  { body = body $0 "\n" }
+  END { flush() }
+'
 # Every release page carries the same footer: the Download link in the README
 # lands here, so this is where a reader learns who made it.
 cat <<'FOOTER'
