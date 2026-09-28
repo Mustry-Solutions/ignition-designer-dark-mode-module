@@ -151,11 +151,26 @@ jobs:
             index($0, "## [" ver "]") == 1 { found = 1; next }
             found && index($0, "## [") == 1 { exit }
             found { print }
-          ' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
-          if [ ! -s "$RUNNER_TEMP/notes.md" ]; then
+          ' CHANGELOG.md > "$RUNNER_TEMP/changelog.md"
+          if [ ! -s "$RUNNER_TEMP/changelog.md" ]; then
             echo "::error::CHANGELOG.md has no '## [${{ steps.ver.outputs.version }}]' section. Add one before tagging."
             exit 1
           fi
+          # Every release page opens with which file to download: the two
+          # assets differ only by an "-8.1" suffix, and the unsuffixed one
+          # (8.3) does not say so in its name. Same table as the README.
+          cat > "$RUNNER_TEMP/notes.md" <<'HEADER'
+          **Which file?**
+
+          | Your gateway | Download |
+          |---|---|
+          | Ignition **8.3** | `designer-dark-mode.modl` |
+          | Ignition **8.1.33** or newer | `designer-dark-mode-8.1.modl` |
+
+          ---
+
+          HEADER
+          cat "$RUNNER_TEMP/changelog.md" >> "$RUNNER_TEMP/notes.md"
           # Every release page carries the same footer: the Download link in
           # the README lands here, so this is where a reader learns who made it.
           cat >> "$RUNNER_TEMP/notes.md" <<'FOOTER'
