@@ -712,10 +712,13 @@ The Dark Mode menu item's crescent, drawn as a vector shape in
 per theme.
 
 ### DesignerDarkModeGatewayHook
-The module's only gateway-scope code, and it does one thing: returns `true`
-from `isFreeModule()`. The 8.3 gateway ignores `<freeModule>` in
-`module.xml`; it asks the gateway hook instead, and a module without one is
-listed as *Trial* under **Config → Modules** (#114). It registers nothing.
+The module's only gateway-scope code, and it answers two questions the
+gateway asks of it. It returns `true` from `isFreeModule()`: the 8.3 gateway
+ignores `<freeModule>` in `module.xml`; it asks the gateway hook instead, and
+a module without one is listed as *Trial* under **Config → Modules** (#114).
+It also returns `true` from `isMakerEditionCompatible()`, without which a
+Maker Edition gateway refuses the module at startup ("Not eligible for use
+with Ignition Maker Edition"). It registers nothing.
 
 ## Gotchas and hard-won facts
 

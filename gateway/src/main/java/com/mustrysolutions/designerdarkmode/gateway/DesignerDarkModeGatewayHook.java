@@ -5,8 +5,9 @@ import com.inductiveautomation.ignition.gateway.model.AbstractGatewayModuleHook;
 import com.inductiveautomation.ignition.gateway.model.GatewayContext;
 
 /**
- * Gateway-scope entry point, present for one reason: to tell the gateway the
- * module is free (#114).
+ * Gateway-scope entry point, present to answer two questions the gateway asks
+ * of it: whether the module is free (#114), and whether it may run on Ignition
+ * Maker Edition.
  *
  * <p>Everything the module does happens in the Designer, and up to 0.4.1 it
  * shipped as designer scope only. Its {@code module.xml} has said
@@ -17,8 +18,9 @@ import com.inductiveautomation.ignition.gateway.model.GatewayContext;
  * hook and asks it {@link #isFreeModule()}. A module with no gateway hook is
  * never asked, so {@code LicenseManagerImpl} falls through to the platform
  * trial state and the Modules page lists it as "Trial" — while the module
- * itself has no gate and works the same either way. This hook exists so that
- * question gets asked.
+ * itself has no gate and works the same either way. This hook was added so
+ * that question gets asked; {@link #isMakerEditionCompatible()} answers the
+ * second one.
  *
  * <p>It registers nothing: no routes, no scripting functions, no resources.
  */
@@ -45,6 +47,18 @@ public class DesignerDarkModeGatewayHook extends AbstractGatewayModuleHook {
      */
     @Override
     public boolean isFreeModule() {
+        return true;
+    }
+
+    /**
+     * The module may run on Ignition Maker Edition. A Maker Edition gateway
+     * only loads modules whose gateway hook returns {@code true} here; the SDK
+     * default is {@code false}, and a module that keeps it is refused at
+     * startup with "Not eligible for use with Ignition Maker Edition". Nothing
+     * the module does depends on the edition.
+     */
+    @Override
+    public boolean isMakerEditionCompatible() {
         return true;
     }
 }

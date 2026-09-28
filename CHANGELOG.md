@@ -27,13 +27,23 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   (no FlatLaf in either save, and it reopens intact after a relaunch), and
   the three fixes below on that line — the project dialog's OPEN buttons,
   one set of Tools items after switching projects, and the console banner.
+- **Ignition Maker Edition support.** The gateway hook now declares
+  `isMakerEditionCompatible()`, in both the 8.3 and the 8.1 file. Before
+  this, a Maker Edition gateway refused the module at startup with "Not
+  eligible for use with Ignition Maker Edition" (seen with 0.5.0 on 8.3.9).
+  The SDK default is `false`, and `isFreeModule()` only covers licensing, so
+  the module has to say so itself. The licence's Data section, which says
+  what the gateway-side code does, now names this too. Checked live on an
+  8.3.9 Maker Edition gateway; the 8.1 file declares the same thing but has
+  not been tried on an 8.1 Maker gateway.
 
 ### Changed
 
 - **The licence no longer says the module runs entirely in the Designer**
   ([#127](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/127)).
-  Since 0.4.2 it has had a gateway hook, which only tells the gateway the
-  module is free. `license.html` now says so, and its Data section also names
+  Since 0.4.2 it has had a gateway hook, which tells the gateway the module
+  is free (and now also that it may run on Maker Edition, see Added).
+  `license.html` now says so, and its Data section also names
   the local debug log alongside the theme preference. Nothing the module does
   has changed, but the licence text has, so the gateway asks for it to be
   accepted again on upgrade.

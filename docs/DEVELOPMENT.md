@@ -485,11 +485,12 @@ certificate held in repository secrets. The release procedure is in
 
 - **All the work is Designer scope.** `:designer` holds every theming class;
   its hook is `DesignerDarkModeHook`, mapped to scope `D` in `build.gradle.kts`.
-  `:gateway` exists for exactly one method: `DesignerDarkModeGatewayHook.
-  isFreeModule()` returns `true`, which is the only signal the 8.3 gateway
+  `:gateway` exists for two methods on `DesignerDarkModeGatewayHook`.
+  `isFreeModule()` returns `true`, which is the only signal the 8.3 gateway
   reads to list a module as Free rather than Trial — it ignores
-  `<freeModule>` in module.xml (#114). Don't grow it: no routes, no scripting
-  functions, no resources.
+  `<freeModule>` in module.xml (#114). `isMakerEditionCompatible()` returns
+  `true`, without which a Maker Edition gateway refuses to load the module.
+  Don't grow it: no routes, no scripting functions, no resources.
 - **Fail soft.** Theming code must never break the Designer. New passes go
   through `ThemeManager.safely(...)`; anything in a paint path swallows its own
   throwables. A theme fix that throws is worse than a component that stays light.
