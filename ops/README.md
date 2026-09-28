@@ -56,6 +56,10 @@ IGNITION_LINE=8.1 ops/deploy.sh    # rebuild and reload
 IGNITION_LINE=8.1 ops/status.sh    # (and logs.sh, teardown.sh [--purge])
 ```
 
+To run the 8.1 support floor instead of 8.1.50, set `IGNITION_81_VERSION=8.1.33`
+in `../.env` before `setup.sh`. The image is chosen when the container is
+created, so on an existing 8.1 gateway run `teardown.sh --purge` first.
+
 It publishes on **http://localhost:9588** (HTTPS 9543), overridable with
 `GATEWAY_81_HTTP_PORT` / `GATEWAY_81_HTTPS_PORT` in `../.env`. Same dev
 certificate, same admin login. Two things work differently underneath, and the
