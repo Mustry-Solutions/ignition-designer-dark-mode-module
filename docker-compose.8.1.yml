@@ -25,9 +25,11 @@ name: designer-dark-mode-81
 
 services:
   gateway:
-    # 8.1.50: the 8.1 release the live Designer sitting used. The module's
-    # 8.1 floor is 8.1.33 (the first 8.1 on Java 17).
-    image: inductiveautomation/ignition:8.1.50
+    # 8.1.50: the 8.1 release the first live Designer sitting used. The
+    # module's 8.1 floor is 8.1.33 (the first 8.1 on Java 17); to run the floor,
+    # set IGNITION_81_VERSION=8.1.33 in .env before a fresh `up` (a container
+    # that already exists keeps its image; teardown.sh first).
+    image: inductiveautomation/ignition:${IGNITION_81_VERSION:-8.1.50}
     container_name: designer-dark-mode-ignition-81
     ports:
       # The next free block in the Mustry host-port scheme (9x88 per repo;
