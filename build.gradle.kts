@@ -161,8 +161,9 @@ ignitionModule {
      *
      * This writes <freeModule>true</freeModule> into module.xml, which the 8.3
      * gateway does NOT read (#114). What it does read is
-     * GatewayModuleHook.isFreeModule() on the gateway-scope hook, which is the
-     * whole reason DesignerDarkModeGatewayHook exists. Kept for the record and
+     * GatewayModuleHook.isFreeModule() on the gateway-scope hook, which is why
+     * DesignerDarkModeGatewayHook was added (it now also declares Maker Edition
+     * compatibility). Kept for the record and
      * for any gateway that starts honouring the element.
      */
     freeModule.set(true)

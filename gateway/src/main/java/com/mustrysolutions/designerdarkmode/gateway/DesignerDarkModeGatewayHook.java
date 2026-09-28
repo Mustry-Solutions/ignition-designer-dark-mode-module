@@ -18,8 +18,9 @@ import com.inductiveautomation.ignition.gateway.model.GatewayContext;
  * hook and asks it {@link #isFreeModule()}. A module with no gateway hook is
  * never asked, so {@code LicenseManagerImpl} falls through to the platform
  * trial state and the Modules page lists it as "Trial" — while the module
- * itself has no gate and works the same either way. This hook exists so that
- * question gets asked.
+ * itself has no gate and works the same either way. This hook was added so
+ * that question gets asked; {@link #isMakerEditionCompatible()} answers the
+ * second one.
  *
  * <p>It registers nothing: no routes, no scripting functions, no resources.
  */
