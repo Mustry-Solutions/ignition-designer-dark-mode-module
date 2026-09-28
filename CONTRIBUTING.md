@@ -79,8 +79,10 @@ same spot dark and light and compare. Full walkthrough in
    right in dark mode is half a change — restores iterate tracked component
    sets rather than the live hierarchy, and it is easy to darken something
    without registering it for restore.
-4. Open a PR. The **Build & test** check must pass — it is a required status
-   check on `main`, so a red build cannot be merged.
+4. Open a PR. The **Build & test** and **LaF harness** checks must pass —
+   they are required status checks on `main`, so a red build cannot be
+   merged. **LaF harness** passes only when every row of the harness matrix
+   (each OS against each supported SDK) has passed.
 5. A maintainer merges it. `main` is always releasable.
 
 ## Conventions
