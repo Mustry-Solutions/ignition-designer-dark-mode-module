@@ -10,6 +10,26 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-09-28
+
+Ignition 8.1 support: each release now carries a second file for 8.1.33 and
+newer. Also Maker Edition support, override icons and File → Open… buttons
+that work in dark mode, and Vision Property Editor values that are readable
+again after switching Dark Mode off.
+
+Checked live in Designers on 8.1.50 and 8.3.6, and as gateway installs of the
+release-signed files on 8.1.33 and 8.3.8. Windows and Linux Designers are
+covered by the headless harness only
+([#96](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/96)).
+
+**Upgrading from 0.5.x:** the licence text has changed (see Changed), so the
+gateway asks for it to be accepted again. Through **Config → Modules →
+Install or Upgrade a Module** that is part of the upload. If you instead
+replace the `.modl` in the gateway's modules folder (a mounted folder in
+Docker, for instance), an 8.3 gateway stops at its commissioning page on the
+next start and waits for the new licence to be accepted there before it
+starts. Checked on 8.3.8.
+
 ### Added
 
 - **Ignition 8.1 support (8.1.33 and newer).** Each release now carries a
@@ -70,7 +90,7 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   each row is painted. Every other tree, the Project Browser included, keeps
   the wrapper. A sweep of the 8.3.8 and 8.1.33 jars found no other owner
   casting a list or tree renderer. Proven by clicking the real panels in the
-  windowed harness; not yet seen in a live Designer.
+  windowed harness, and confirmed in a live 8.3.6 Designer.
 
 - **Unloading the module no longer leaves a listener running in the Designer**
   ([#147](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/147)).
@@ -138,6 +158,26 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   4.01:1, both under the WCAG AA minimum of 4.5:1. They are now `#FF9F99`
   and `#85BFEC`, the same hues lighter: 4.61:1 there, and 5.39:1 on the
   Output Console's `#3C3F41`.
+
+### Known limitations
+
+Three Tag Editor findings, all present in 0.5.0 too and planned for the next
+release:
+
+- In the Tag Editor's property table, every second row keeps a dark label
+  cell and value field after switching Dark Mode off
+  ([#156](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/156)).
+- In dark mode, the Tag Editor's alarm list draws each alarm's name
+  near-black on the dark row
+  ([#157](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/157)),
+  and its event-scripts tree draws a selected event in dark grey on the blue
+  selection
+  ([#158](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/158)).
+
+Also under investigation: File → Open… has asked to save changes that were
+never made, after a theme switch
+([#137](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/137)).
+The cause is unknown and may not be this module. Answering No saves nothing.
 
 ## [0.5.0] - 2026-09-24
 
@@ -1165,7 +1205,8 @@ First release.
 
 Cosmetic, and affects no behaviour.
 
-[Unreleased]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/compare/v0.4.2...v0.5.0
 [0.4.2]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/compare/v0.4.0...v0.4.1
