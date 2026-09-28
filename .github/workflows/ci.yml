@@ -207,8 +207,14 @@ jobs:
       # traces, and its own timeout dump in <system-out>), the module's
       # debug log — whose environment block is what a failing platform is
       # read against — and, when the pixel test fails, its three renders.
+      #
+      # Evidence, not a check: a harness failure is already red at its own
+      # step, so an upload that cannot reach the artifact service (a DNS
+      # miss on a hosted macOS runner, seen in #154) must not turn a passing
+      # row red.
       - name: Upload harness diagnostics
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v7
         with:
           name: laf-harness-${{ matrix.os }}-${{ matrix.sdk.id }}
