@@ -21,7 +21,7 @@ Everything else is resolved by Gradle: Gradle 9.7.1 via the wrapper, the
 ./gradlew build
 ```
 
-Output: `build/designer-dark-mode.unsigned.modl`. FlatLaf is bundled into the module
+Output: `build/designer-dark-mode-8.3.unsigned.modl`. FlatLaf is bundled into the module
 (declared `modlImplementation` in `designer/build.gradle.kts`), so there's no
 runtime dependency to install separately.
 
@@ -59,7 +59,7 @@ anything," check you relaunched.
 
 ### Option B — your own gateway
 
-Install `build/designer-dark-mode.unsigned.modl` via **Config → Modules** in the
+Install `build/designer-dark-mode-8.3.unsigned.modl` via **Config → Modules** in the
 Gateway web UI, accept the unsigned module, relaunch the Designer.
 
 ## The debug loop

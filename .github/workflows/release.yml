@@ -2,7 +2,7 @@ name: Release
 
 # A release is a git tag `vX.Y.Z`. Pushing the tag builds + signs the module
 # for both Ignition lines, then publishes a GitHub Release with both signed
-# .modl files attached: designer-dark-mode.modl (8.3) and
+# .modl files attached: designer-dark-mode-8.3.modl (8.3) and
 # designer-dark-mode-8.1.modl (8.1.33 and later). The tag drives the version.
 #
 # Required secrets (repo or org level — Settings → Secrets and variables → Actions):
@@ -113,10 +113,10 @@ jobs:
       - name: Locate the signed .modl files
         id: modl
         run: |
-          for f in build/designer-dark-mode.modl build/designer-dark-mode-8.1.modl; do
+          for f in build/designer-dark-mode-8.3.modl build/designer-dark-mode-8.1.modl; do
             [ -f "$f" ] || { echo "::error::$f was not produced"; exit 1; }
           done
-          echo "v83=build/designer-dark-mode.modl" >> "$GITHUB_OUTPUT"
+          echo "v83=build/designer-dark-mode-8.3.modl" >> "$GITHUB_OUTPUT"
           echo "v81=build/designer-dark-mode-8.1.modl" >> "$GITHUB_OUTPUT"
 
       # A signed Ignition .modl carries certificates.p7b + signatures.properties
@@ -156,15 +156,14 @@ jobs:
             echo "::error::CHANGELOG.md has no '## [${{ steps.ver.outputs.version }}]' section. Add one before tagging."
             exit 1
           fi
-          # Every release page opens with which file to download: the two
-          # assets differ only by an "-8.1" suffix, and the unsuffixed one
-          # (8.3) does not say so in its name. Same table as the README.
+          # Every release page opens with which file to download, so nobody
+          # has to guess from the two names. Same table as the README.
           cat > "$RUNNER_TEMP/notes.md" <<'HEADER'
           **Which file?**
 
           | Your gateway | Download |
           |---|---|
-          | Ignition **8.3** | `designer-dark-mode.modl` |
+          | Ignition **8.3** | `designer-dark-mode-8.3.modl` |
           | Ignition **8.1.33** or newer | `designer-dark-mode-8.1.modl` |
 
           ---
