@@ -56,9 +56,10 @@ Steps marked *dark only* or *light only* are skipped in the other direction.
 1. **Look and feel swap.** Dark: first the snapshots the light switch will
    need — JIDE's painter map (see step 5), a copy of the DEVELOPER defaults,
    Ignition's own `UIManager.put`s, which Synthetica's uninstall is about to
-   clear (see [DeveloperDefaults](#developerdefaults)), and the stock colours
+   clear (see [DeveloperDefaults](#developerdefaults)), the stock colours
    by key for [LookAndFeelColors](#lookandfeelcolors) and
-   [VisionConstructionColors](#visionconstructioncolors) — then
+   [VisionConstructionColors](#visionconstructioncolors), and the keystrokes
+   the stock tree map binds for [TreeClipboardKeys](#treeclipboardkeys) — then
    `UIManager.setLookAndFeel(new FlatDarkLaf())`,
    then `keepStockFont(...)` puts the `Label.font` read just before the swap
    as FlatLaf's `defaultFont`, so the switch is colour-only (see
@@ -78,7 +79,8 @@ Steps marked *dark only* or *light only* are skipped in the other direction.
    feel JIDE recognizes, so under dark it must be told the VSNET style
    explicitly: `installJideExtension(1)`. Light only, straight after it:
    **developer defaults** — put back what Ignition had put at startup, over
-   what JIDE has just re-put (`DeveloperDefaults.restore`).
+   what JIDE has just re-put (`DeveloperDefaults.restore`), then the tree
+   clipboard keys mirrored onto the stock map ([TreeClipboardKeys](#treeclipboardkeys)).
 5. **Theme painters** — `overrideThemePainters(dark)` repoints JIDE's painter
    map (see below).
 6. **Default re-assert** (dark only) — `applyMenuDefaults(true)` re-puts *all*
@@ -87,7 +89,10 @@ Steps marked *dark only* or *light only* are skipped in the other direction.
    direction clears both in step 0 instead. Then, with every default final,
    the dark colours are joined to the stock ones by key
    (`LookAndFeelColors.captureDark`, `VisionConstructionColors.captureDark`)
-   and `VisionConstructionBorders` is reset; light clears all three.
+   and `VisionConstructionBorders` is reset; light clears all three. Last,
+   and before the tree update so every tree takes it, FlatLaf's tree map
+   loses the clipboard bindings the stock one lacks
+   ([TreeClipboardKeys](#treeclipboardkeys)).
 7. **Renderer colour capture** (dark only) — `CellRendererSanitizer
    .captureStockColors()`, before the tree update, because
    `JTableHeader.updateUI()` nulls a cell renderer's colours and a renderer that
@@ -586,6 +591,31 @@ chevrons), not a defect. The harness's stock install now runs
 `IgnitionLookAndFeel.init()` itself, so the #23 cycle test sees these puts
 and would catch their loss; `PropertyEditorAfterRestoreTest` paints a JIDE
 property table's category row across a cycle.
+
+### TreeClipboardKeys
+Keeps Ctrl+X/C/V (and the `CUT`/`COPY`/`PASTE` keys) in trees going to the
+Designer's Edit menu under dark (#168). The Project Browser (`NavTreePanel`)
+removes those six keystrokes from its tree's input map when it is built, and
+walks the parent chain to do it, so they come out of the look and feel's
+shared `Tree.focusInputMap` too. In a stock Designer no tree binds them, and
+the keystroke reaches Edit ▸ Cut/Copy/Paste, which acts through the focused
+frame's `EditActionHandler`. FlatLaf's tree map binds all six to Swing's
+`TransferHandler` actions; on a tree with a transfer handler, which the
+Project Browser and the Tag Browser both have, those count as enabled and
+consume the keystroke, so the shortcut silently did nothing while the
+right-click menu, which calls the Designer's handler directly, still worked.
+
+So the dark switch records every keystroke the stock tree map binds, just
+before FlatLaf goes in, and once the dark defaults are final removes from
+FlatLaf's map each cut/copy/paste binding the stock map did not have. Recorded
+rather than hard-coded: an Ignition that stops stripping gets FlatLaf's
+bindings back rather than losing them. The light restore mirrors the same
+record onto the reinstalled stock map; today that map comes back already
+stripped and nothing changes. The strip is the only place Ignition edits a
+look and feel's shared input map (8.3.8 and 8.1.55 designer and client
+jars); its other key-binding edits are on a component's own map, which a
+look-and-feel swap leaves alone. `TreeClipboardKeysTest` transcribes the
+strip and presses the keys through Swing's binding path.
 
 ### LookAndFeelColors
 The stock value for a look-and-feel colour a Vision component inherits, for
