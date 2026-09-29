@@ -1,6 +1,5 @@
 package com.mustrysolutions.designerdarkmode.designer;
 
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -29,13 +28,24 @@ import javax.swing.UIManager;
  * shortcut does nothing, while right-click Copy/Paste, which calls the
  * Designer's handler directly, still works.
  *
- * <p>So: record which keystrokes the stock map binds just before FlatLaf goes
- * in, and once the dark defaults are final remove from FlatLaf's map every
- * clipboard binding the stock map did not have. Recorded rather than
- * hard-coded, so this follows whatever Ignition strips (and stops if it
- * stops). The light side mirrors the same record onto the stock map the
- * reinstall serves, in case that map comes back fresh; today it comes back
- * already stripped and nothing changes.
+ * <p>So: record which keystrokes the stock map binds to one of those
+ * clipboard actions just before FlatLaf goes in, and once the dark defaults
+ * are final remove from FlatLaf's map every clipboard binding the stock map
+ * did not have. Recorded rather than hard-coded, so this follows whatever
+ * Ignition strips (and stops if it stops). The light side mirrors the same
+ * record onto the stock map the reinstall serves, in case that map comes
+ * back fresh; today it comes back already stripped and nothing changes.
+ *
+ * <p>Recorded by action, not by whether a keystroke is bound at all. On
+ * macOS, Synthetica's {@code SyntheticaDefaultLookup} loads the menu-shortcut
+ * X/C/V back into the shared tree map as {@code cut-to-clipboard},
+ * {@code copy-to-clipboard} and {@code paste-from-clipboard} whenever a
+ * Synthetica tree installs, which in a Designer is long after the Project
+ * Browser's strip. Those are text-editor actions no tree's action map has,
+ * so on a stock tree they are inert and the keystroke still reaches the Edit
+ * menu; but they are bindings, and a record of "bound" took them for the
+ * stock tree's own and let FlatLaf's consuming {@code cut}/{@code copy}/
+ * {@code paste} through on every Mac.
  */
 final class TreeClipboardKeys {
 
@@ -44,19 +54,28 @@ final class TreeClipboardKeys {
     /** The action names {@code TransferHandler}'s cut/copy/paste actions are bound under. */
     static final List<String> CLIPBOARD_ACTIONS = List.of("cut", "copy", "paste");
 
-    /** Every keystroke the stock tree map binds, or {@code null} before a capture. */
-    private Set<KeyStroke> stockBound;
+    /** Every keystroke the stock tree map binds to a clipboard action, or {@code null} before a capture. */
+    private Set<KeyStroke> stockClipboardKeys;
 
     /** Before the dark look and feel goes in. */
     void captureStock() {
         InputMap stock = currentMap();
         if (stock == null) {
-            stockBound = null;
+            stockClipboardKeys = null;
             DebugLog.log("TreeClipboardKeys: no stock " + MAP_KEY + "; tree clipboard keys left alone.");
             return;
         }
+        stockClipboardKeys = new HashSet<>();
         KeyStroke[] keys = stock.allKeys();
-        stockBound = keys == null ? new HashSet<>() : new HashSet<>(Arrays.asList(keys));
+        if (keys != null) {
+            for (KeyStroke key : keys) {
+                if (isClipboardAction(stock.get(key))) {
+                    stockClipboardKeys.add(key);
+                }
+            }
+        }
+        DebugLog.detail("TreeClipboardKeys: the stock tree map binds " + stockClipboardKeys.size()
+            + " keystroke(s) to a clipboard action.");
     }
 
     /**
@@ -68,7 +87,7 @@ final class TreeClipboardKeys {
      */
     int mirrorStock() {
         InputMap map = currentMap();
-        if (stockBound == null || map == null) {
+        if (stockClipboardKeys == null || map == null) {
             return 0;
         }
         int removed = 0;
@@ -80,8 +99,7 @@ final class TreeClipboardKeys {
                 continue;
             }
             for (KeyStroke key : keys) {
-                Object action = level.get(key);
-                if (!stockBound.contains(key) && CLIPBOARD_ACTIONS.contains(String.valueOf(action))) {
+                if (!stockClipboardKeys.contains(key) && isClipboardAction(level.get(key))) {
                     level.remove(key);
                     removed++;
                 }
@@ -90,6 +108,10 @@ final class TreeClipboardKeys {
         DebugLog.detail("TreeClipboardKeys: removed " + removed
             + " clipboard binding(s) the stock tree map does not have.");
         return removed;
+    }
+
+    private static boolean isClipboardAction(Object action) {
+        return action != null && CLIPBOARD_ACTIONS.contains(action.toString());
     }
 
     private static InputMap currentMap() {

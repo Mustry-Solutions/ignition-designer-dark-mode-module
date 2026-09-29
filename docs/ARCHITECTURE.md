@@ -605,17 +605,27 @@ Project Browser and the Tag Browser both have, those count as enabled and
 consume the keystroke, so the shortcut silently did nothing while the
 right-click menu, which calls the Designer's handler directly, still worked.
 
-So the dark switch records every keystroke the stock tree map binds, just
-before FlatLaf goes in, and once the dark defaults are final removes from
-FlatLaf's map each cut/copy/paste binding the stock map did not have. Recorded
-rather than hard-coded: an Ignition that stops stripping gets FlatLaf's
-bindings back rather than losing them. The light restore mirrors the same
+So the dark switch records which keystrokes the stock tree map binds to a
+`cut`/`copy`/`paste` action, just before FlatLaf goes in, and once the dark
+defaults are final removes from FlatLaf's map each such binding the stock map
+did not have. Recorded rather than hard-coded: an Ignition that stops
+stripping gets FlatLaf's bindings back rather than losing them. Recorded by
+action rather than by "bound at all", because of macOS: there Synthetica's
+`SyntheticaDefaultLookup` loads the menu-shortcut X/C/V back into the shared
+tree map as `cut-to-clipboard`, `copy-to-clipboard` and `paste-from-clipboard`
+every time a Synthetica tree installs, long after the Project Browser's
+strip. No tree's action map has those text-editor actions, so on a stock
+tree they are inert and the keystroke still reaches the Edit menu; a record
+of bound keystrokes took them for the stock tree's own and let FlatLaf's
+consuming bindings through on every Mac (caught by the macOS row of #169's
+first CI run). The light restore mirrors the same
 record onto the reinstalled stock map; today that map comes back already
 stripped and nothing changes. The strip is the only place Ignition edits a
 look and feel's shared input map (8.3.8 and 8.1.55 designer and client
 jars); its other key-binding edits are on a component's own map, which a
 look-and-feel swap leaves alone. `TreeClipboardKeysTest` transcribes the
-strip and presses the keys through Swing's binding path.
+strip and the macOS lookup, so every CI row covers both, and presses the keys
+through Swing's binding path.
 
 ### LookAndFeelColors
 The stock value for a look-and-feel colour a Vision component inherits, for
