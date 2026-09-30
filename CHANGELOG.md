@@ -25,6 +25,42 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   `setBackground`, as X11 does, with a dock title pane and a text field in
   it, and checks the root pane's UI in both directions.
 
+## [0.6.1] - 2026-09-30
+
+One fix: keyboard copy, cut and paste in the Project Browser work again in
+dark mode.
+
+Checked live in a Designer on 8.3.6 (macOS). The 8.1 line and Windows and
+Linux Designers are covered by the headless harness only.
+
+### Fixed
+
+- **Ctrl+C, Ctrl+V and Ctrl+X work in the Project Browser in dark mode
+  again**
+  ([#168](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/168)).
+  Copying or pasting a named query, script or any other resource with the
+  keyboard did nothing while dark; only the right-click menu worked. The
+  Project Browser takes those keys out of every tree's shared key bindings so
+  they reach the Designer's Edit menu, and FlatLaf's trees bind them again to
+  Swing's own clipboard actions, which swallowed the keystroke. The dark theme
+  now leaves out every tree clipboard binding the stock theme does not have.
+  The Tag Browser's shortcuts, which already worked, now go through the Edit
+  menu as they do in light. Both lines, 8.3 and 8.1.
+
+### Known limitations
+
+The known limitations of 0.6.0 still apply: the three Tag Editor findings
+([#156](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/156),
+[#157](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/157),
+[#158](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/158))
+and the unexplained "Save Changes?" prompt after a theme switch
+([#137](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/137)).
+
+On Linux, every switch to dark logs `updateUI failed for
+javax.swing.JRootPane` and leaves the main window's root pane half-themed,
+also after switching back to light
+([#164](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/164)).
+
 ## [0.6.0] - 2026-09-28
 
 Ignition 8.1 support: each release now carries a second file for 8.1.33 and
