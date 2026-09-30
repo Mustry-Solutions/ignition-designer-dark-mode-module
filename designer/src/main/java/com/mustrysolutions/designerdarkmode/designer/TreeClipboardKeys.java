@@ -24,9 +24,11 @@ import javax.swing.UIManager;
  * <p>FlatLaf brings its own {@code Tree.focusInputMap}, which binds all six to
  * Swing's {@code TransferHandler} cut/copy/paste actions. On a tree with a
  * drag-and-drop transfer handler, which both browsers have, those actions
- * are enabled and consume the keystroke, so the Edit menu never sees it: the
- * shortcut does nothing, while right-click Copy/Paste, which calls the
- * Designer's handler directly, still works.
+ * are enabled and consume the keystroke, so the Edit menu never sees it. In
+ * the Project Browser the shortcut does nothing, while right-click
+ * Copy/Paste, which calls the Designer's handler directly, still works. The
+ * Tag Browser's transfer handler does copy and paste tags, so its shortcuts
+ * kept working; the fix sends them to the Edit menu, as in light.
  *
  * <p>So: record which keystrokes the stock map binds to one of those
  * clipboard actions just before FlatLaf goes in, and once the dark defaults

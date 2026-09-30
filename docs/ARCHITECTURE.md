@@ -602,8 +602,11 @@ the keystroke reaches Edit ▸ Cut/Copy/Paste, which acts through the focused
 frame's `EditActionHandler`. FlatLaf's tree map binds all six to Swing's
 `TransferHandler` actions; on a tree with a transfer handler, which the
 Project Browser and the Tag Browser both have, those count as enabled and
-consume the keystroke, so the shortcut silently did nothing while the
-right-click menu, which calls the Designer's handler directly, still worked.
+consume the keystroke. In the Project Browser the shortcut silently did
+nothing while the right-click menu, which calls the Designer's handler
+directly, still worked. The Tag Browser's transfer handler does copy and
+paste tags, so there the shortcut kept working under dark, by a different
+path (seen live on 8.3.6, 2026-09-30).
 
 So the dark switch records which keystrokes the stock tree map binds to a
 `cut`/`copy`/`paste` action, just before FlatLaf goes in, and once the dark

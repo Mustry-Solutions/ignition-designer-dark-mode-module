@@ -21,8 +21,8 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   they reach the Designer's Edit menu, and FlatLaf's trees bind them again to
   Swing's own clipboard actions, which swallowed the keystroke. The dark theme
   now leaves out every tree clipboard binding the stock theme does not have.
-  The Tag Browser's tree is built the same way and gets the same fix. Both
-  lines, 8.3 and 8.1.
+  The Tag Browser's shortcuts, which already worked, now go through the Edit
+  menu as they do in light. Both lines, 8.3 and 8.1.
 
 ## [0.6.0] - 2026-09-28
 
