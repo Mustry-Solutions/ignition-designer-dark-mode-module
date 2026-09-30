@@ -65,6 +65,7 @@ public class ThemeManager {
     private final LookAndFeelColors lafColors = new LookAndFeelColors();
     private final VisionConstructionColors visionConstruction = new VisionConstructionColors();
     private final CellRendererSanitizer cellRenderers = new CellRendererSanitizer();
+    private final TreeClipboardKeys treeClipboardKeys = new TreeClipboardKeys();
 
     private DesignerContext context;
     private LookAndFeel stockLaf;
@@ -518,6 +519,9 @@ public class ThemeManager {
                 trace("stockColors");
                 lafColors.captureStock();
                 visionConstruction.captureStock();
+                // And which keystrokes the stock tree map binds, after the
+                // Project Browser has stripped the clipboard keys from it (#168).
+                treeClipboardKeys.captureStock();
                 // Read now, while the stock look and feel is still the one
                 // answering: this is the font the Designer has been drawing
                 // with, and the one dark mode keeps (see below).
@@ -604,6 +608,7 @@ public class ThemeManager {
             // where JIDE has just put its own (the property tables' category
             // icons), the way they did at startup (#102).
             safely("developerDefaults", () -> DeveloperDefaults.restore(developerDefaultsAtStock));
+            safely("treeClipboardKeys", treeClipboardKeys::mirrorStock);
         }
         safely("painters", () -> overrideThemePainters(dark));
         if (dark) {
@@ -620,6 +625,9 @@ public class ThemeManager {
                 VisionConstructionBorders.clear();
                 RendererBorders.clear();
             });
+            // Before the tree update, so every tree takes FlatLaf's map
+            // without the clipboard keys the Designer's Edit menu owns (#168).
+            safely("treeClipboardKeys", treeClipboardKeys::mirrorStock);
         } else {
             safely("darkColors", () -> {
                 lafColors.clear();

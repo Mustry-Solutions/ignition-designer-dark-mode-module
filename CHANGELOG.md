@@ -10,6 +10,20 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Ctrl+C, Ctrl+V and Ctrl+X work in the Project Browser in dark mode
+  again**
+  ([#168](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/168)).
+  Copying or pasting a named query, script or any other resource with the
+  keyboard did nothing while dark; only the right-click menu worked. The
+  Project Browser takes those keys out of every tree's shared key bindings so
+  they reach the Designer's Edit menu, and FlatLaf's trees bind them again to
+  Swing's own clipboard actions, which swallowed the keystroke. The dark theme
+  now leaves out every tree clipboard binding the stock theme does not have.
+  The Tag Browser's shortcuts, which already worked, now go through the Edit
+  menu as they do in light. Both lines, 8.3 and 8.1.
+
 ## [0.6.0] - 2026-09-28
 
 Ignition 8.1 support: each release now carries a second file for 8.1.33 and
