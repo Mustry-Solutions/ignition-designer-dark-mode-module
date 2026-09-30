@@ -39,7 +39,10 @@ jobs:
           fetch-depth: 0
 
       # Fails open: no base to diff against, or a diff that errors, counts
-      # as a code change.
+      # as a code change. --no-renames, because a rename is otherwise listed
+      # under its new path only, and moving license.html into docs/ would
+      # pass as docs-only. Markdown counts only at the root, so a .md file
+      # added under src/ as a resource is never skipped.
       - name: Diff against the base
         id: diff
         env:
@@ -48,10 +51,10 @@ jobs:
         run: |
           code=true
           if [ -n "$BASE" ] && [ "$BASE" != 0000000000000000000000000000000000000000 ] \
-             && files="$(git diff --name-only "$BASE...$HEAD")"; then
+             && files="$(git diff --no-renames --name-only "$BASE...$HEAD")"; then
             echo "$files"
             if [ -n "$files" ] \
-               && ! echo "$files" | grep -qvE '(\.md$|^docs/|^LICENSE$)'; then
+               && ! echo "$files" | grep -qvE '(^[^/]*\.md$|^docs/|^LICENSE$)'; then
               code=false
             fi
           fi
