@@ -313,10 +313,11 @@ class WindowedCycleTest {
      * On X11 a frame repaints inside {@code setBackground}:
      * {@code XPanelPeer.setBackground} ends in {@code XWindow.repaint}, which
      * paints there and then. {@code FlatRootPaneUI.installDefaults} sets the
-     * frame's background, so the dark tree update's {@code updateUI()} on the
-     * root pane paints the whole frame before it walks any further down. A
-     * dock title pane below that still holds {@code SyntheticaJidePainter}
-     * throws {@code ClassCastException}, which aborts the root pane's install
+     * frame's background, so a root pane updated before its subtree paints the
+     * whole frame while everything in it is still on Synthetica's delegates.
+     * A dock title pane holding {@code SyntheticaJidePainter} throws
+     * {@code ClassCastException}, a Synthetica text field's border throws
+     * {@code NullPointerException}, and either aborts the root pane's install
      * part-way. Every later switch then NPEs in {@code FlatRootPaneUI
      * .uninstallUI}, and the root pane stays on FlatLaf's UI after the light
      * restore (#164).
@@ -336,6 +337,10 @@ class WindowedCycleTest {
             DockableFrame dock = new DockableFrame("dock");
             dock.getContentPane().add(new JLabel("docked"));
             content.add(dock, BorderLayout.CENTER);
+            // Not only JIDE's painter: every Synthetica painter throws once
+            // FlatLaf is in. On a live Linux Designer, with the title panes
+            // repointed, a text field's border was the next to fail.
+            content.add(new JTextField("filter"), BorderLayout.NORTH);
             List<Throwable> paintFailures = new ArrayList<>();
             int[] paints = {0};
             boolean[] armed = {false};

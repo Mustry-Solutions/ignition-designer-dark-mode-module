@@ -635,15 +635,6 @@ public class ThemeManager {
             // that colours itself in its constructor never gets them back, so
             // the only chance to record them is now.
             safely("captureRenderers", cellRenderers::captureStockColors);
-            // Before the tree update as well as after it (#164). The walk
-            // updates a window's JRootPane before anything below it, and
-            // FlatRootPaneUI.installDefaults sets the frame's background. On
-            // X11 that repaints the frame synchronously, so every dock title
-            // pane paints while it still holds SyntheticaJidePainter, which
-            // throws. The throw aborts the root pane's install part-way, and
-            // every later switch then fails to uninstall it. The run after
-            // the tree update stays, for panes attached during it.
-            safely("cachedPainters", () -> repointCachedThemePainters(true));
         }
         if (!dark) {
             uninstallComponentWatcher();
@@ -2775,6 +2766,30 @@ public class ThemeManager {
 
     private static int updateSubtree(
             java.awt.Component component, java.util.Set<String> failed) {
+        // A root pane gets its own UI after everything below it, not before
+        // as in Swing's walk (#164). FlatRootPaneUI.installDefaults sets the
+        // frame's background, and on X11 the frame repaints inside that call.
+        // Updated first, the root pane had the whole frame paint while every
+        // component in it still held the outgoing look and feel's delegates,
+        // and Synthetica's painters throw under FlatLaf. The throw aborted the
+        // root pane's install part-way, and every later switch then failed to
+        // uninstall it.
+        boolean ownUiLast = component instanceof javax.swing.JRootPane;
+        int failures = ownUiLast ? 0 : updateOwnUi(component, failed);
+        java.awt.Component[] children = childrenOf(component, failed);
+        if (children != null) {
+            for (java.awt.Component each : children) {
+                failures += updateSubtree(each, failed);
+            }
+        }
+        if (ownUiLast) {
+            failures += updateOwnUi(component, failed);
+        }
+        return failures;
+    }
+
+    private static int updateOwnUi(
+            java.awt.Component component, java.util.Set<String> failed) {
         int failures = 0;
         if (component instanceof javax.swing.JComponent) {
             javax.swing.JComponent child = (javax.swing.JComponent) component;
@@ -2814,12 +2829,6 @@ public class ThemeManager {
                     DebugLog.log("Could not reach the popup menu on "
                         + child.getClass().getName(), t);
                 }
-            }
-        }
-        java.awt.Component[] children = childrenOf(component, failed);
-        if (children != null) {
-            for (java.awt.Component each : children) {
-                failures += updateSubtree(each, failed);
             }
         }
         return failures;

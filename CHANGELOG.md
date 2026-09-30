@@ -17,12 +17,13 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   Every switch logged `updateUI failed for javax.swing.JRootPane`, and the
   root pane stayed on FlatLaf's UI even after switching back to light. On
   X11, setting a frame's background repaints it straight away, and FlatLaf's
-  root pane UI sets it while it installs. The dock title panes then painted
-  with the Synthetica painter they had cached, which throws under FlatLaf,
-  and that stopped the root pane's install part-way. The cached painters are
-  now repointed before the tree update as well as after it. A windowed
-  harness test paints the frame inside `setBackground`, as X11 does, and
-  checks the root pane's UI in both directions.
+  root pane UI sets it while it installs. The tree update reached the root
+  pane first, so the whole frame painted while everything in it was still on
+  Synthetica's delegates, which throw under FlatLaf, and that stopped the
+  root pane's install part-way. The root pane now gets its new UI after
+  everything below it. A windowed harness test paints the frame inside
+  `setBackground`, as X11 does, with a dock title pane and a text field in
+  it, and checks the root pane's UI in both directions.
 
 ## [0.6.0] - 2026-09-28
 
