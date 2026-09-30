@@ -91,7 +91,14 @@ Steps marked *dark only* or *light only* are skipped in the other direction.
 7. **Renderer colour capture** (dark only) — `CellRendererSanitizer
    .captureStockColors()`, before the tree update, because
    `JTableHeader.updateUI()` nulls a cell renderer's colours and a renderer that
-   colours itself in its constructor never gets them back.
+   colours itself in its constructor never gets them back. Then **cached JIDE
+   painters** are repointed at `BasicPainter` (step 11 repeats it for panes
+   attached during the update). The tree update reaches a window's
+   `JRootPane` before anything below it, and `FlatRootPaneUI.installDefaults`
+   sets the frame's background, which on X11 repaints the frame on the spot.
+   A dock title pane still holding `SyntheticaJidePainter` throws there, and
+   the throw left the root pane half on `FlatRootPaneUI` for the rest of the
+   session (#164).
 8. **Renderer unwrap** (light only) — `TreeIconRecolorer.unwrap()` and
    `CellRendererSanitizer.unwrap()` hand every wrapped tree, table and list
    its own renderer back *before* the tree update, and a tree whose renderer

@@ -302,6 +302,105 @@ class WindowedCycleTest {
     }
 
     /**
+     * On X11 a frame repaints inside {@code setBackground}:
+     * {@code XPanelPeer.setBackground} ends in {@code XWindow.repaint}, which
+     * paints there and then. {@code FlatRootPaneUI.installDefaults} sets the
+     * frame's background, so the dark tree update's {@code updateUI()} on the
+     * root pane paints the whole frame before it walks any further down. A
+     * dock title pane below that still holds {@code SyntheticaJidePainter}
+     * throws {@code ClassCastException}, which aborts the root pane's install
+     * part-way. Every later switch then NPEs in {@code FlatRootPaneUI
+     * .uninstallUI}, and the root pane stays on FlatLaf's UI after the light
+     * restore (#164).
+     *
+     * <p>The frame here paints its root pane synchronously in
+     * {@code setBackground}, as an X11 peer does, so every platform's
+     * windowed row runs the X11 order. On macOS FlatLaf defers that
+     * {@code setBackground} to {@code invokeLater}, so the paint comes after
+     * the switch and this test proves nothing there. The Linux and Windows
+     * rows cover it.
+     */
+    @Test
+    @DisplayName("a frame that paints inside setBackground, as on X11, gets a whole root pane UI both ways (#164)")
+    void rootPaneInstallSurvivesAFramePaintInsideSetBackground() throws Throwable {
+        onEdt(() -> {
+            JPanel content = new JPanel(new BorderLayout());
+            DockableFrame dock = new DockableFrame("dock");
+            dock.getContentPane().add(new JLabel("docked"));
+            content.add(dock, BorderLayout.CENTER);
+            List<Throwable> paintFailures = new ArrayList<>();
+            int[] paints = {0};
+            boolean[] armed = {false};
+            JFrame frame = new JFrame("WindowedCycleTest") {
+                @Override
+                public void setBackground(Color background) {
+                    super.setBackground(background);
+                    if (!armed[0]) {
+                        return;
+                    }
+                    paints[0]++;
+                    BufferedImage image = new BufferedImage(
+                        Math.max(1, getWidth()), Math.max(1, getHeight()),
+                        BufferedImage.TYPE_INT_RGB);
+                    Graphics2D graphics = image.createGraphics();
+                    try {
+                        getRootPane().paint(graphics);
+                    } catch (RuntimeException e) {
+                        // Rethrown: on X11 nothing between the peer and the
+                        // root pane's installUI catches it either.
+                        paintFailures.add(e);
+                        throw e;
+                    } finally {
+                        graphics.dispose();
+                    }
+                }
+            };
+            frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+            frame.setContentPane(content);
+            frame.pack();
+            frames.add(frame);
+            assertTrue(painterFields(content).values().stream().anyMatch(painter ->
+                    painter.getClass().getName().equals(
+                        "com.jidesoft.plaf.synthetica.SyntheticaJidePainter")),
+                "no dock title pane caches Synthetica's painter under stock, so the paint "
+                    + "below has nothing to trip over");
+            armed[0] = true;
+            try {
+                manager.apply(true);
+                if (!com.formdev.flatlaf.util.SystemInfo.isMacOS) {
+                    assertTrue(paints[0] > 0, "FlatRootPaneUI never set the frame's background, "
+                        + "so the root pane's install was never painted through; the test is "
+                        + "vacuous");
+                }
+                assertEquals(List.of(), paintFailures, "a paint inside the root pane's install "
+                    + "threw under dark. On X11 that aborts FlatRootPaneUI.installUI part-way");
+                javax.swing.plaf.RootPaneUI darkUi = frame.getRootPane().getUI();
+                assertTrue(darkUi instanceof com.formdev.flatlaf.ui.FlatRootPaneUI,
+                    "the root pane is not on FlatLaf's UI under dark: " + darkUi);
+                Field installedOn = com.formdev.flatlaf.ui.FlatRootPaneUI.class
+                    .getDeclaredField("rootPane");
+                installedOn.setAccessible(true);
+                assertSame(frame.getRootPane(), installedOn.get(darkUi),
+                    "FlatRootPaneUI.installUI did not finish: its rootPane field is only set "
+                        + "after BasicRootPaneUI.installUI returns, and uninstallUI NPEs "
+                        + "without it");
+
+                manager.apply(false);
+                assertEquals(List.of(), manager.failedPhases());
+                assertEquals(List.of(), paintFailures, "a paint inside the root pane's install "
+                    + "threw on the light restore");
+                String lightUi = frame.getRootPane().getUI().getClass().getName();
+                assertFalse(lightUi.startsWith("com.formdev.flatlaf."),
+                    "the root pane is still on " + lightUi + " after the light restore");
+            } finally {
+                // macOS runs FlatLaf's setBackground later, from the event
+                // queue. Nothing should paint for this test once it is over.
+                armed[0] = false;
+            }
+        });
+    }
+
+    /**
      * Vision's {@code DockingInternalFrameUI.installDefaults} — inherited from
      * {@code BasicInternalFrameUI}, so plain Swing reproduces it — does
      * {@code if (contentPane.getBackground() instanceof UIResource)

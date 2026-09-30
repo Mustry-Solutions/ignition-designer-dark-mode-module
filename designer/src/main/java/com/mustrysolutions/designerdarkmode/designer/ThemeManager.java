@@ -635,6 +635,15 @@ public class ThemeManager {
             // that colours itself in its constructor never gets them back, so
             // the only chance to record them is now.
             safely("captureRenderers", cellRenderers::captureStockColors);
+            // Before the tree update as well as after it (#164). The walk
+            // updates a window's JRootPane before anything below it, and
+            // FlatRootPaneUI.installDefaults sets the frame's background. On
+            // X11 that repaints the frame synchronously, so every dock title
+            // pane paints while it still holds SyntheticaJidePainter, which
+            // throws. The throw aborts the root pane's install part-way, and
+            // every later switch then fails to uninstall it. The run after
+            // the tree update stays, for panes attached during it.
+            safely("cachedPainters", () -> repointCachedThemePainters(true));
         }
         if (!dark) {
             uninstallComponentWatcher();
