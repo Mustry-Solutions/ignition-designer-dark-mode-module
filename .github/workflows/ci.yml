@@ -18,8 +18,52 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  changes:
+    name: Detect code changes
+    # A PR that only touches docs or the changelog cannot change what the
+    # build or the harness sees, so it skips both instead of holding the
+    # merge for a dozen harness rows. Not a workflow-level paths-ignore:
+    # the ruleset requires `Build & test` and `LaF harness`, and a workflow
+    # that never starts leaves those pending forever. A job skipped by its
+    # `if:` reports as passed instead.
+    #
+    # Nothing in the docs list is packaged into the .modl; license.html is,
+    # which is why it is not in the list.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      code: ${{ steps.diff.outputs.code }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # Fails open: no base to diff against, or a diff that errors, counts
+      # as a code change.
+      - name: Diff against the base
+        id: diff
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          code=true
+          if [ -n "$BASE" ] && [ "$BASE" != 0000000000000000000000000000000000000000 ] \
+             && files="$(git diff --name-only "$BASE...$HEAD")"; then
+            echo "$files"
+            if [ -n "$files" ] \
+               && ! echo "$files" | grep -qvE '(\.md$|^docs/|^LICENSE$)'; then
+              code=false
+            fi
+          fi
+          echo "code=$code" | tee -a "$GITHUB_OUTPUT"
+
   build:
     name: Build & test
+    needs: changes
+    # !cancelled() and "not false" rather than "== true", so a failed
+    # `changes` job runs the build instead of skipping it: a skipped
+    # required check counts as passed.
+    if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}
     runs-on: ubuntu-latest
     # Normal runs finish in well under a minute; the cap stops a wedged job
     # from burning the 6-hour GitHub default. The harness runs in its own
@@ -133,6 +177,9 @@ jobs:
     # is ~2 min of tests (~3.5 on Windows) in a single JVM, so running them
     # back to back made the Windows row alone take a quarter of an hour.
     # fail-fast is off so one failure still shows every other row.
+    needs: changes
+    # Same condition as `build`, for the same reason.
+    if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}
     strategy:
       fail-fast: false
       matrix:
@@ -234,14 +281,19 @@ jobs:
     # passes only if every row passed, so the ruleset names it alone.
     #
     # always(), so a failed or cancelled row fails this check rather than
-    # skipping it: a skipped required check counts as passed.
-    needs: harness
+    # skipping it: a skipped required check counts as passed. The one skip
+    # it accepts is the docs-only one, decided by `changes`.
+    needs: [changes, harness]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Every harness row passed
         run: |
-          echo "harness matrix: ${{ needs.harness.result }}"
+          echo "harness matrix: ${{ needs.harness.result }}, code changed: ${{ needs.changes.outputs.code }}"
+          if [ "${{ needs.harness.result }}" = "skipped" ] && [ "${{ needs.changes.outputs.code }}" = "false" ]; then
+            echo "Docs-only change; harness not needed."
+            exit 0
+          fi
           [ "${{ needs.harness.result }}" = "success" ] \
             || { echo "::error::One or more LaF harness rows did not pass (${{ needs.harness.result }})"; exit 1; }
