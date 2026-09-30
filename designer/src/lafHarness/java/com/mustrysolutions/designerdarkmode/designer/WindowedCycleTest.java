@@ -140,9 +140,17 @@ class WindowedCycleTest {
             // setBackground(null). One failing test would take the rest of
             // the class with it, and the reported failures would point
             // anywhere but here.
+            //
+            // shutdown(), not apply(false): the light restore installs the
+            // light-leftover watcher, a toolkit-wide listener with a timer on
+            // this thread, and nothing else takes it down. Left installed, it
+            // fired during the next class's test, walked into a frame from
+            // here and ran the tree-update diagnostic on the EDT while that
+            // test used UIManager from its own thread. The EDT then waited in
+            // UIDefaults forever (macOS, 8.1 current, PR #170's first run).
             try {
-                if (manager != null && UIManager.getLookAndFeel() instanceof FlatDarkLaf) {
-                    manager.apply(false);
+                if (manager != null) {
+                    manager.shutdown();
                 }
             } finally {
                 for (Window frame : frames) {
@@ -424,10 +432,11 @@ class WindowedCycleTest {
             JDesktopPane desktop = new JDesktopPane();
             desktop.setPreferredSize(new Dimension(320, 240));
             JInternalFrame inner = new JInternalFrame("window");
+            boolean[] armed = {true};
             JPanel content = new JPanel() {
                 @Override
                 public void setBackground(Color background) {
-                    if (background == null) {
+                    if (background == null && armed[0]) {
                         // BasicContainer.setBackground dereferences its argument.
                         throw new NullPointerException("BasicContainer stand-in: null background");
                     }
@@ -439,29 +448,40 @@ class WindowedCycleTest {
             inner.setVisible(true);
             desktop.add(inner);
             frame(desktop);
-            assertTrue(content.getBackground() instanceof UIResource,
-                "the content pane starts with a look-and-feel background: " + content.getBackground());
+            try {
+                assertTrue(content.getBackground() instanceof UIResource,
+                    "the content pane starts with a look-and-feel background: "
+                        + content.getBackground());
 
-            manager.apply(true);
-            assertEquals(List.of(), manager.failedPhases());
-            assertNotNull(inner.getLayout(), "the internal frame lost its layout: installDefaults "
-                + "threw part-way through, which is the Vision crash (#39) reproduced in plain Swing");
-            assertTrue(content.getBackground() instanceof UIResource,
-                "the content pane no longer tracks the look and feel: " + content.getBackground()
-                    + ". The neutralisation swaps a plain colour in for the update and must put "
-                    + "a UIResource back afterwards, or the pane stays whatever colour it was.");
-            assertTrue(ThemeManager.luminance(content.getBackground()) < 128,
-                "the content pane did not go dark: " + content.getBackground());
-            inner.getMinimumSize(); // NPEs without a layout
+                manager.apply(true);
+                assertEquals(List.of(), manager.failedPhases());
+                assertNotNull(inner.getLayout(), "the internal frame lost its layout: "
+                    + "installDefaults threw part-way through, which is the Vision crash (#39) "
+                    + "reproduced in plain Swing");
+                assertTrue(content.getBackground() instanceof UIResource,
+                    "the content pane no longer tracks the look and feel: "
+                        + content.getBackground() + ". The neutralisation swaps a plain colour "
+                        + "in for the update and must put a UIResource back afterwards, or the "
+                        + "pane stays whatever colour it was.");
+                assertTrue(ThemeManager.luminance(content.getBackground()) < 128,
+                    "the content pane did not go dark: " + content.getBackground());
+                inner.getMinimumSize(); // NPEs without a layout
 
-            manager.apply(false);
-            assertEquals(List.of(), manager.failedPhases());
-            assertNotNull(inner.getLayout(), "the internal frame lost its layout on the restore");
-            assertTrue(content.getBackground() instanceof UIResource, "after the restore: "
-                + content.getBackground());
-            assertTrue(ThemeManager.luminance(content.getBackground()) > 128,
-                "the content pane did not come back light: " + content.getBackground());
-            inner.getMinimumSize();
+                manager.apply(false);
+                assertEquals(List.of(), manager.failedPhases());
+                assertNotNull(inner.getLayout(),
+                    "the internal frame lost its layout on the restore");
+                assertTrue(content.getBackground() instanceof UIResource, "after the restore: "
+                    + content.getBackground());
+                assertTrue(ThemeManager.luminance(content.getBackground()) > 128,
+                    "the content pane did not come back light: " + content.getBackground());
+                inner.getMinimumSize();
+            } finally {
+                // The frame outlives the test in Window.getWindows() until it is
+                // collected, and later classes still walk it (JIDE's desktop-
+                // property refresh does, unguarded). Only this test wants the throw.
+                armed[0] = false;
+            }
         });
     }
 
