@@ -140,9 +140,17 @@ class WindowedCycleTest {
             // setBackground(null). One failing test would take the rest of
             // the class with it, and the reported failures would point
             // anywhere but here.
+            //
+            // shutdown(), not apply(false): the light restore installs the
+            // light-leftover watcher, a toolkit-wide listener with a timer on
+            // this thread, and nothing else takes it down. Left installed, it
+            // fired during the next class's test, walked into a frame from
+            // here and ran the tree-update diagnostic on the EDT while that
+            // test used UIManager from its own thread. The EDT then waited in
+            // UIDefaults forever (macOS, 8.1 current, PR #170's first run).
             try {
-                if (manager != null && UIManager.getLookAndFeel() instanceof FlatDarkLaf) {
-                    manager.apply(false);
+                if (manager != null) {
+                    manager.shutdown();
                 }
             } finally {
                 for (Window frame : frames) {
@@ -302,6 +310,110 @@ class WindowedCycleTest {
     }
 
     /**
+     * On X11 a frame repaints inside {@code setBackground}:
+     * {@code XPanelPeer.setBackground} ends in {@code XWindow.repaint}, which
+     * paints there and then. {@code FlatRootPaneUI.installDefaults} sets the
+     * frame's background, so a root pane updated before its subtree paints the
+     * whole frame while everything in it is still on Synthetica's delegates.
+     * A dock title pane holding {@code SyntheticaJidePainter} throws
+     * {@code ClassCastException}, a Synthetica text field's border throws
+     * {@code NullPointerException}, and either aborts the root pane's install
+     * part-way. Every later switch then NPEs in {@code FlatRootPaneUI
+     * .uninstallUI}, and the root pane stays on FlatLaf's UI after the light
+     * restore (#164).
+     *
+     * <p>The frame here paints its root pane synchronously in
+     * {@code setBackground}, as an X11 peer does, so every platform's
+     * windowed row runs the X11 order. On macOS FlatLaf defers that
+     * {@code setBackground} to {@code invokeLater}, so the paint comes after
+     * the switch and this test proves nothing there. The Linux and Windows
+     * rows cover it.
+     */
+    @Test
+    @DisplayName("a frame that paints inside setBackground, as on X11, gets a whole root pane UI both ways (#164)")
+    void rootPaneInstallSurvivesAFramePaintInsideSetBackground() throws Throwable {
+        onEdt(() -> {
+            JPanel content = new JPanel(new BorderLayout());
+            DockableFrame dock = new DockableFrame("dock");
+            dock.getContentPane().add(new JLabel("docked"));
+            content.add(dock, BorderLayout.CENTER);
+            // Not only JIDE's painter: every Synthetica painter throws once
+            // FlatLaf is in. On a live Linux Designer, with the title panes
+            // repointed, a text field's border was the next to fail.
+            content.add(new JTextField("filter"), BorderLayout.NORTH);
+            List<Throwable> paintFailures = new ArrayList<>();
+            int[] paints = {0};
+            boolean[] armed = {false};
+            JFrame frame = new JFrame("WindowedCycleTest") {
+                @Override
+                public void setBackground(Color background) {
+                    super.setBackground(background);
+                    if (!armed[0]) {
+                        return;
+                    }
+                    paints[0]++;
+                    BufferedImage image = new BufferedImage(
+                        Math.max(1, getWidth()), Math.max(1, getHeight()),
+                        BufferedImage.TYPE_INT_RGB);
+                    Graphics2D graphics = image.createGraphics();
+                    try {
+                        getRootPane().paint(graphics);
+                    } catch (RuntimeException e) {
+                        // Rethrown: on X11 nothing between the peer and the
+                        // root pane's installUI catches it either.
+                        paintFailures.add(e);
+                        throw e;
+                    } finally {
+                        graphics.dispose();
+                    }
+                }
+            };
+            frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+            frame.setContentPane(content);
+            frame.pack();
+            frames.add(frame);
+            assertTrue(painterFields(content).values().stream().anyMatch(painter ->
+                    painter.getClass().getName().equals(
+                        "com.jidesoft.plaf.synthetica.SyntheticaJidePainter")),
+                "no dock title pane caches Synthetica's painter under stock, so the paint "
+                    + "below has nothing to trip over");
+            armed[0] = true;
+            try {
+                manager.apply(true);
+                if (!com.formdev.flatlaf.util.SystemInfo.isMacOS) {
+                    assertTrue(paints[0] > 0, "FlatRootPaneUI never set the frame's background, "
+                        + "so the root pane's install was never painted through; the test is "
+                        + "vacuous");
+                }
+                assertEquals(List.of(), paintFailures, "a paint inside the root pane's install "
+                    + "threw under dark. On X11 that aborts FlatRootPaneUI.installUI part-way");
+                javax.swing.plaf.RootPaneUI darkUi = frame.getRootPane().getUI();
+                assertTrue(darkUi instanceof com.formdev.flatlaf.ui.FlatRootPaneUI,
+                    "the root pane is not on FlatLaf's UI under dark: " + darkUi);
+                Field installedOn = com.formdev.flatlaf.ui.FlatRootPaneUI.class
+                    .getDeclaredField("rootPane");
+                installedOn.setAccessible(true);
+                assertSame(frame.getRootPane(), installedOn.get(darkUi),
+                    "FlatRootPaneUI.installUI did not finish: its rootPane field is only set "
+                        + "after BasicRootPaneUI.installUI returns, and uninstallUI NPEs "
+                        + "without it");
+
+                manager.apply(false);
+                assertEquals(List.of(), manager.failedPhases());
+                assertEquals(List.of(), paintFailures, "a paint inside the root pane's install "
+                    + "threw on the light restore");
+                String lightUi = frame.getRootPane().getUI().getClass().getName();
+                assertFalse(lightUi.startsWith("com.formdev.flatlaf."),
+                    "the root pane is still on " + lightUi + " after the light restore");
+            } finally {
+                // macOS runs FlatLaf's setBackground later, from the event
+                // queue. Nothing should paint for this test once it is over.
+                armed[0] = false;
+            }
+        });
+    }
+
+    /**
      * Vision's {@code DockingInternalFrameUI.installDefaults} — inherited from
      * {@code BasicInternalFrameUI}, so plain Swing reproduces it — does
      * {@code if (contentPane.getBackground() instanceof UIResource)
@@ -325,10 +437,11 @@ class WindowedCycleTest {
             JDesktopPane desktop = new JDesktopPane();
             desktop.setPreferredSize(new Dimension(320, 240));
             JInternalFrame inner = new JInternalFrame("window");
+            boolean[] armed = {true};
             JPanel content = new JPanel() {
                 @Override
                 public void setBackground(Color background) {
-                    if (background == null) {
+                    if (background == null && armed[0]) {
                         // BasicContainer.setBackground dereferences its argument.
                         throw new NullPointerException("BasicContainer stand-in: null background");
                     }
@@ -340,29 +453,40 @@ class WindowedCycleTest {
             inner.setVisible(true);
             desktop.add(inner);
             frame(desktop);
-            assertTrue(content.getBackground() instanceof UIResource,
-                "the content pane starts with a look-and-feel background: " + content.getBackground());
+            try {
+                assertTrue(content.getBackground() instanceof UIResource,
+                    "the content pane starts with a look-and-feel background: "
+                        + content.getBackground());
 
-            manager.apply(true);
-            assertEquals(List.of(), manager.failedPhases());
-            assertNotNull(inner.getLayout(), "the internal frame lost its layout: installDefaults "
-                + "threw part-way through, which is the Vision crash (#39) reproduced in plain Swing");
-            assertTrue(content.getBackground() instanceof UIResource,
-                "the content pane no longer tracks the look and feel: " + content.getBackground()
-                    + ". The neutralisation swaps a plain colour in for the update and must put "
-                    + "a UIResource back afterwards, or the pane stays whatever colour it was.");
-            assertTrue(ThemeManager.luminance(content.getBackground()) < 128,
-                "the content pane did not go dark: " + content.getBackground());
-            inner.getMinimumSize(); // NPEs without a layout
+                manager.apply(true);
+                assertEquals(List.of(), manager.failedPhases());
+                assertNotNull(inner.getLayout(), "the internal frame lost its layout: "
+                    + "installDefaults threw part-way through, which is the Vision crash (#39) "
+                    + "reproduced in plain Swing");
+                assertTrue(content.getBackground() instanceof UIResource,
+                    "the content pane no longer tracks the look and feel: "
+                        + content.getBackground() + ". The neutralisation swaps a plain colour "
+                        + "in for the update and must put a UIResource back afterwards, or the "
+                        + "pane stays whatever colour it was.");
+                assertTrue(ThemeManager.luminance(content.getBackground()) < 128,
+                    "the content pane did not go dark: " + content.getBackground());
+                inner.getMinimumSize(); // NPEs without a layout
 
-            manager.apply(false);
-            assertEquals(List.of(), manager.failedPhases());
-            assertNotNull(inner.getLayout(), "the internal frame lost its layout on the restore");
-            assertTrue(content.getBackground() instanceof UIResource, "after the restore: "
-                + content.getBackground());
-            assertTrue(ThemeManager.luminance(content.getBackground()) > 128,
-                "the content pane did not come back light: " + content.getBackground());
-            inner.getMinimumSize();
+                manager.apply(false);
+                assertEquals(List.of(), manager.failedPhases());
+                assertNotNull(inner.getLayout(),
+                    "the internal frame lost its layout on the restore");
+                assertTrue(content.getBackground() instanceof UIResource, "after the restore: "
+                    + content.getBackground());
+                assertTrue(ThemeManager.luminance(content.getBackground()) > 128,
+                    "the content pane did not come back light: " + content.getBackground());
+                inner.getMinimumSize();
+            } finally {
+                // The frame outlives the test in Window.getWindows() until it is
+                // collected, and later classes still walk it (JIDE's desktop-
+                // property refresh does, unguarded). Only this test wants the throw.
+                armed[0] = false;
+            }
         });
     }
 

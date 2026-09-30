@@ -10,6 +10,21 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Linux: the main window's root pane no longer fails to switch**
+  ([#164](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/164)).
+  Every switch logged `updateUI failed for javax.swing.JRootPane`, and the
+  root pane stayed on FlatLaf's UI even after switching back to light. On
+  X11, setting a frame's background repaints it straight away, and FlatLaf's
+  root pane UI sets it while it installs. The tree update reached the root
+  pane first, so the whole frame painted while everything in it was still on
+  Synthetica's delegates, which throw under FlatLaf, and that stopped the
+  root pane's install part-way. The root pane now gets its new UI after
+  everything below it. A windowed harness test paints the frame inside
+  `setBackground`, as X11 does, with a dock title pane and a text field in
+  it, and checks the root pane's UI in both directions.
+
 ## [0.6.1] - 2026-09-30
 
 One fix: keyboard copy, cut and paste in the Project Browser work again in

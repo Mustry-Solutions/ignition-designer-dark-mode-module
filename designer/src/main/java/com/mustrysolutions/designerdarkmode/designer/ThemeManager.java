@@ -2774,6 +2774,30 @@ public class ThemeManager {
 
     private static int updateSubtree(
             java.awt.Component component, java.util.Set<String> failed) {
+        // A root pane gets its own UI after everything below it, not before
+        // as in Swing's walk (#164). FlatRootPaneUI.installDefaults sets the
+        // frame's background, and on X11 the frame repaints inside that call.
+        // Updated first, the root pane had the whole frame paint while every
+        // component in it still held the outgoing look and feel's delegates,
+        // and Synthetica's painters throw under FlatLaf. The throw aborted the
+        // root pane's install part-way, and every later switch then failed to
+        // uninstall it.
+        boolean ownUiLast = component instanceof javax.swing.JRootPane;
+        int failures = ownUiLast ? 0 : updateOwnUi(component, failed);
+        java.awt.Component[] children = childrenOf(component, failed);
+        if (children != null) {
+            for (java.awt.Component each : children) {
+                failures += updateSubtree(each, failed);
+            }
+        }
+        if (ownUiLast) {
+            failures += updateOwnUi(component, failed);
+        }
+        return failures;
+    }
+
+    private static int updateOwnUi(
+            java.awt.Component component, java.util.Set<String> failed) {
         int failures = 0;
         if (component instanceof javax.swing.JComponent) {
             javax.swing.JComponent child = (javax.swing.JComponent) component;
@@ -2813,12 +2837,6 @@ public class ThemeManager {
                     DebugLog.log("Could not reach the popup menu on "
                         + child.getClass().getName(), t);
                 }
-            }
-        }
-        java.awt.Component[] children = childrenOf(component, failed);
-        if (children != null) {
-            for (java.awt.Component each : children) {
-                failures += updateSubtree(each, failed);
             }
         }
         return failures;
