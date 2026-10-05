@@ -250,6 +250,46 @@ class CachedEditorAfterRestoreTest {
             "the refresh pinned FlatLaf's light text onto the field");
     }
 
+    @Test
+    @DisplayName("a cached table-cell label left with a dark UIResource colour is reset when a light paint shows it (#156)")
+    void aCachedCellLabelWithDarkColoursIsResetOnALightPaint() throws Exception {
+        // JIDE's property table keeps a couple of default-renderer labels inside
+        // its name-cell panel and reuses them for every other row. One that went
+        // through a dark session kept FlatLaf's colours as UIResources even
+        // though its delegate was back on stock: every second label cell dark.
+        javax.swing.table.DefaultTableCellRenderer.UIResource label =
+            new javax.swing.table.DefaultTableCellRenderer.UIResource();
+        JPanel cell = new JPanel(new BorderLayout());
+        cell.add(label, BorderLayout.CENTER);
+        TableCellRenderer renderer = (table, value, selected, focus, row, column) -> {
+            label.setText(String.valueOf(value));
+            return cell;
+        };
+        JTable[] table = new JTable[1];
+        JPanel[] host = new JPanel[1];
+        SwingUtilities.invokeAndWait(() -> {
+            // A restore has happened, so the watcher is running.
+            manager.apply(true);
+            manager.apply(false);
+            table[0] = table(renderer);
+            host[0] = host(table[0]);
+            label.setBackground(new javax.swing.plaf.ColorUIResource(0x46494B));
+            label.setForeground(new javax.swing.plaf.ColorUIResource(0xDDDDDD));
+        });
+        assertFalse(ThemeManager.hasStaleUi(label, false), "the label is on FlatLaf, so the test reproduces nothing");
+
+        SwingUtilities.invokeAndWait(() -> paint(table[0]));
+        waitForWatcherTick();
+
+        SwingUtilities.invokeAndWait(() -> paint(table[0]));
+        assertTrue(ThemeManager.luminance(label.getBackground()) > 200,
+            "the cached label still paints FlatLaf's dark background in a light Designer: "
+                + Integer.toHexString(rgb(label.getBackground())));
+        assertTrue(ThemeManager.luminance(label.getForeground()) < 120,
+            "the cached label kept FlatLaf's light text in a light Designer: "
+                + Integer.toHexString(rgb(label.getForeground())));
+    }
+
     /** Declares its table's renderer, as ConfigPropertyEditPanel declares its EditorRenderer. */
     private static final class OwnerHost extends JPanel {
         final Renderer renderer = new Renderer();

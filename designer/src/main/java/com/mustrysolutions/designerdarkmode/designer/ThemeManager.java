@@ -2173,9 +2173,14 @@ public class ThemeManager {
      * @return 1 if it was stale and refreshed, 0 if there was nothing to do
      */
     int refreshStaleAttached(java.awt.Component component, boolean renderer) {
-        if (!(component instanceof javax.swing.JComponent) || isDarkActive()
-                || !hasStaleUi(component, false)) {
+        if (!(component instanceof javax.swing.JComponent) || isDarkActive()) {
             return 0;
+        }
+        // Before the stale check: the labels this resets are already on stock
+        // delegates, which is why nothing else ever looks at them.
+        int reset = renderer ? resetDarkCellRendererColours(component) : 0;
+        if (!hasStaleUi(component, false)) {
+            return reset > 0 ? 1 : 0;
         }
         java.util.List<javax.swing.JComponent> borderless = renderer
             ? RendererBorders.borderless(component) : java.util.List.of();
@@ -2188,6 +2193,49 @@ public class ThemeManager {
         RendererBorders.restore(borderless);
         return 1;
     }
+
+    /**
+     * Give a cached {@code DefaultTableCellRenderer} its own colours back when
+     * a dark session left FlatLaf's on it (#156).
+     *
+     * <p>JIDE's property table keeps default-renderer labels inside every
+     * name-cell panel and reuses them, so one that was on FlatLaf in a dark
+     * session outlives it. Its delegate comes back to stock, but the
+     * {@code UIResource} colours the dark delegate installed stay, in the
+     * renderer's own {@code unselected} fields: every second label cell of the
+     * Tag Editor's property table stayed dark. {@code updateUI()} nulls those
+     * fields, and that is all this does, so only {@code UIResource} colours
+     * that cannot be a light theme's (a very dark background, a very light
+     * text) are touched.
+     *
+     * @return how many renderers were reset
+     */
+    private static int resetDarkCellRendererColours(java.awt.Component component) {
+        int reset = 0;
+        if (component instanceof javax.swing.table.DefaultTableCellRenderer) {
+            javax.swing.table.DefaultTableCellRenderer label =
+                (javax.swing.table.DefaultTableCellRenderer) component;
+            java.awt.Color background = label.getBackground();
+            java.awt.Color foreground = label.getForeground();
+            boolean darkBackground = background instanceof javax.swing.plaf.UIResource
+                && luminance(background) < DARK_LEFTOVER_LUMINANCE;
+            boolean lightForeground = foreground instanceof javax.swing.plaf.UIResource
+                && luminance(foreground) > LIGHT_FOREGROUND_LUMINANCE;
+            if (darkBackground || lightForeground) {
+                label.setBackground(null);
+                label.setForeground(null);
+                reset++;
+            }
+        }
+        if (component instanceof java.awt.Container) {
+            for (java.awt.Component child : ((java.awt.Container) component).getComponents()) {
+                reset += resetDarkCellRendererColours(child);
+            }
+        }
+        return reset;
+    }
+
+    private static final int LIGHT_FOREGROUND_LUMINANCE = 200;
 
     private static boolean hasPendingAncestor(java.awt.Component component,
             java.util.Set<java.awt.Component> pending) {
