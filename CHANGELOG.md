@@ -10,6 +10,15 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-10-05
+
+Tag Editor colour fixes, and the Linux root-pane switch.
+
+Checked live in a Designer on 8.3.6 (macOS): the Tag Editor fixes, in the same
+dark to light cycle that showed each bug. The Linux fix was checked in a Linux
+Designer before it merged. The 8.1 line and Windows are covered by the headless
+harness only.
+
 ### Fixed
 
 - **Tag Editor: alarm names, selected events and value fields read correctly in
@@ -1279,7 +1288,9 @@ First release.
 
 Cosmetic, and affects no behaviour.
 
-[Unreleased]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/compare/v0.6.2...HEAD
+[0.6.2]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/compare/v0.6.1...v0.6.2
+[0.6.1]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/compare/v0.4.2...v0.5.0
 [0.4.2]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/compare/v0.4.1...v0.4.2
