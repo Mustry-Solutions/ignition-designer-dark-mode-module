@@ -12,6 +12,19 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ### Fixed
 
+- **Tag Editor: alarm names, selected events and value fields read correctly in
+  both themes**
+  ([#157](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/157),
+  [#158](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/158),
+  [#156](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/156)).
+  An unselected alarm's name was near-black on the dark row, because the
+  renderer hard-codes black in its HTML. A selected event in the Scripting
+  tree took its text colour from a palette token dark mode turns dark. And
+  after a dark to light switch, the property table's value fields (Deadband,
+  Engineering limits) stayed dark: the cached editor's refresh put FlatLaf's
+  colours back. Alternating dark label cells, also reported in #156, did not
+  reproduce and are not covered.
+
 - **Linux: the main window's root pane no longer fails to switch**
   ([#164](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/164)).
   Every switch logged `updateUI failed for javax.swing.JRootPane`, and the
