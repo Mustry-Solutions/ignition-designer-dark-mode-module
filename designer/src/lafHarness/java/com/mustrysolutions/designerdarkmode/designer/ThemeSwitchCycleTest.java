@@ -17,6 +17,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 
 /**
  * Drives {@link ThemeManager}'s own switch sequence against the real Designer
@@ -30,9 +31,10 @@ import org.junit.jupiter.api.Test;
  *
  * <p>Nothing here is mocked. The stock Synthetica look and feel is installed,
  * JIDE's extension goes on top of it, and then {@link ThemeManager#apply} runs
- * exactly as it does in a Designer. What is missing is a Designer: there are no
- * windows, so the component walks run and find nothing, and everything asserted
- * below lives in {@code UIManager} or in the module's own state.
+ * exactly as it does in a Designer, on the EDT. What is missing is a Designer:
+ * there are no windows, so the component walks run and find nothing, and
+ * everything asserted below lives in {@code UIManager} or in the module's own
+ * state.
  *
  * <h2>What this cannot see</h2>
  *
@@ -42,6 +44,7 @@ import org.junit.jupiter.api.Test;
  * are not, because with no windows there is nothing holding one. A Designer and
  * a pair of eyes still settle "does this look right".
  */
+@ExtendWith(RunOnEdt.class)
 class ThemeSwitchCycleTest {
 
     private ThemeManager manager;
@@ -403,6 +406,17 @@ class ThemeSwitchCycleTest {
      * which is exactly the kind nobody finds by looking. It is nearly free to
      * run. If you make it fail, that is a real finding — write down what did
      * it.
+     *
+     * <p>It failed twice on macOS CI, and neither time was the module (#160,
+     * #171). The test then ran on the test thread while earlier tests' leaked
+     * light-leftover watchers updated JIDE components on the EDT (#179). One
+     * such update after the first restore left {@code JideButton.actionMap}
+     * and {@code CollapsiblePane.actionMap} in the defaults, which the third
+     * restore's fresh table lacked (#171). One between Synthetica's
+     * {@code setLookAndFeel} and its {@code setFont} let JIDE install its
+     * extension from Tahoma 11 before the module could (#160). Each was
+     * reproduced by doing it once. {@link RunOnEdt} and {@link ManagerCleanup}
+     * now rule both out, as the single EDT of a Designer does.
      */
     @Test
     @DisplayName("repeated cycles converge rather than drifting")
