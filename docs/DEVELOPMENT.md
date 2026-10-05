@@ -112,6 +112,15 @@ given, in which case a headless JVM is a broken runner and it fails). CI runs
 it on all three platforms, Linux under Xvfb. A Designer and a pair of eyes
 still settle "does this look right".
 
+**Make a test's `ThemeManager` with `ManagerCleanup.newManager()`**, not
+`new ThemeManager()`. Every light restore installs a toolkit-wide watcher that
+only `shutdown()` removes; left live, it keeps updating components on the EDT
+during later tests ([#179][179]). `ManagerCleanup` shuts each test's managers
+down and fails a test that leaves one of the module's AWT listeners behind. A
+test that snapshots defaults across a switch should also run on the EDT, as a
+Designer does: `@ExtendWith(RunOnEdt.class)`, as in `ThemeSwitchCycleTest`
+([#160][160], [#171][171]).
+
 **Some tests read pixels.** The first was `TagBrowserHeaderBandTest`: it builds
 the real `SimpleTreeTable` by hand, drives the dark passes over it, and paints
 it into a `BufferedImage`. That is not a screenshot test — there is no reference image, so
@@ -359,6 +368,9 @@ judgment calls into a rule with four exceptions. [#22][22] was two of these
 [81]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/81
 [92]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/92
 [102]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/102
+[160]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/160
+[171]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/171
+[179]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/179
 [14]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/14
 [19]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/19
 [21]: https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/21
