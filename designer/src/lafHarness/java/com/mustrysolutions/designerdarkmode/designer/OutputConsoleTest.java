@@ -46,7 +46,7 @@ class OutputConsoleTest {
     @BeforeEach
     void installStockDesignerLookAndFeel() throws Exception {
         DesignerLookAndFeel.installStock();
-        manager = new ThemeManager();
+        manager = ManagerCleanup.newManager();
         manager.captureStockLaf();
         consoles = new ConsoleTextTheme();
     }

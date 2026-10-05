@@ -65,7 +65,7 @@ class UiScaleDisableTest {
     @BeforeEach
     void installStockDesignerLookAndFeel() throws Exception {
         DesignerLookAndFeel.installStock();
-        manager = new ThemeManager();
+        manager = ManagerCleanup.newManager();
         manager.captureStockLaf();
         labelFontBefore = UIManager.getFont("Label.font");
         defaultFontBefore = UIManager.get("defaultFont");

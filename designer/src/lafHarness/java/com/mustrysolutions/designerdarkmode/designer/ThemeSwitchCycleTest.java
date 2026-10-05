@@ -49,7 +49,7 @@ class ThemeSwitchCycleTest {
     @BeforeEach
     void installStockDesignerLookAndFeel() throws Exception {
         DesignerLookAndFeel.installStock();
-        manager = new ThemeManager();
+        manager = ManagerCleanup.newManager();
         // The one piece of startup() state apply() needs, and the reason it
         // needs no DesignerContext.
         manager.captureStockLaf();

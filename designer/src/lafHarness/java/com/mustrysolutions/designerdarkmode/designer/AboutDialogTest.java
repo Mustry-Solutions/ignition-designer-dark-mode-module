@@ -55,7 +55,7 @@ class AboutDialogTest {
     void installStockDesignerLookAndFeel() throws Throwable {
         onEdt(() -> {
             DesignerLookAndFeel.installStock();
-            manager = new ThemeManager();
+            manager = ManagerCleanup.newManager();
             manager.captureStockLaf();
         });
     }

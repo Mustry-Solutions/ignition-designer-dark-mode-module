@@ -82,7 +82,7 @@ class TagBrowserHeaderBandTest {
         // never re-read, and that staleness is half of #21 — a test that first
         // touched the class under dark would quietly test nothing.
         Class.forName(SimpleTreeTable.class.getName());
-        manager = new ThemeManager();
+        manager = ManagerCleanup.newManager();
         manager.captureStockLaf();
         renderers = new CellRendererSanitizer();
     }

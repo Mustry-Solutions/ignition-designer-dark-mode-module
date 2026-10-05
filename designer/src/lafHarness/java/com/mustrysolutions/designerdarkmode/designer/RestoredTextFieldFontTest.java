@@ -55,7 +55,7 @@ class RestoredTextFieldFontTest {
     @BeforeEach
     void installStockDesignerLookAndFeel() throws Exception {
         DesignerLookAndFeel.installStock();
-        manager = new ThemeManager();
+        manager = ManagerCleanup.newManager();
         manager.captureStockLaf();
         // What Vision does when it names a component, at stock.
         IgnitionLookAndFeel.disableFontScaling(VISION_NAME);

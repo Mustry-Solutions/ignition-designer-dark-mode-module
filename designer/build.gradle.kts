@@ -231,6 +231,10 @@ val lafHarnessTask = tasks.register<Test>("lafHarness") {
 
     runsHeadlessAgainstTheRealLookAndFeels("laf-harness-debug.log")
 
+    // ManagerCleanup, listed in META-INF/services: shuts down each test's
+    // ThemeManagers and fails a test that leaves an AWT listener behind (#179).
+    systemProperty("junit.jupiter.extensions.autodetection.enabled", "true")
+
     testLogging {
         // standardOut/standardError: the harness prints almost nothing, and
         // JUnit's timeout thread dump goes through the test JVM's streams.

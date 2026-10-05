@@ -42,7 +42,7 @@ class TokenColorOnSaveTest {
     @BeforeEach
     void installStockDesignerLookAndFeel() throws Exception {
         DesignerLookAndFeel.installStock();
-        manager = new ThemeManager();
+        manager = ManagerCleanup.newManager();
         manager.captureStockLaf();
         SerializerCleanCopies.refresh();
         Class<?> colors = Class.forName(IaColorTokens.COLORS_CLASS);

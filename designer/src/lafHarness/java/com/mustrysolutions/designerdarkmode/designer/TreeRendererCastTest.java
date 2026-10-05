@@ -50,7 +50,7 @@ class TreeRendererCastTest {
     @BeforeEach
     void installStockDesignerLookAndFeel() throws Exception {
         DesignerLookAndFeel.installStock();
-        manager = new ThemeManager();
+        manager = ManagerCleanup.newManager();
         manager.captureStockLaf();
         icons = new TreeIconRecolorer();
     }

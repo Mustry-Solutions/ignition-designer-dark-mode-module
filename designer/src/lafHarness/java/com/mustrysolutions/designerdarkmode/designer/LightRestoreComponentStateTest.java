@@ -81,7 +81,7 @@ class LightRestoreComponentStateTest {
         // Class-init under the LIGHT theme, as a Designer does: the renderer
         // reads Panel.background in its constructor and never re-reads it.
         Class.forName(SimpleTreeTable.class.getName());
-        manager = new ThemeManager();
+        manager = ManagerCleanup.newManager();
         manager.captureStockLaf();
         renderers = new CellRendererSanitizer();
     }

@@ -90,7 +90,7 @@ class OwnedRendererCastTest {
     @BeforeEach
     void installStockDesignerLookAndFeel() throws Exception {
         DesignerLookAndFeel.installStock();
-        manager = new ThemeManager();
+        manager = ManagerCleanup.newManager();
         manager.captureStockLaf();
         renderers = new CellRendererSanitizer();
         icons = new TreeIconRecolorer();
