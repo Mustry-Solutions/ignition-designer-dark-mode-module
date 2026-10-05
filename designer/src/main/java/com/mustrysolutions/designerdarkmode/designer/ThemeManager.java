@@ -2948,21 +2948,27 @@ public class ThemeManager {
         }
     }
 
-    static boolean hasStaleUi(java.awt.Component component, boolean darkActive) {
+    /** Is this component's own delegate from the look and feel that is not active? */
+    static boolean hasStaleOwnUi(java.awt.Component component, boolean darkActive) {
         if (component instanceof javax.swing.JComponent) {
             try {
                 Object ui = component.getClass().getMethod("getUI").invoke(component);
                 if (ui != null) {
                     String name = ui.getClass().getName();
-                    if (darkActive
-                            ? (name.contains("Synthetica") || name.contains("synth"))
-                            : name.contains("flatlaf")) {
-                        return true;
-                    }
+                    return darkActive
+                        ? (name.contains("Synthetica") || name.contains("synth"))
+                        : name.contains("flatlaf");
                 }
             } catch (Exception ignored) {
                 // Component without getUI.
             }
+        }
+        return false;
+    }
+
+    static boolean hasStaleUi(java.awt.Component component, boolean darkActive) {
+        if (hasStaleOwnUi(component, darkActive)) {
+            return true;
         }
         if (component instanceof java.awt.Container) {
             for (java.awt.Component child
