@@ -840,6 +840,36 @@ public class TreeIconRecolorer {
     /** Logged once: the field is protected, and a JVM that keeps it closed skips owned trees. */
     private boolean paneUnavailable;
 
+    /**
+     * Give a selected row's text the selection foreground (#158). The event
+     * tree's renderer sets that text from an IA palette token ({@code
+     * Base100}, white in the light theme) that dark mode turns dark, and
+     * ignores the selection colour pushed into it, so a selected event read
+     * dark grey on the blue. Only a selected row is touched: an unselected
+     * row's grey and primary colours say something.
+     */
+    private static void liftSelectedText(Component row, JTree tree, int y, int height) {
+        Color foreground = UIManager.getColor("Tree.selectionForeground");
+        // The panel's own background still holds the previous row's colour
+        // here (the cached colours apply from the next row), so ask the tree.
+        int index = tree.getClosestRowForLocation(0, y + height / 2);
+        if (foreground == null || index < 0 || !tree.isRowSelected(index)) {
+            return;
+        }
+        setLabelForegrounds(row, foreground);
+    }
+
+    private static void setLabelForegrounds(Component component, Color foreground) {
+        if (component instanceof JLabel) {
+            component.setForeground(foreground);
+        }
+        if (component instanceof Container) {
+            for (Component child : ((Container) component).getComponents()) {
+                setLabelForegrounds(child, foreground);
+            }
+        }
+    }
+
     /** Does for an owned tree's painted cells what RecoloringRenderer does for the rest. */
     private class RecoloringPane extends javax.swing.CellRendererPane {
         @Override
@@ -853,6 +883,7 @@ public class TreeIconRecolorer {
                         syncRendererColors(renderer);
                     }
                     processComponent(c);
+                    liftSelectedText(c, (JTree) p, y, h);
                 } catch (Throwable ignored) {
                     // Never let theming break a paint.
                 }

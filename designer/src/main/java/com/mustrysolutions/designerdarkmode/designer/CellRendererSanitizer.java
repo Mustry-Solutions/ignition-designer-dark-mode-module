@@ -1006,6 +1006,31 @@ public class CellRendererSanitizer {
      * <p>The identical border on {@code SimpleTreeTable$TreeHeader}, the corner
      * above the row header, IS a real component and has been darkened by the
      * hierarchy walk since #20. That is why the band starts at the tree's right
+    /**
+     * Repaint an HTML label's hard-coded black text in the foreground colour
+     * (#157). The Tag Editor's alarm list sets each unselected name as
+     * {@code <font color='black'>}, which the foreground lift above never
+     * sees because the colour lives in the text. The renderer sets the text
+     * again on every row, so nothing needs putting back, and a list
+     * renderer's {@code setText} does not repaint.
+     */
+    private void liftHardCodedBlackText(javax.swing.JLabel label) {
+        String text = label.getText();
+        if (text == null || !text.regionMatches(true, 0, "<html", 0, 5)) {
+            return;
+        }
+        String lifted = text
+            .replace("color='black'", "color='" + hex(lightForeground) + "'")
+            .replace("color=\"black\"", "color=\"" + hex(lightForeground) + "\"");
+        if (!lifted.equals(text)) {
+            label.setText(lifted);
+        }
+    }
+
+    private static String hex(Color color) {
+        return String.format("#%06X", color.getRGB() & 0xFFFFFF);
+    }
+
      * edge rather than at the panel's: the same 8px, half of it already fixed.
      *
      * <p>Anything light qualifies here, not just {@code Color.WHITE}: a
@@ -1033,6 +1058,9 @@ public class CellRendererSanitizer {
         // one-shot swap is undone before the cell is ever painted.
         if (!mutatedBorders.containsKey(target)) {
             mutatedBorders.put(target, border);
+        }
+        if (component instanceof javax.swing.JLabel) {
+            liftHardCodedBlackText((javax.swing.JLabel) component);
         }
         target.setBorder(darkened);
     }
