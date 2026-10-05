@@ -283,6 +283,156 @@ class OwnedRendererCastTest {
     }
 
 
+    // ---- #157 / #158: row text the owners colour themselves ------------------
+
+    @Test
+    @DisplayName("an unselected alarm's name is not painted darker than its dark row (#157)")
+    void anAlarmNameIsReadableOnTheDarkRow() throws Throwable {
+        requireADisplay();
+        onEdt(this::anAlarmNameIsReadableOnTheDarkRowOnEdt);
+    }
+
+    private void anAlarmNameIsReadableOnTheDarkRowOnEdt() throws Exception {
+        manager.apply(true);
+        Object alarm = stub(Class.forName(
+            "com.inductiveautomation.ignition.common.alarming.config.AlarmDefinition"),
+            method -> {
+                switch (method.getName()) {
+                    case "getName": return args -> "HighAlarm";
+                    case "getNonNull": return args -> args[1];
+                    default: return null;
+                }
+            });
+        Object config = stub(Class.forName(
+            "com.inductiveautomation.ignition.common.alarming.config.AlarmConfiguration"),
+            method -> "getDefinitions".equals(method.getName())
+                ? args -> new ArrayList<>(List.of(alarm)) : null);
+        Class<?> controllerType = Class.forName(
+            "com.inductiveautomation.ignition.designer.tags.editing.propeditors.alarms."
+                + "AlarmListPanel$AlarmListController");
+        Object controller = stub(controllerType, method -> null);
+        JPanel alarms = (JPanel) Class.forName(
+            "com.inductiveautomation.ignition.designer.tags.editing.propeditors.alarms."
+                + "AlarmListPanel").getConstructor().newInstance();
+        alarms.getClass().getMethod("init", controllerType, Class.forName(
+            "com.inductiveautomation.ignition.common.alarming.config.AlarmConfiguration"))
+            .invoke(alarms, controller, config);
+        JList<?> list = (JList<?>) field(alarms, "list");
+        list.clearSelection();
+        JPanel panel = inPanel(alarms, 400, 300);
+        renderers.install();
+        renderers.installIn(panel);
+
+        Rectangle row = list.getCellBounds(0, 0);
+        BufferedImage image = paint(list);
+        // Past the override icon; the name and the description are what is left.
+        int darkest = darkestLuminance(image, row.x + 28, row.y, row.width - 28, row.height);
+        int background = luminance(new java.awt.Color(
+            image.getRGB(row.x + row.width - 2, row.y + 2)));
+        assertTrue(background < 120, "the row is not dark (" + background + "), so this test "
+            + "measures nothing");
+        assertTrue(background - darkest <= 10,
+            "the alarm name is painted darker than the row (darkest pixel " + darkest
+                + " on a row of " + background + "): its HTML carries a hard-coded black");
+    }
+
+    @Test
+    @DisplayName("a selected event's text reads against the selection in the event tree (#158)")
+    void aSelectedEventReadsAgainstTheSelection() throws Throwable {
+        requireADisplay();
+        onEdt(this::aSelectedEventReadsAgainstTheSelectionOnEdt);
+    }
+
+    private void aSelectedEventReadsAgainstTheSelectionOnEdt() throws Exception {
+        manager.apply(true);
+        JPanel editor = eventScriptEditor(new ArrayList<>());
+        JTree tree = (JTree) field(editor, "tree");
+        JPanel panel = inPanel(editor, 700, 500);
+        icons.installIn(panel);
+        int target = eventRows(tree).get(0);
+        tree.setSelectionRow(target);
+
+        // Paint the selected row through the tree's own pane, as BasicTreeUI
+        // does. Headless, nothing lays the renderer out, so the text cannot be
+        // read from pixels; the colour the label holds when it is painted is
+        // the thing under test.
+        Component row = tree.getCellRenderer().getTreeCellRendererComponent(tree,
+            tree.getPathForRow(target).getLastPathComponent(), true, false, true, target, false);
+        Rectangle bounds = tree.getRowBounds(target);
+        BufferedImage image = new BufferedImage(tree.getWidth(), tree.getHeight(),
+            BufferedImage.TYPE_INT_ARGB);
+        java.awt.Graphics2D g = image.createGraphics();
+        try {
+            ((CellRendererPane) rendererPane(tree, "BasicTreeUI")).paintComponent(g, row, tree,
+                bounds.x, bounds.y, bounds.width, bounds.height, true);
+        } finally {
+            g.dispose();
+        }
+        double best = contrast(firstTextLabel(row).getForeground(),
+            UIManager.getColor("Tree.selectionBackground"));
+        assertTrue(best >= 4.0, "the selected event's text has a contrast of " + best
+            + " against the selection; the renderer takes its text colour from a palette "
+            + "token that dark mode turned dark");
+    }
+
+    private static BufferedImage paint(Component component) {
+        BufferedImage image = new BufferedImage(component.getWidth(), component.getHeight(),
+            BufferedImage.TYPE_INT_ARGB);
+        java.awt.Graphics2D g = image.createGraphics();
+        try {
+            component.paint(g);
+        } finally {
+            g.dispose();
+        }
+        return image;
+    }
+
+    private static JLabel firstTextLabel(Component component) {
+        if (component instanceof JLabel && ((JLabel) component).getText() != null
+                && !((JLabel) component).getText().isEmpty()) {
+            return (JLabel) component;
+        }
+        if (component instanceof Container) {
+            for (Component child : ((Container) component).getComponents()) {
+                JLabel found = firstTextLabel(child);
+                if (found != null) {
+                    return found;
+                }
+            }
+        }
+        return null;
+    }
+
+    private static int darkestLuminance(BufferedImage image, int x, int y, int w, int h) {
+        int darkest = 255;
+        for (int i = x; i < x + w; i++) {
+            for (int j = y; j < y + h; j++) {
+                darkest = Math.min(darkest, luminance(new java.awt.Color(image.getRGB(i, j))));
+            }
+        }
+        return darkest;
+    }
+
+    private static int luminance(java.awt.Color c) {
+        return (int) Math.round(0.2126 * c.getRed() + 0.7152 * c.getGreen()
+            + 0.0722 * c.getBlue());
+    }
+
+    /** WCAG contrast ratio. */
+    private static double contrast(java.awt.Color a, java.awt.Color b) {
+        double la = relative(a);
+        double lb = relative(b);
+        return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+    }
+
+    private static double relative(java.awt.Color c) {
+        double[] v = {c.getRed() / 255.0, c.getGreen() / 255.0, c.getBlue() / 255.0};
+        for (int i = 0; i < 3; i++) {
+            v[i] = v[i] <= 0.03928 ? v[i] / 12.92 : Math.pow((v[i] + 0.055) / 1.055, 2.4);
+        }
+        return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2];
+    }
+
     // ---- helpers --------------------------------------------------------------
 
     /**

@@ -96,6 +96,9 @@ public class CellRendererSanitizer {
      * table must not be held alive by this.
      */
     private final Map<Component, Color[]> stockRendererColors = new WeakHashMap<>();
+
+    /** Marks a recorded colour the restore must not write back; compared by identity. */
+    private static final Color LEAVE_ALONE = new Color(0, 0, 0, 0);
     private final Map<javax.swing.JComponent, Boolean> refreshedRenderers = new WeakHashMap<>();
 
     /**
@@ -180,10 +183,36 @@ public class CellRendererSanitizer {
         snapshotColors((Component) renderer, colors);
         colors.forEach((component, pair) -> stockRendererColors.putIfAbsent(component, new Color[] {
             mutatedBackgrounds.containsKey(component)
-                ? mutatedBackgrounds.get(component) : pair[0],
+                ? mutatedBackgrounds.get(component) : ownedByFlatLaf(component, pair[0]),
             mutatedForegrounds.containsKey(component)
-                ? mutatedForegrounds.get(component) : pair[1],
+                ? mutatedForegrounds.get(component) : ownedByFlatLaf(component, pair[1]),
         }));
+    }
+
+    /**
+     * A colour a FlatLaf delegate installed is not a stock colour (#156).
+     *
+     * <p>A component built while dark, such as the Tag Editor's value fields
+     * (a cached editor panel that outlives the dialog it was built for),
+     * holds {@code UIResource} colours that FlatLaf's UI put there. Recorded
+     * as stock and applied last of all by {@link #uninstall()}, they came back
+     * on the light restore: dark boxes in a light Designer. Recorded as
+     * {@link #LEAVE_ALONE} instead, so the restore skips them and the light
+     * delegate's own colours stand (a recorded null would wipe those).
+     */
+    private static Color ownedByFlatLaf(Component component, Color colour) {
+        if (!(colour instanceof UIResource) || !(component instanceof javax.swing.JComponent)) {
+            return colour;
+        }
+        try {
+            Object ui = component.getClass().getMethod("getUI").invoke(component);
+            if (ui != null && ui.getClass().getName().contains("flatlaf")) {
+                return LEAVE_ALONE;
+            }
+        } catch (Exception ignored) {
+            // Component without getUI: nothing installed its colours.
+        }
+        return colour;
     }
 
     /**
@@ -198,17 +227,35 @@ public class CellRendererSanitizer {
      * without it a stock-built Vision value editor came out of the refresh
      * with FlatLaf's border, and the box followed it back to light.
      */
-    private void refreshDelegatePreservingColors(javax.swing.JComponent renderer) {
+    /** Package-private so a test can drive the refresh without a paint. */
+    void refreshDelegatePreservingColors(javax.swing.JComponent renderer) {
         Map<Component, Color[]> before = new java.util.LinkedHashMap<>();
         snapshotColors(renderer, before);
+        // The colours a stale delegate installed are the outgoing look and
+        // feel's, not the component's own: pinning them back is what left the
+        // Tag Editor's value fields dark in a light Designer (#156).
+        boolean darkActive = UIManager.getLookAndFeel() instanceof com.formdev.flatlaf.FlatDarkLaf;
+        before.replaceAll((component, colors) -> new Color[] {
+            installedByStaleUi(component, colors[0], darkActive),
+            installedByStaleUi(component, colors[1], darkActive),
+        });
         java.util.List<javax.swing.JComponent> borderless = RendererBorders.borderless(renderer);
         ThemeManager.refreshStaleUiDelegates(renderer);
         RendererBorders.restore(borderless);
         before.forEach((component, colors) -> {
-            component.setBackground(colors[0]);
-            component.setForeground(colors[1]);
+            if (colors[0] != LEAVE_ALONE) {
+                component.setBackground(colors[0]);
+            }
+            if (colors[1] != LEAVE_ALONE) {
+                component.setForeground(colors[1]);
+            }
         });
         refreshedRenderers.put(renderer, Boolean.TRUE);
+    }
+
+    private static Color installedByStaleUi(Component component, Color colour, boolean darkActive) {
+        return colour instanceof UIResource && ThemeManager.hasStaleOwnUi(component, darkActive)
+            ? LEAVE_ALONE : colour;
     }
 
     /**
@@ -857,8 +904,12 @@ public class CellRendererSanitizer {
         // like — mutatedBackgrounds can only hold what sanitize() overwrote,
         // which by then was already null.
         stockRendererColors.forEach((component, colors) -> {
-            component.setBackground(colors[0]);
-            component.setForeground(colors[1]);
+            if (colors[0] != LEAVE_ALONE) {
+                component.setBackground(colors[0]);
+            }
+            if (colors[1] != LEAVE_ALONE) {
+                component.setForeground(colors[1]);
+            }
         });
         stockRendererColors.clear();
     }
@@ -955,6 +1006,31 @@ public class CellRendererSanitizer {
         }
     }
 
+    /**
+     * Repaint an HTML label's hard-coded black text in the foreground colour
+     * (#157). The Tag Editor's alarm list sets each unselected name as
+     * {@code <font color='black'>}, which the foreground lift above never
+     * sees because the colour lives in the text. The renderer sets the text
+     * again on every row, so nothing needs putting back, and a list
+     * renderer's {@code setText} does not repaint.
+     */
+    private void liftHardCodedBlackText(javax.swing.JLabel label) {
+        String text = label.getText();
+        if (text == null || !text.regionMatches(true, 0, "<html", 0, 5)) {
+            return;
+        }
+        String lifted = text
+            .replace("color='black'", "color='" + hex(lightForeground) + "'")
+            .replace("color=\"black\"", "color=\"" + hex(lightForeground) + "\"");
+        if (!lifted.equals(text)) {
+            label.setText(lifted);
+        }
+    }
+
+    private static String hex(Color color) {
+        return String.format("#%06X", color.getRGB() & 0xFFFFFF);
+    }
+
     private void sanitize(Component component) {
         // The sanitizing renderer pane survives until updateComponentTreeUI
         // rebuilds the UI on the light restore — never darken outside dark mode.
@@ -983,6 +1059,9 @@ public class CellRendererSanitizer {
             component.setForeground(lightForeground);
         }
         sanitizeBorder(component);
+        if (component instanceof javax.swing.JLabel) {
+            liftHardCodedBlackText((javax.swing.JLabel) component);
+        }
         if (component instanceof Container) {
             for (Component child : ((Container) component).getComponents()) {
                 sanitize(child);

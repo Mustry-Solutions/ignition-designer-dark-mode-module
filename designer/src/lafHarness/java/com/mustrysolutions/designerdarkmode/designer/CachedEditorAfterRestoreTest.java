@@ -127,6 +127,212 @@ class CachedEditorAfterRestoreTest {
     }
 
     @Test
+    @DisplayName("a value field built while dark takes the light colours back, in a renderer that is itself a component (#156)")
+    void aFieldBuiltWhileDarkTakesTheLightColoursBack() throws Exception {
+        JTable[] table = new JTable[1];
+        JPanel[] host = new JPanel[1];
+        ComponentRenderer[] renderer = new ComponentRenderer[1];
+        // The Tag Editor's shape: the renderer holds the editor panel it hands
+        // out, the whole of it is built the first time a dark dialog opens, and
+        // it outlives that dialog.
+        SwingUtilities.invokeAndWait(() -> {
+            manager.apply(true);
+            renderer[0] = new ComponentRenderer();
+            table[0] = table(renderer[0]);
+            host[0] = host(table[0]);
+            SwingUtilities.updateComponentTreeUI(host[0]);
+            renderers.install();
+            renderers.installIn(host[0]);
+            paint(table[0]);
+        });
+        JTextField field = renderer[0].field;
+        assertFalse(ThemeManager.hasStaleUi(field, true),
+            "the field built under dark mode is not on FlatLaf, so this test reproduces nothing");
+
+        SwingUtilities.invokeAndWait(() -> {
+            renderers.unwrap();
+            manager.apply(false);
+            SwingUtilities.updateComponentTreeUI(host[0]);
+            renderers.uninstall();
+            paint(table[0]);
+        });
+        waitForWatcherTick();
+
+        assertFalse(ThemeManager.hasStaleUi(field, false),
+            "the field is not back on stock delegates: " + field.getUI().getClass().getName());
+        assertEquals(stock("TextField.background"), rgb(field.getBackground()),
+            "the value field kept FlatLaf's dark background in a light Designer");
+        assertEquals(stock("TextField.foreground"), rgb(field.getForeground()),
+            "the value field kept FlatLaf's light text in a light Designer");
+    }
+
+    @Test
+    @DisplayName("a value field built light, refreshed in dark, takes the light colours back on the restore (#156)")
+    void aFieldRefreshedInDarkTakesTheLightColoursBack() throws Exception {
+        OwnerHost[] owner = new OwnerHost[1];
+        JTable[] table = new JTable[1];
+        JPanel[] host = new JPanel[1];
+        // The Tag Editor opened once in a light Designer: the editor is built
+        // on stock delegates and then cached. Its renderer is declared by the
+        // panel that owns the table, so it is never wrapped; the dark paint
+        // goes through the renderer pane instead.
+        SwingUtilities.invokeAndWait(() -> {
+            owner[0] = new OwnerHost();
+            table[0] = table(owner[0].renderer);
+            owner[0].add(new JScrollPane(table[0]), BorderLayout.CENTER);
+            owner[0].setSize(320, 120);
+            owner[0].doLayout();
+            host[0] = owner[0];
+            paint(table[0]);
+        });
+        JTextField field = owner[0].renderer.field;
+        assertTrue(ThemeManager.hasStaleUi(field, true),
+            "the field is not on stock delegates, so this test reproduces nothing");
+
+        // Dark: the renderer pane refreshes the stock editor on the paint that shows it.
+        SwingUtilities.invokeAndWait(() -> {
+            manager.apply(true);
+            SwingUtilities.updateComponentTreeUI(host[0]);
+            renderers.install();
+            renderers.installIn(host[0]);
+            paint(table[0]);
+        });
+        assertFalse(ThemeManager.hasStaleUi(field, true),
+            "the dark paint did not refresh the field onto FlatLaf, so this test reproduces nothing");
+        // No stock record was taken: the dialog was closed when Dark Mode went on,
+        // as in the live run, so the capture phase saw no table.
+        SwingUtilities.invokeAndWait(() -> {
+            renderers.unwrap();
+            manager.apply(false);
+            SwingUtilities.updateComponentTreeUI(host[0]);
+            renderers.uninstall();
+            paint(table[0]);
+        });
+        waitForWatcherTick();
+
+        assertFalse(ThemeManager.hasStaleUi(field, false),
+            "the field is not back on stock delegates: " + field.getUI().getClass().getName());
+        assertEquals(stock("TextField.background"), rgb(field.getBackground()),
+            "the value field kept FlatLaf's dark background in a light Designer");
+        assertEquals(stock("TextField.foreground"), rgb(field.getForeground()),
+            "the value field kept FlatLaf's light text in a light Designer");
+    }
+
+    @Test
+    @DisplayName("refreshing a stale delegate does not pin the outgoing look and feel's colours (#156)")
+    void theRefreshDoesNotPinTheOutgoingColours() throws Exception {
+        JPanel[] editor = new JPanel[1];
+        javax.swing.JFormattedTextField[] field = new javax.swing.JFormattedTextField[1];
+        // A cached editor that spent a dark session on FlatLaf: its delegate
+        // and the UIResource colours that delegate installed.
+        SwingUtilities.invokeAndWait(() -> {
+            editor[0] = new JPanel(new BorderLayout());
+            field[0] = new javax.swing.JFormattedTextField("0.0");
+            editor[0].add(field[0], BorderLayout.CENTER);
+            manager.apply(true);
+            SwingUtilities.updateComponentTreeUI(editor[0]);
+        });
+        assertFalse(ThemeManager.hasStaleUi(field[0], true),
+            "the field is not on FlatLaf, so this test reproduces nothing");
+
+        SwingUtilities.invokeAndWait(() -> {
+            manager.apply(false);
+            // The restore's tree walk never reaches a cached editor; the
+            // sanitizer's refresh does, from uninstall() and from a paint.
+            renderers.refreshDelegatePreservingColors(editor[0]);
+        });
+
+        assertFalse(ThemeManager.hasStaleUi(field[0], false),
+            "the refresh left a FlatLaf delegate: " + field[0].getUI().getClass().getName());
+        assertEquals(stock("TextField.background"), rgb(field[0].getBackground()),
+            "the refresh pinned FlatLaf's dark background onto the field");
+        assertEquals(stock("TextField.foreground"), rgb(field[0].getForeground()),
+            "the refresh pinned FlatLaf's light text onto the field");
+    }
+
+    @Test
+    @DisplayName("a cached table-cell label left with a dark UIResource colour is reset when a light paint shows it (#156)")
+    void aCachedCellLabelWithDarkColoursIsResetOnALightPaint() throws Exception {
+        // JIDE's property table keeps a couple of default-renderer labels inside
+        // its name-cell panel and reuses them for every other row. One that went
+        // through a dark session kept FlatLaf's colours as UIResources even
+        // though its delegate was back on stock: every second label cell dark.
+        javax.swing.table.DefaultTableCellRenderer.UIResource label =
+            new javax.swing.table.DefaultTableCellRenderer.UIResource();
+        JPanel cell = new JPanel(new BorderLayout());
+        cell.add(label, BorderLayout.CENTER);
+        TableCellRenderer renderer = (table, value, selected, focus, row, column) -> {
+            label.setText(String.valueOf(value));
+            return cell;
+        };
+        JTable[] table = new JTable[1];
+        JPanel[] host = new JPanel[1];
+        SwingUtilities.invokeAndWait(() -> {
+            // A restore has happened, so the watcher is running.
+            manager.apply(true);
+            manager.apply(false);
+            table[0] = table(renderer);
+            host[0] = host(table[0]);
+            label.setBackground(new javax.swing.plaf.ColorUIResource(0x46494B));
+            label.setForeground(new javax.swing.plaf.ColorUIResource(0xDDDDDD));
+        });
+        assertFalse(ThemeManager.hasStaleUi(label, false), "the label is on FlatLaf, so the test reproduces nothing");
+
+        SwingUtilities.invokeAndWait(() -> paint(table[0]));
+        waitForWatcherTick();
+
+        SwingUtilities.invokeAndWait(() -> paint(table[0]));
+        assertTrue(ThemeManager.luminance(label.getBackground()) > 200,
+            "the cached label still paints FlatLaf's dark background in a light Designer: "
+                + Integer.toHexString(rgb(label.getBackground())));
+        assertTrue(ThemeManager.luminance(label.getForeground()) < 120,
+            "the cached label kept FlatLaf's light text in a light Designer: "
+                + Integer.toHexString(rgb(label.getForeground())));
+    }
+
+    /** Declares its table's renderer, as ConfigPropertyEditPanel declares its EditorRenderer. */
+    private static final class OwnerHost extends JPanel {
+        final Renderer renderer = new Renderer();
+
+        OwnerHost() {
+            super(new BorderLayout());
+        }
+
+        private static final class Renderer extends JPanel implements TableCellRenderer {
+            final javax.swing.JFormattedTextField field = new javax.swing.JFormattedTextField("0.0");
+
+            Renderer() {
+                super(new BorderLayout());
+                add(field, BorderLayout.CENTER);
+            }
+
+            @Override
+            public Component getTableCellRendererComponent(JTable table, Object value,
+                    boolean isSelected, boolean hasFocus, int row, int column) {
+                field.setText(String.valueOf(value));
+                return this;
+            }
+        }
+    }
+
+    /** A renderer that is a component and carries its editor, like Ignition's EditorRenderer. */
+    private static final class ComponentRenderer extends JPanel implements TableCellRenderer {
+        final javax.swing.JFormattedTextField field = new javax.swing.JFormattedTextField("0.0");
+
+        ComponentRenderer() {
+            super(new BorderLayout());
+            add(field, BorderLayout.CENTER);
+        }
+
+        @Override
+        public Component getTableCellRendererComponent(JTable table, Object value,
+                boolean isSelected, boolean hasFocus, int row, int column) {
+            field.setText(String.valueOf(value));
+            return this;
+        }
+    }
+
+    @Test
     @DisplayName("the refresh leaves an editor on stock delegates alone")
     void aStockEditorIsLeftAlone() throws Exception {
         CachingRenderer renderer = new CachingRenderer();
