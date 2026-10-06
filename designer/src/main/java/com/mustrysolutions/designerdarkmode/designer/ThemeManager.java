@@ -2059,16 +2059,7 @@ public class ThemeManager {
         }
         lightAttachedSeen.clear();
         lightAttachedPending.clear();
-        lightWatcherTimer = new Timer(150, e -> {
-            // The window walk only when there is something for it: a
-            // non-renderer attached, or a refresh done. Every table paint
-            // attaches renderer components, and walking every window after
-            // each paint burst would cost a light Designer for good.
-            if (!isDarkActive() && refreshAttachedStale()) {
-                lightLeftoverWalks++;
-                refreshComponentsLeftDark();
-            }
-        });
+        lightWatcherTimer = new Timer(150, e -> lightWatcherTick());
         lightWatcherTimer.setRepeats(false);
         lightWatcher = event -> {
             if (event.getID() == ContainerEvent.COMPONENT_ADDED) {
@@ -2090,6 +2081,21 @@ public class ThemeManager {
         Toolkit.getDefaultToolkit().addAWTEventListener(
             lightWatcher, AWTEvent.CONTAINER_EVENT_MASK);
         DebugLog.detail("Light restore: watching for subtrees attached later.");
+    }
+
+    /**
+     * What the light watcher's timer runs. Package-private so the harness can
+     * run a tick right after a paint, without waiting on the timer. EDT only.
+     */
+    void lightWatcherTick() {
+        // The window walk only when there is something for it: a
+        // non-renderer attached, or a refresh done. Every table paint
+        // attaches renderer components, and walking every window after
+        // each paint burst would cost a light Designer for good.
+        if (!isDarkActive() && refreshAttachedStale()) {
+            lightLeftoverWalks++;
+            refreshComponentsLeftDark();
+        }
     }
 
     /**
@@ -2121,63 +2127,77 @@ public class ThemeManager {
      *         refreshed
      */
     private boolean refreshAttachedStale() {
-        var attached = new java.util.ArrayList<>(lightAttachedPending.entrySet());
-        lightAttachedPending.clear();
-        // A child and its ancestor can both be pending (an editor panel and
-        // the field in it). Refresh from the top first: a child refreshed first
-        // leaves the ancestor looking fresh, and the ancestor's own context
-        // (was it a renderer?) would never be applied.
+        // Held strongly for the tick: the map is weak, and forEach skips a
+        // component already collected.
         java.util.Map<java.awt.Component, Attached> pending = new java.util.IdentityHashMap<>();
-        attached.forEach(entry -> pending.put(entry.getKey(), entry.getValue()));
-        // Each child held back for a pending ancestor, with the outermost one.
-        java.util.Map<java.awt.Component, java.awt.Component> heldBack =
-            new java.util.IdentityHashMap<>();
+        lightAttachedPending.forEach(pending::put);
+        lightAttachedPending.clear();
         java.util.Set<java.awt.Component> repaint =
             java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
         int refreshed = 0;
         boolean nonRenderer = false;
-        for (var entry : attached) {
+        java.util.List<java.awt.Component> round = new java.util.ArrayList<>();
+        for (var entry : pending.entrySet()) {
             java.awt.Component component = entry.getKey();
             java.awt.Container where = entry.getValue().where.get();
             nonRenderer |= !entry.getValue().renderer;
             // The component's own chain too: the container it was attached to
             // may be gone, and the component may have moved since.
-            if (component == null || insideVisionWorkspace(component)
+            if (insideVisionWorkspace(component)
                     || (where != null && insideVisionWorkspace(where))) {
                 continue;
             }
-            java.awt.Component ancestor = outermostPendingAncestor(component, pending);
-            if (ancestor != null) {
-                heldBack.put(component, ancestor);
-                continue;
-            }
-            if (refreshStaleAttached(component, entry.getValue().renderer) > 0) {
-                refreshed++;
-                addRepaint(entry.getValue(), repaint);
-            }
+            round.add(component);
         }
-        // Then a held-back child the ancestor's refresh did not reach. A combo
-        // box whose renderer is not a component refreshes everything but the
-        // label it stamps its value with: its new UI swaps in a new renderer
-        // pane, so the label leaves the subtree before the walk gets to it.
-        // The next paint stamps it into the new pane, but the watcher has
-        // seen it already and never looks again, so it kept FlatLaf's
-        // delegate and text anti-aliasing for the session (JIDE's
-        // ExComboBox, the Vision Property Editor's font cells). Only when the
-        // label came before the combo box in the pending map's order, which
-        // is identity hash order: the bug came and went between builds.
-        for (var entry : attached) {
-            java.awt.Component component = entry.getKey();
-            java.awt.Component ancestor = component == null ? null : heldBack.get(component);
-            if (ancestor == null || !hasStaleUi(component, false)) {
-                continue;
+        // A child and its ancestor can both be pending (an editor panel and
+        // the field in it). Refresh from the top only: a child refreshed first
+        // leaves the ancestor looking fresh, and the ancestor's own context
+        // (was it a renderer?) would never be applied. The ancestor's refresh
+        // covers the child, unless it detaches it on the way: a combo box
+        // whose renderer is not a component refreshes everything but the label
+        // it stamps its value with, as its new UI swaps in a new renderer pane
+        // and the label leaves with the old one before the walk gets to it.
+        // The next paint stamps the label into the new pane, but the watcher
+        // has seen it already and never looks again, so it kept FlatLaf's
+        // delegate and text anti-aliasing for the session (JIDE's ExComboBox,
+        // the Vision Property Editor's font cells). That happened only when the
+        // tick reached the label before the combo box, in identity hash order,
+        // so it came and went between builds. So what a refresh detached goes
+        // round again, from the top as before, and nothing else does: a child
+        // still under its ancestor was reached by that refresh.
+        java.util.Set<java.awt.Component> above =
+            java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
+        above.addAll(pending.keySet());
+        // The outermost pending ancestor a component was held back for, whose
+        // renderer pane is the one still in a table: the child's own pane may
+        // be detached by then.
+        java.util.Map<java.awt.Component, java.awt.Component> paintedIn =
+            new java.util.IdentityHashMap<>();
+        while (!round.isEmpty()) {
+            java.util.Map<java.awt.Component, java.awt.Component> heldBack =
+                new java.util.IdentityHashMap<>();
+            for (java.awt.Component component : round) {
+                java.awt.Component ancestor = outermostAncestorIn(component, above);
+                if (ancestor != null) {
+                    heldBack.put(component, ancestor);
+                    paintedIn.putIfAbsent(component, ancestor);
+                    continue;
+                }
+                if (refreshStaleAttached(component, pending.get(component).renderer) > 0) {
+                    refreshed++;
+                    addRepaint(pending.get(paintedIn.getOrDefault(component, component)), repaint);
+                }
             }
-            if (refreshStaleAttached(component, entry.getValue().renderer) > 0) {
-                refreshed++;
-                // Painted inside the ancestor, whose renderer pane is the one
-                // still in a table; the child's own pane may be detached.
-                addRepaint(pending.get(ancestor), repaint);
+            // A child still under its ancestor is not tried again, even one
+            // whose updateUI threw: a second try only logs it twice.
+            round = new java.util.ArrayList<>();
+            for (var entry : heldBack.entrySet()) {
+                if (!SwingUtilities.isDescendingFrom(entry.getKey(), entry.getValue())) {
+                    round.add(entry.getKey());
+                }
             }
+            above.clear();
+            above.addAll(round);
         }
         repaint.forEach(java.awt.Component::repaint);
         if (refreshed > 0) {
@@ -2282,12 +2302,12 @@ public class ThemeManager {
 
     private static final int LIGHT_FOREGROUND_LUMINANCE = 200;
 
-    /** The outermost pending ancestor of the component, or null if none is pending. */
-    private static java.awt.Component outermostPendingAncestor(java.awt.Component component,
-            java.util.Map<java.awt.Component, Attached> pending) {
+    /** The outermost ancestor of the component in the set, or null if none is. */
+    private static java.awt.Component outermostAncestorIn(java.awt.Component component,
+            java.util.Set<java.awt.Component> set) {
         java.awt.Component outermost = null;
         for (java.awt.Container p = component.getParent(); p != null; p = p.getParent()) {
-            if (pending.containsKey(p)) {
+            if (set.contains(p)) {
                 outermost = p;
             }
         }

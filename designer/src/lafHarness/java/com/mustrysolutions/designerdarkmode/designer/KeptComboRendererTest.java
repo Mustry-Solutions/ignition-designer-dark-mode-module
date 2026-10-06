@@ -11,10 +11,7 @@ import java.awt.Graphics2D;
 import java.awt.GraphicsEnvironment;
 import java.awt.RenderingHints;
 import java.awt.Window;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 import java.awt.image.BufferedImage;
-import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -24,7 +21,6 @@ import javax.swing.JLabel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.SwingUtilities;
-import javax.swing.Timer;
 import javax.swing.UIManager;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableCellRenderer;
@@ -153,15 +149,13 @@ class KeptComboRendererTest {
             assertEquals(List.of(), manager.failedPhases());
             paint(table[0]);
         });
-        waitForWatcherTicks();
-        SwingUtilities.invokeAndWait(() -> {
+        // The dark side refreshes the kept label on a debounce; on a loaded
+        // runner that can take longer than any fixed wait, so poll for it.
+        assertTrue(holdsWithin(() -> {
             paint(table[0]);
-            for (KeptCombo cell : cells) {
-                assertTrue(ThemeManager.hasStaleOwnUi(cell.label, false),
-                    "the kept label is not on a FlatLaf delegate under dark, so this test "
-                        + "reproduces nothing: " + cell.label.getUI().getClass().getName());
-            }
-        });
+            return cells.stream().allMatch(cell -> ThemeManager.hasStaleOwnUi(cell.label, false));
+        }), "the kept label is not on a FlatLaf delegate under dark, so this test reproduces "
+            + "nothing: " + cells.get(0).label.getUI().getClass().getName());
 
         // The light restore, then the property table repainting while the
         // watcher works through what each paint attached. Each paint is
@@ -174,7 +168,7 @@ class KeptComboRendererTest {
             assertEquals(List.of(), manager.failedPhases());
             for (int i = 0; i < 3; i++) {
                 paint(table[0]);
-                lightWatcherTick();
+                manager.lightWatcherTick();
             }
         });
 
@@ -265,24 +259,17 @@ class KeptComboRendererTest {
         }
     }
 
-    /** What the light watcher's timer runs when it fires. */
-    private void lightWatcherTick() {
-        try {
-            Field field = ThemeManager.class.getDeclaredField("lightWatcherTimer");
-            field.setAccessible(true);
-            Timer timer = (Timer) field.get(manager);
-            assertNotNull(timer, "the light restore installed no watcher");
-            for (ActionListener tick : timer.getActionListeners()) {
-                tick.actionPerformed(new ActionEvent(timer, ActionEvent.ACTION_PERFORMED, null));
-            }
-        } catch (ReflectiveOperationException e) {
-            throw new AssertionError("the light watcher's timer is out of reach", e);
-        }
-    }
-
-    /** The watchers debounce on Swing timers of a few hundred milliseconds at most. */
-    private static void waitForWatcherTicks() throws Exception {
-        Thread.sleep(700);
-        SwingUtilities.invokeAndWait(() -> { });
+    /**
+     * Whether the check, run on the EDT, holds within a few seconds. The
+     * watchers debounce on Swing timers of a few hundred milliseconds at most.
+     */
+    private static boolean holdsWithin(java.util.function.BooleanSupplier check) throws Exception {
+        long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(10);
+        boolean[] holds = new boolean[1];
+        do {
+            Thread.sleep(50);
+            SwingUtilities.invokeAndWait(() -> holds[0] = check.getAsBoolean());
+        } while (!holds[0] && System.nanoTime() < deadline);
+        return holds[0];
     }
 }
