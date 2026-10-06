@@ -532,15 +532,16 @@ public class ThemeManager {
                 // answering: this is the font the Designer has been drawing
                 // with, and the one dark mode keeps (see below).
                 java.awt.Font stockFont = UIManager.getFont("Label.font");
-                // Synthetica's uninstall writes back each button's alignment
-                // and margin as they were at construction, undoing what the
-                // application set since (#174).
-                safely("buttonLayout", () -> {
+                // Synthetica's uninstall writes back properties as they were
+                // when it styled each component, undoing what the application
+                // set since: button alignment and margin (#174), toolbar
+                // separator sizes, table default editors, combo layouts.
+                safely("propertyStore", () -> {
                     try {
-                        SyntheticaPropertyStore.keepApplicationButtonLayout();
+                        SyntheticaPropertyStore.keepApplicationProperties();
                     } catch (ReflectiveOperationException e) {
                         throw new IllegalStateException("Synthetica's property store is out of reach; "
-                            + "buttons may lose the alignment their application set", e);
+                            + "components may lose properties their application set", e);
                     }
                 });
                 trace("lookAndFeel");
