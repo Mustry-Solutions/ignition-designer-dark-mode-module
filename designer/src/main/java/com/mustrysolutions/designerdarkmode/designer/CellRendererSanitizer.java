@@ -462,6 +462,63 @@ public class CellRendererSanitizer {
         }
     }
 
+    /**
+     * Run the dark switch's tree update with stale renderer components
+     * refreshed as a renderer pane stamps them, which is what
+     * {@link SanitizingCellRendererPane} does once {@link #install()} has run.
+     *
+     * <p>The tree update cannot reach a renderer component the renderer keeps:
+     * {@code BasicTableUI}, {@code BasicListUI} and {@code BasicTreeUI} empty
+     * their renderer pane after every paint, so the component has no parent
+     * while the windows are walked, and keeps Synthetica's delegates. Nothing
+     * paints it until the switch is over, except on X11, where the frame
+     * repaints inside {@code FlatRootPaneUI.installDefaults} — before
+     * {@code install()} has given any table a sanitizing pane. Vision's
+     * property editor was the case: its {@code EditorComboBox} panel threw
+     * from Synthetica's {@code ImagePainter} under FlatLaf, which stopped the
+     * root pane's install part-way, and every light restore after that failed
+     * to uninstall it.
+     *
+     * <p>A {@code CellRendererPane} adds the component to itself before it
+     * paints it, and the container event for that is dispatched synchronously,
+     * so a listener refreshes the component before its first paint. It is
+     * installed only for the tree update: after it, the sanitizing panes do
+     * the same on every paint.
+     */
+    void refreshingStampedRenderers(Runnable treeUpdate) {
+        java.awt.event.AWTEventListener stamped = event -> {
+            if (event.getID() != java.awt.event.ContainerEvent.COMPONENT_ADDED) {
+                return;
+            }
+            java.awt.event.ContainerEvent added = (java.awt.event.ContainerEvent) event;
+            Component c = added.getChild();
+            if (added.getContainer() instanceof javax.swing.CellRendererPane
+                    && c instanceof javax.swing.JComponent
+                    && javax.swing.SwingUtilities.isEventDispatchThread()
+                    && !refreshingDelegates
+                    && ThemeManager.hasStaleUi(c, true)) {
+                refreshingDelegates = true;
+                try {
+                    refreshDelegatePreservingColors((javax.swing.JComponent) c);
+                } catch (Throwable t) {
+                    // The paint goes ahead either way; a refresh that throws
+                    // is no worse than none.
+                    DebugLog.log("Could not refresh the renderer component "
+                        + c.getClass().getName() + " before its paint.", t);
+                } finally {
+                    refreshingDelegates = false;
+                }
+            }
+        };
+        java.awt.Toolkit.getDefaultToolkit().addAWTEventListener(
+            stamped, java.awt.AWTEvent.CONTAINER_EVENT_MASK);
+        try {
+            treeUpdate.run();
+        } finally {
+            java.awt.Toolkit.getDefaultToolkit().removeAWTEventListener(stamped);
+        }
+    }
+
     private void wrapTable(JTable table) {
         if (wrappedColumns.containsKey(table)) {
             return;
