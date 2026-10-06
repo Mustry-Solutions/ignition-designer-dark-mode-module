@@ -366,8 +366,8 @@ class WindowedCycleTest {
      * and {@code SynthComboBoxUI} throws under FlatLaf ({@code ImagePainter}:
      * "this.dInsets is null"). That aborts {@code FlatRootPaneUI.installUI}
      * part-way, and every light restore after it NPEs in
-     * {@code FlatRootPaneUI.uninstallClientDecorations} — the #164 failure,
-     * through a component the #164 fix cannot reach.
+     * {@code FlatRootPaneUI.uninstallClientDecorations}. That is the #164
+     * failure, through a component the #164 fix cannot reach.
      *
      * <p>The table here has the property editor's shape: a renderer that keeps
      * one panel holding a combo box, built under the stock look and feel.
@@ -403,7 +403,15 @@ class WindowedCycleTest {
                 + "renderer pane, so the tree walk reaches it and the test is vacuous");
             assertTrue(ThemeManager.hasStaleOwnUi(combo, true), "the kept combo box is not "
                 + "on a Synthetica delegate under stock: " + combo.getUI());
-            assertWholeRootPaneUiBothWays(frame);
+            assertWholeRootPaneUiBothWays(frame, () -> {
+                // macOS never paints inside the root pane's install, so
+                // nothing there stamps the panel before the switch ends.
+                if (!com.formdev.flatlaf.util.SystemInfo.isMacOS) {
+                    assertFalse(ThemeManager.hasStaleUi(editor, true), "the kept panel was "
+                        + "painted inside the switch but is still on Synthetica: " + combo.getUI());
+                }
+            }, () -> assertFalse(ThemeManager.hasStaleUi(editor, false), "the kept panel is "
+                + "still on FlatLaf after the light restore: " + combo.getUI()));
         });
     }
 
@@ -673,7 +681,13 @@ class WindowedCycleTest {
      * {@code setBackground}: no paint may throw, and the root pane must end
      * each switch wholly on the new look and feel's UI.
      */
-    private void assertWholeRootPaneUiBothWays(X11PaintingFrame frame) throws Exception {
+    private void assertWholeRootPaneUiBothWays(X11PaintingFrame frame) throws Throwable {
+        assertWholeRootPaneUiBothWays(frame, () -> { }, () -> { });
+    }
+
+    /** The same, with extra checks run after each switch. */
+    private void assertWholeRootPaneUiBothWays(X11PaintingFrame frame, Executable underDark,
+            Executable underLight) throws Throwable {
         frame.armed = true;
         try {
             manager.apply(true);
@@ -694,6 +708,7 @@ class WindowedCycleTest {
                 "FlatRootPaneUI.installUI did not finish: its rootPane field is only set "
                     + "after BasicRootPaneUI.installUI returns, and uninstallUI NPEs "
                     + "without it");
+            underDark.execute();
 
             manager.apply(false);
             assertEquals(List.of(), manager.failedPhases());
@@ -702,6 +717,7 @@ class WindowedCycleTest {
             String lightUi = frame.getRootPane().getUI().getClass().getName();
             assertFalse(lightUi.startsWith("com.formdev.flatlaf."),
                 "the root pane is still on " + lightUi + " after the light restore");
+            underLight.execute();
         } finally {
             // macOS runs FlatLaf's setBackground later, from the event
             // queue. Nothing should paint for this test once it is over.
