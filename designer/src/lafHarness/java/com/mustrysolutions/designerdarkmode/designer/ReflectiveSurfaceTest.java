@@ -213,6 +213,12 @@ class ReflectiveSurfaceTest {
         propertyName(missing, "BUTTON_HALIGN", SyntheticaPropertyStore.HALIGN);
         propertyName(missing, "BUTTON_VALIGN", SyntheticaPropertyStore.VALIGN);
         propertyName(missing, "BUTTON_MARGIN", SyntheticaPropertyStore.MARGIN);
+        propertyName(missing, "TOOLBAR_SEPARATOR_SIZE", SyntheticaPropertyStore.SEPARATOR_SIZE);
+        propertyName(missing, "TABLE_OBJECT_DEFAULT_RENDERER", SyntheticaPropertyStore.TABLE_OBJECT_RENDERER);
+        propertyName(missing, "TABLE_BOOLEAN_DEFAULT_RENDERER", SyntheticaPropertyStore.TABLE_BOOLEAN_RENDERER);
+        propertyName(missing, "TABLE_OBJECT_DEFAULT_EDITOR", SyntheticaPropertyStore.TABLE_OBJECT_EDITOR);
+        propertyName(missing, "TABLE_NUMBER_DEFAULT_EDITOR", SyntheticaPropertyStore.TABLE_NUMBER_EDITOR);
+        propertyName(missing, "COMBOBOX_DEFAULT_LAYOUT", SyntheticaPropertyStore.COMBO_LAYOUT);
 
         // --- SerializerCleanCopies (#92) -----------------------------------
         // The cache the refresh empties. Losing this field would leave every
