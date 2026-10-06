@@ -158,6 +158,7 @@ final class AppTableRenderers {
     }
 
     private static void restore(JTable table, Map<Class<?>, TableCellRenderer> before) {
+        boolean changed = false;
         try {
             for (Map.Entry<Class<?>, TableCellRenderer> entry : before.entrySet()) {
                 Class<?> valueClass = entry.getKey();
@@ -175,6 +176,7 @@ final class AppTableRenderers {
                 if (table.getDefaultRenderer(valueClass) != own) {
                     table.setDefaultRenderer(valueClass, own);
                 }
+                changed = true;
                 DebugLog.detail("Kept " + table.getClass().getName() + "'s own "
                     + valueClass.getSimpleName() + " renderer ("
                     + own.getClass().getName() + ") across the switch.");
@@ -183,7 +185,9 @@ final class AppTableRenderers {
             DebugLog.log("Could not put back the default renderers of "
                 + table.getClass().getName() + "; continuing.", t);
         }
-        table.repaint();
+        if (changed) {
+            table.repaint();
+        }
     }
 
     /** Where {@code JTable.getDefaultRenderer} looks next when a class has no entry. */
