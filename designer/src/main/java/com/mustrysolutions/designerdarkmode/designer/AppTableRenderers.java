@@ -32,8 +32,10 @@ import javax.swing.table.TableCellRenderer;
  *
  * <p>The owner's renderer was gone in dark. Back in light its slot held a
  * {@code UIResource}, which Synthetica replaced with its own, so it never
- * came back. Candidates in a Designer include the permission-model editors'
- * Boolean columns, {@code SecurityTable} and {@code ThreadViewerTable}.
+ * came back. Seen live: the tag permission editor's Boolean column
+ * ({@code PermissionModelEditor$AccessLevelRenderer}), {@code ThreadViewerTable}
+ * in Help &gt; Diagnostics and the SFC event timeline's header.
+ * {@code SecurityTable} sets one too but is a JIDE table and was never hit.
  * Both mechanisms belong to a {@code SynthTableUI}, and only a table on one
  * is touched here. JIDE's tables are not: their UIs are their own.
  *

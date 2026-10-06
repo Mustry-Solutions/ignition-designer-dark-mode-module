@@ -47,18 +47,19 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   that UI inside its constructor, so any renderer its owner set afterwards
   was replaced when the switch gave the table FlatLaf's UI, and in light
   Synthetica replaced that with its own: the owner's renderer was gone for
-  the session. This probably affects the permission-model editors' Boolean
-  columns, `SecurityTable` and the thread viewer, but none of those was
-  checked in a Designer. Each table UI swap the module makes now puts back
-  the renderers the outgoing `SynthTableUI` replaced, including for a table
-  the module reaches only later, such as one attached while dark. Renderers
-  that belong to the look and feel are left alone, including
-  `SynthTableUI`'s own, which are not `UIResource`s. With the property
-  store fix above, windowed harness tests check custom renderers and editors
-  through repeated cycles, on a table in a window, one outside any window
-  and one attached while dark, that the cells paint and edit with them in
-  dark, that dates and numbers still follow the table's renderer, and that a
-  stock table keeps the look and feel's renderers and editors.
+  the session. Checked live in a Linux Designer, this hit the tag security
+  permission editor's access-level column, the thread viewer in Help >
+  Diagnostics and the SFC event timeline's header. Each table UI swap the
+  module makes now puts back the renderers the outgoing `SynthTableUI`
+  replaced, including for a table the module reaches only later, such as one
+  attached while dark. Renderers that belong to the look and feel are left
+  alone, including `SynthTableUI`'s own, which are not `UIResource`s. With
+  the property store fix above, windowed harness tests check custom
+  renderers and editors through repeated cycles, on a table in a window, one
+  outside any window and one attached while dark, that the cells paint and
+  edit with them in dark, that dates and numbers still follow the table's
+  renderer, and that a stock table keeps the look and feel's renderers and
+  editors.
 
 - **Three intermittent look-and-feel harness failures on macOS CI**
   ([#179](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/179),
