@@ -77,6 +77,26 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   after. The 14th is the Vision property table, where JIDE's own expand
   listener runs after the UI handler, as it has in dark since #130.
 
+- **The Vision Property Editor's font values are drawn crisp again after
+  switching back to light.** Found in a Linux Designer: after one dark →
+  light switch, a font property's value, such as a window's Titlebar Font
+  ("Dialog, Bold, 12"), was drawn with FlatLaf's grayscale text
+  anti-aliasing, where every other cell, and a Designer that was never dark,
+  draws it crisp. The cell is a JIDE combo box the property table keeps
+  between paints, and it paints its value with a label its renderer keeps.
+  That label was still on FlatLaf's UI, and with it FlatLaf's text
+  anti-aliasing setting. When a table paints such a cell for the first time
+  in light, the combo box and its label are seen together. The label was
+  left for the combo box's refresh, but that refresh gives the combo box a
+  new renderer pane and never reaches the label, and the label was not
+  looked at again. The light restore now checks such a label again once the
+  combo box is done. It only happened in some sessions, depending on the
+  order the two were looked at, so it seemed to come and go between builds.
+  A windowed harness test paints eight kept combo boxes through a switch and
+  fails without the change. Checked live in a Linux 8.3.6 Designer: on main
+  the Titlebar Font value had 105 colours after one switch, against 4 never
+  switched; with the change it had 4 after each of three switches.
+
 - **Three intermittent look-and-feel harness failures on macOS CI**
   ([#179](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/179),
   [#160](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/160),
