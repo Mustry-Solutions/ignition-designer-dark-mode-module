@@ -1943,22 +1943,28 @@ public class ThemeManager {
                 // row dark for the rest of a light session unless re-synced.
                 TreeIconRecolorer.syncRendererColors(((javax.swing.JTree) child).getCellRenderer());
             }
-            if (!isDarkLeftover(child)) {
-                continue;
-            }
-            try {
-                AppTableRenderers.updateUi((javax.swing.JComponent) child);
-                refreshed++;
-                if (isDarkLeftover(child)) {
-                    DebugLog.detail("Still dark after updateUI: "
-                        + child.getClass().getName() + " bg="
-                        + String.format("#%06X", child.getBackground().getRGB() & 0xFFFFFF));
+            if (isDarkLeftover(child)) {
+                try {
+                    AppTableRenderers.updateUi((javax.swing.JComponent) child);
+                    refreshed++;
+                    if (isDarkLeftover(child)) {
+                        DebugLog.detail("Still dark after updateUI: "
+                            + child.getClass().getName() + " bg="
+                            + String.format("#%06X", child.getBackground().getRGB() & 0xFFFFFF));
+                    }
+                } catch (Throwable t) {
+                    // One component that cannot be refreshed must not cost the
+                    // rest of the walk, the same bargain as every other pass here.
+                    DebugLog.log("updateUI failed on " + child.getClass().getName()
+                        + " during the dark-leftover pass; continuing.", t);
                 }
-            } catch (Throwable t) {
-                // One component that cannot be refreshed must not cost the
-                // rest of the walk, the same bargain as every other pass here.
-                DebugLog.log("updateUI failed on " + child.getClass().getName()
-                    + " during the dark-leftover pass; continuing.", t);
+            }
+            if (child instanceof javax.swing.JTable) {
+                // Every UI the light restore gave a table, and every one the
+                // watcher gives a dock attached later, put its mouse handler
+                // behind the owner's listeners again (#140). This walk runs
+                // after both, and no dark pass will come to fix the order.
+                CellRendererSanitizer.moveOwnedMouseListenersLast((javax.swing.JTable) child);
             }
         }
         return refreshed;
