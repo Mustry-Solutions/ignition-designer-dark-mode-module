@@ -40,22 +40,25 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   Every other kind of value Synthetica records was checked and does no harm
   under Ignition's theme.
 
-- **A table's own cell renderers survive switching to dark mode.** A plain
-  `JTable` gets Synthetica's UI inside its constructor, so any default
-  renderer its owner sets comes afterwards. On the switch to dark, two things
-  put the old renderer back without checking: Synthetica's property store,
-  when Synthetica uninstalls, and `SynthTableUI`'s uninstall, when the table
-  gets FlatLaf's UI. The owner's renderer was gone in dark and did not come
-  back in light. This probably affects the permission-model editors' Boolean
+- **A table's own cell renderers survive switching to dark mode.** Swing's
+  `SynthTableUI`, which Synthetica's tables use, saves a table's default
+  renderers when it is installed and sets every one back when it is
+  uninstalled, without checking what is there now. A plain `JTable` gets
+  that UI inside its constructor, so any renderer its owner set afterwards
+  was replaced when the switch gave the table FlatLaf's UI, and in light
+  Synthetica replaced that with its own: the owner's renderer was gone for
+  the session. This probably affects the permission-model editors' Boolean
   columns, `SecurityTable` and the thread viewer, but none of those was
-  checked in a Designer. The switch now records each table's own renderers
-  before the look-and-feel change and puts back any that were replaced.
-  Renderers that belong to the look and feel are left alone, including
-  `SynthTableUI`'s own, which are not `UIResource`s. A windowed harness test
-  checks a custom Object and Boolean renderer through a cycle, another that
-  dates and numbers still follow the table's renderer after repeated
-  switches, and a third that a stock table keeps the look and feel's
-  renderers.
+  checked in a Designer. Each table UI swap the module makes now puts back
+  the renderers the outgoing `SynthTableUI` replaced, including for a table
+  the module reaches only later, such as one attached while dark. Renderers
+  that belong to the look and feel are left alone, including
+  `SynthTableUI`'s own, which are not `UIResource`s. With the property
+  store fix above, windowed harness tests check custom renderers and editors
+  through repeated cycles, on a table in a window, one outside any window
+  and one attached while dark, that the cells paint and edit with them in
+  dark, that dates and numbers still follow the table's renderer, and that a
+  stock table keeps the look and feel's renderers and editors.
 
 - **Three intermittent look-and-feel harness failures on macOS CI**
   ([#179](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/179),

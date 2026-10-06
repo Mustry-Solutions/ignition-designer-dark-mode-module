@@ -1,11 +1,7 @@
 package com.mustrysolutions.designerdarkmode.designer;
 
-import java.awt.Component;
-import java.awt.Container;
-import java.awt.Window;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.WeakHashMap;
 
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
@@ -41,15 +37,16 @@ import javax.swing.table.TableCellRenderer;
  * Both mechanisms belong to a {@code SynthTableUI}, and only a table on one
  * is touched here. JIDE's tables are not: their UIs are their own.
  *
- * <p>So the switch to dark records each table's own renderers before
- * {@code setLookAndFeel} ({@link #capture}) and puts back any the switch
- * replaced once the tree walk is done ({@link #restore}). Every
- * {@code updateUI()} the module runs on a component goes through
- * {@link #updateUi}, which does the same around a single swap. That covers
- * the light-side refresh passes, which replace a Synthetica UI with a fresh
- * one. The light restore itself needs nothing: FlatLaf's UI leaves the
- * renderers alone on the way out, and neither {@code SynthTableUI} nor
- * Synthetica installs over a renderer that is not a look and feel's.
+ * <p>The first is {@link SyntheticaPropertyStore}'s: before the switch it
+ * drops the entry for any table that no longer holds Synthetica's renderer,
+ * for every table Synthetica styled, in a window or not. The second is this class's: every {@code updateUI()} the module
+ * runs on a component goes through {@link #updateUi}, which puts back what
+ * the outgoing {@code SynthTableUI} replaced. That covers the dark tree walk,
+ * a table outside any window when it is refreshed later, and the light-side
+ * refresh passes, which replace a Synthetica UI with a fresh one. The light
+ * restore itself needs nothing: FlatLaf's UI leaves the renderers alone on
+ * the way out, and neither {@code SynthTableUI} nor Synthetica installs over
+ * a renderer that is not a look and feel's.
  *
  * <p>"Own" is Swing's rule, with one exception. A renderer that is not a
  * {@code UIResource} belongs to the application and a look and feel must
@@ -70,30 +67,7 @@ final class AppTableRenderers {
         java.util.Date.class, Icon.class, ImageIcon.class, Boolean.class,
     };
 
-    /** Tables that hold a renderer of their own, from {@link #capture} to {@link #restore}. */
-    private final Map<JTable, Map<Class<?>, TableCellRenderer>> captured = new WeakHashMap<>();
-
-    /** Record every table's own renderers. Before {@code setLookAndFeel}. */
-    void capture() {
-        captured.clear();
-        for (Window window : Window.getWindows()) {
-            try {
-                captureIn(window);
-            } catch (Throwable t) {
-                DebugLog.log("Could not record the table renderers under "
-                    + window.getClass().getName() + "; continuing.", t);
-            }
-        }
-        if (!captured.isEmpty()) {
-            DebugLog.detail("Recorded the own default renderers of "
-                + captured.size() + " table(s).");
-        }
-    }
-
-    /** Put back what the switch replaced. After the tree walk. */
-    void restore() {
-        captured.forEach(AppTableRenderers::restore);
-        captured.clear();
+    private AppTableRenderers() {
     }
 
     /**
@@ -113,28 +87,6 @@ final class AppTableRenderers {
         } finally {
             if (before != null) {
                 restore(table, before);
-            }
-        }
-    }
-
-    private void captureIn(Container container) {
-        Component[] children;
-        try {
-            children = container.getComponents();
-        } catch (Throwable t) {
-            // FilterablePalette's components attribute throws on access (see
-            // ThemeManager.childrenOf); its subtree holds no tables of note.
-            return;
-        }
-        for (Component child : children) {
-            if (child instanceof JTable) {
-                Map<Class<?>, TableCellRenderer> own = ownRenderers((JTable) child);
-                if (own != null) {
-                    captured.put((JTable) child, own);
-                }
-            }
-            if (child instanceof Container) {
-                captureIn((Container) child);
             }
         }
     }
@@ -167,7 +119,7 @@ final class AppTableRenderers {
                     continue;
                 }
                 boolean lost = table.getDefaultRenderer(valueClass) != own;
-                // Inherited before the switch (Synthetica's UI clears the
+                // Inherited before the swap (Synthetica's UI clears the
                 // Date, Number and Icon entries, so they fall through to
                 // Object): drop the entry the uninstall put back and it
                 // inherits the parent's again, as it did. Also when that entry
@@ -189,7 +141,7 @@ final class AppTableRenderers {
                 changed = true;
                 DebugLog.detail("Kept " + table.getClass().getName() + "'s own "
                     + valueClass.getSimpleName() + " renderer ("
-                    + own.getClass().getName() + ") across the switch.");
+                    + own.getClass().getName() + ") across a UI swap.");
             }
         } catch (Throwable t) {
             DebugLog.log("Could not put back the default renderers of "

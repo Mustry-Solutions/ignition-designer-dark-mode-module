@@ -65,7 +65,6 @@ public class ThemeManager {
     private final LookAndFeelColors lafColors = new LookAndFeelColors();
     private final VisionConstructionColors visionConstruction = new VisionConstructionColors();
     private final CellRendererSanitizer cellRenderers = new CellRendererSanitizer();
-    private final AppTableRenderers tableRenderers = new AppTableRenderers();
     private final TreeClipboardKeys treeClipboardKeys = new TreeClipboardKeys();
 
     private DesignerContext context;
@@ -523,11 +522,6 @@ public class ThemeManager {
                 // And which keystrokes the stock tree map binds, after the
                 // Project Browser has stripped the clipboard keys from it (#168).
                 treeClipboardKeys.captureStock();
-                // And each table's own default renderers: Synthetica's
-                // uninitialize, inside setLookAndFeel, overwrites them, and
-                // so does SynthTableUI's uninstall in the tree walk.
-                trace("tableRenderers");
-                tableRenderers.capture();
                 // Read now, while the stock look and feel is still the one
                 // answering: this is the font the Designer has been drawing
                 // with, and the one dark mode keeps (see below).
@@ -606,10 +600,6 @@ public class ThemeManager {
                     applyMenuDefaults(true);
                 });
                 safely("jideOverrides", () -> applyJideDarkOverrides(true));
-            }
-            if (dark) {
-                // Synthetica's uninitialize may already have overwritten them.
-                safely("tableRenderers", tableRenderers::restore);
             }
             return;
         }
@@ -714,10 +704,6 @@ public class ThemeManager {
                     + ". Their subtrees were still walked.");
             }
         });
-        if (dark) {
-            // Before the sanitizer wraps them, so it wraps the owner's.
-            safely("tableRenderers", tableRenderers::restore);
-        }
         safely("cachedPopups", this::refreshCachedPopups);
         // The macOS native title bar follows this root pane property; without
         // the explicit reset it stays dark after a switch back to light.
