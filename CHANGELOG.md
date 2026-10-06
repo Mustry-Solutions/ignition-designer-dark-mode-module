@@ -61,6 +61,22 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   renderer, and that a stock table keeps the look and feel's renderers and
   editors.
 
+- **Tables handle clicks in the right order again after switching back to
+  light**
+  ([#140](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/140)).
+  Every table UI change puts the look and feel's mouse handler after the
+  table owner's own listeners, and an owner listener that consumes a press
+  then keeps the table from starting a cell editor: the cause of the dead
+  OPEN buttons in #130. The fix for #130 restored the order only on the way
+  to dark, so the light restore broke it again for every table that stayed
+  open, and the light watcher broke it for a dock that came back later, such
+  as the Vision property editor after a workspace switch. The light restore's
+  last walk, which also runs for every dock attached later, now restores the
+  order. Checked live in a Linux Designer with a listener-order probe: after
+  dark and back, 3 of 14 tables were in their stock order before, 13 of 14
+  after. The 14th is the Vision property table, where JIDE's own expand
+  listener runs after the UI handler, as it has in dark since #130.
+
 - **Linux: switching with a Vision window open no longer breaks the main
   frame's root pane.** Found in a Linux Designer with a Vision window open:
   every switch logged `updateUI failed for javax.swing.JRootPane`, a
