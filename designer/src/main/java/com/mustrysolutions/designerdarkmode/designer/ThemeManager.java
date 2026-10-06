@@ -1947,7 +1947,7 @@ public class ThemeManager {
                 continue;
             }
             try {
-                ((javax.swing.JComponent) child).updateUI();
+                AppTableRenderers.updateUi((javax.swing.JComponent) child);
                 refreshed++;
                 if (isDarkLeftover(child)) {
                     DebugLog.detail("Still dark after updateUI: "
@@ -2868,7 +2868,8 @@ public class ThemeManager {
             // Prevention, not containment — see the method's javadoc.
             java.awt.Color pinned = neutraliseInternalFrameBackground(child);
             try {
-                child.updateUI();
+                // A table's own default renderers survive the swap.
+                AppTableRenderers.updateUi(child);
                 // Under dark, a Vision component's look-and-feel border is
                 // put back to what a fresh one has, which is what its save
                 // is compared against (VisionConstructionBorders).
