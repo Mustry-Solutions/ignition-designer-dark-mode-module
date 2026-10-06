@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.awt.Color;
+import java.awt.Component;
 import java.awt.Paint;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -72,6 +73,8 @@ class ReflectiveSurfaceTest {
         named.put("ThemeManager.keyField", ThemeManager.KEY_FIELD_CLASS);
         named.put("ThemeManager.borderlessField", ThemeManager.BORDERLESS_FIELD_CLASS);
         named.put("SerializerCleanCopies", SerializerCleanCopies.SERIALIZER_CLASS);
+        named.put("SyntheticaPropertyStore", SyntheticaPropertyStore.STYLE_FACTORY_CLASS);
+        named.put("JideButtonMargins", JideButtonMargins.JIDE_BUTTON_CLASS);
 
         List<String> missing = new ArrayList<>();
         named.forEach((owner, className) -> {
@@ -200,6 +203,17 @@ class ReflectiveSurfaceTest {
         method(missing, ThemeManager.KEY_FIELD_CLASS, ThemeManager.UNEDITABLE_FOREGROUND_SETTER,
             Color.class);
 
+        // --- SyntheticaPropertyStore (#174) ---------------------------------
+        fields(missing, SyntheticaPropertyStore.STYLE_FACTORY_CLASS, SyntheticaPropertyStore.STORE_FIELD);
+        fields(missing, SyntheticaPropertyStore.STORE_CLASS, SyntheticaPropertyStore.ENTRIES_FIELD);
+        fields(missing, SyntheticaPropertyStore.ENTRY_CLASS,
+            SyntheticaPropertyStore.ENTRY_COMPONENT_FIELD, SyntheticaPropertyStore.ENTRY_NAME_FIELD);
+        method(missing, ThemeManager.SYNTHETICA_LAF, "getInt", String.class, Component.class, int.class);
+        // The entries are matched by these names; renamed, nothing would match.
+        propertyName(missing, "BUTTON_HALIGN", SyntheticaPropertyStore.HALIGN);
+        propertyName(missing, "BUTTON_VALIGN", SyntheticaPropertyStore.VALIGN);
+        propertyName(missing, "BUTTON_MARGIN", SyntheticaPropertyStore.MARGIN);
+
         // --- SerializerCleanCopies (#92) -----------------------------------
         // The cache the refresh empties. Losing this field would leave every
         // save after a switch carrying the previous look and feel again, and
@@ -274,6 +288,19 @@ class ReflectiveSurfaceTest {
             missing.add(className + " (class)");
         } catch (NoSuchMethodException gone) {
             missing.add(className + "." + name + signature(parameters));
+        }
+    }
+
+    /** A Synthetica {@code ComponentProperty} name constant still holds the value the module matches on. */
+    private static void propertyName(List<String> missing, String constant, String expected) {
+        try {
+            java.lang.reflect.Field field = load(SyntheticaPropertyStore.ENTRY_CLASS).getDeclaredField(constant);
+            field.setAccessible(true);
+            if (!expected.equals(field.get(null))) {
+                missing.add(SyntheticaPropertyStore.ENTRY_CLASS + "." + constant + " is no longer \"" + expected + "\"");
+            }
+        } catch (ReflectiveOperationException gone) {
+            missing.add(SyntheticaPropertyStore.ENTRY_CLASS + "." + constant);
         }
     }
 

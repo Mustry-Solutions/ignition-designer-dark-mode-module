@@ -12,6 +12,21 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ### Fixed
 
+- **Vision component palette items stay left-aligned through a switch**
+  ([#174](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/174)).
+  After a switch to dark, every palette row was centered, in dark and again
+  after switching back. Vision builds each item and only then makes it
+  left-aligned with a 20 px indent. Synthetica, when it is uninstalled for
+  the switch, writes back each button's alignment and margin as they were
+  when it first styled the button, and under Synthetica JIDE's button UI
+  takes the margin from the theme on every update, so the light restore took
+  the indent away too. The switch now keeps the alignment an application set
+  on any button, and the margin on JIDE buttons. Plain buttons still take
+  the dark look and feel's margin, which pads them better than the one
+  Ignition sets. Seen first on Linux; it happened on every platform. Checked
+  live in a Linux Designer over two switches: compared screen by screen with
+  the previous build, only the palette changed.
+
 - **A table's own cell renderers survive switching to dark mode.** A plain
   `JTable` gets Synthetica's UI inside its constructor, so any default
   renderer its owner sets comes afterwards. On the switch to dark, two things
@@ -24,8 +39,10 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   before the look-and-feel change and puts back any that were replaced.
   Renderers that belong to the look and feel are left alone, including
   `SynthTableUI`'s own, which are not `UIResource`s. A windowed harness test
-  checks a custom Object and Boolean renderer through a cycle. A second test
-  checks that a stock table keeps the look and feel's renderers.
+  checks a custom Object and Boolean renderer through a cycle, another that
+  dates and numbers still follow the table's renderer after repeated
+  switches, and a third that a stock table keeps the look and feel's
+  renderers.
 
 - **Three intermittent look-and-feel harness failures on macOS CI**
   ([#179](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/179),

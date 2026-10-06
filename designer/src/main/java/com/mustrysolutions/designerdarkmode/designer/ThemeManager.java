@@ -532,6 +532,17 @@ public class ThemeManager {
                 // answering: this is the font the Designer has been drawing
                 // with, and the one dark mode keeps (see below).
                 java.awt.Font stockFont = UIManager.getFont("Label.font");
+                // Synthetica's uninstall writes back each button's alignment
+                // and margin as they were at construction, undoing what the
+                // application set since (#174).
+                safely("buttonLayout", () -> {
+                    try {
+                        SyntheticaPropertyStore.keepApplicationButtonLayout();
+                    } catch (ReflectiveOperationException e) {
+                        throw new IllegalStateException("Synthetica's property store is out of reach; "
+                            + "buttons may lose the alignment their application set", e);
+                    }
+                });
                 trace("lookAndFeel");
                 try {
                     UIManager.setLookAndFeel(new FlatDarkLaf());
@@ -673,6 +684,9 @@ public class ThemeManager {
         safely("updateComponentTrees", () -> {
             java.util.Set<String> failed = new java.util.LinkedHashSet<>();
             int failures = 0;
+            // JIDE buttons take their margin from a Synth style on every
+            // updateUI, over the application's (#174).
+            JideButtonMargins margins = JideButtonMargins.capture(Window.getWindows());
             for (Window window : Window.getWindows()) {
                 // Isolate per WINDOW, not per phase. Synthetica can NPE out of
                 // updateComponentTreeUI on a window holding a stale delegate
@@ -692,6 +706,7 @@ public class ThemeManager {
                     TreeUpdateDiagnostic.report(window, t);
                 }
             }
+            margins.restore();
             if (failures > 0) {
                 DebugLog.log("updateUI failed on " + failures + " component(s) across "
                     + failed.size() + " class(es): " + failed
