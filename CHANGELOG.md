@@ -12,6 +12,21 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ### Fixed
 
+- **Vision component palette items stay left-aligned through a switch**
+  ([#174](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/174)).
+  After a switch to dark, every palette row was centered, in dark and again
+  after switching back. Vision builds each item and only then makes it
+  left-aligned with a 20 px indent. Synthetica, when it is uninstalled for
+  the switch, writes back each button's alignment and margin as they were
+  when it first styled the button, and under Synthetica JIDE's button UI
+  takes the margin from the theme on every update, so the light restore took
+  the indent away too. The switch now keeps the alignment an application set
+  on any button, and the margin on JIDE buttons. Plain buttons still take
+  the dark look and feel's margin, which pads them better than the one
+  Ignition sets. Seen first on Linux; it happened on every platform. Checked
+  live in a Linux Designer over two switches: compared screen by screen with
+  the previous build, only the palette changed.
+
 - **Three intermittent look-and-feel harness failures on macOS CI**
   ([#179](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/179),
   [#160](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/160),
