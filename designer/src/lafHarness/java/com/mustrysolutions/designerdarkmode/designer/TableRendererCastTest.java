@@ -25,6 +25,7 @@ import java.util.function.Consumer;
 import javax.swing.CellRendererPane;
 import javax.swing.JPanel;
 import javax.swing.JTable;
+import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 import javax.swing.plaf.basic.BasicTableUI;
 import javax.swing.table.DefaultTableCellRenderer;
@@ -182,6 +183,95 @@ class TableRendererCastTest {
 
         renderers.installIn(panel);
 
+        clickOpen(table, action);
+        assertEquals(List.of("demo"), launched,
+            "the editor started but the OPEN button's action did not launch the project");
+    }
+
+    @Test
+    @DisplayName("OPEN on a table that stayed open through dark and back still launches (#140)")
+    void aRealClickOnOpenLaunchesAfterTheLightRestore() throws Exception {
+        List<String> launched = new ArrayList<>();
+        JPanel projectList = projectListTable(launched::add);
+        JTable table = (JTable) field(projectList, "table");
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.add(projectList, BorderLayout.CENTER);
+        panel.setSize(900, 300);
+        layOut(panel);
+        int action = actionColumn(table);
+
+        // What apply(true) and apply(false) do to a table already on screen,
+        // in the order they do it.
+        manager.apply(true);
+        SwingUtilities.updateComponentTreeUI(panel);
+        renderers.installIn(panel);
+        manager.apply(false);
+        SwingUtilities.updateComponentTreeUI(panel);
+        renderers.uninstall();
+        manager.refreshComponentsLeftDark(panel);
+        layOut(panel);
+
+        clickOpen(table, action);
+        assertEquals(List.of("demo"), launched,
+            "the editor started but the OPEN button's action did not launch the project");
+    }
+
+    @Test
+    @DisplayName("OPEN on a table detached through the light restore launches once it is back (#140)")
+    void aRealClickOnOpenLaunchesAfterALateAttach() throws Exception {
+        List<String> launched = new ArrayList<>();
+        JPanel projectList = projectListTable(launched::add);
+        JTable table = (JTable) field(projectList, "table");
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.add(projectList, BorderLayout.CENTER);
+        panel.setSize(900, 300);
+        layOut(panel);
+        int action = actionColumn(table);
+
+        manager.apply(true);
+        SwingUtilities.updateComponentTreeUI(panel);
+        renderers.installIn(panel);
+        // A workspace switch detaches the Vision docks, so the light restore
+        // never reaches them.
+        panel.remove(projectList);
+        manager.apply(false);
+        SwingUtilities.updateComponentTreeUI(panel);
+        renderers.uninstall();
+        manager.refreshComponentsLeftDark(panel);
+        // Back in the workspace: what the light watcher's tick does with it.
+        panel.add(projectList, BorderLayout.CENTER);
+        assertEquals(1, manager.refreshStaleAttached(projectList, false),
+            "the re-attached panel was not refreshed, so this does not reproduce the late attach");
+        manager.refreshComponentsLeftDark(panel);
+        layOut(panel);
+
+        clickOpen(table, action);
+        assertEquals(List.of("demo"), launched,
+            "the editor started but the OPEN button's action did not launch the project");
+    }
+
+    @Test
+    @DisplayName("light control: OPEN launches on a table built under the stock look and feel")
+    void aRealClickOnOpenLaunchesUnderStockLight() throws Exception {
+        List<String> launched = new ArrayList<>();
+        JPanel projectList = projectListTable(launched::add);
+        JTable table = (JTable) field(projectList, "table");
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.add(projectList, BorderLayout.CENTER);
+        panel.setSize(900, 300);
+        layOut(panel);
+
+        clickOpen(table, actionColumn(table));
+        assertEquals(List.of("demo"), launched,
+            "the click mechanics fail even with no theme switch, so the other OPEN "
+                + "tests prove nothing about the switch");
+    }
+
+    /**
+     * Hover, press and release on row 0's OPEN button through
+     * {@code dispatchEvent}, so the listeners run in the table's real order.
+     */
+    private static void clickOpen(JTable table, int action) throws Exception {
         // IA's listener reads the OPEN button's bounds from the renderer,
         // which a paint lays out. Headless, validate() is a no-op, so render
         // the cell and lay the renderer out by hand instead.
@@ -218,8 +308,6 @@ class TableRendererCastTest {
                 + "ahead of the table UI's own handler, so the button never sees the click");
         table.dispatchEvent(new MouseEvent(table, MouseEvent.MOUSE_RELEASED,
             System.currentTimeMillis(), 0, x, y, 1, false, MouseEvent.BUTTON1));
-        assertEquals(List.of("demo"), launched,
-            "the editor started but the OPEN button's action did not launch the project");
     }
 
     @Test

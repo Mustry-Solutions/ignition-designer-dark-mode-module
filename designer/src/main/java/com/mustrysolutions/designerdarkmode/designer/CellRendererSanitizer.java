@@ -597,8 +597,9 @@ public class CellRendererSanitizer {
      * when one of them sits ahead of a listener that is not, so a table that
      * is already in the right order is left alone. Runs on every pass, not
      * once per table, because a rescan can replace the UI again at any time.
+     * Package-private for the light restore's walk, which replaces them too.
      */
-    private static void moveOwnedMouseListenersLast(JTable table) {
+    static void moveOwnedMouseListenersLast(JTable table) {
         java.awt.event.MouseListener[] listeners = table.getMouseListeners();
         java.util.List<java.awt.event.MouseListener> owned = new java.util.ArrayList<>();
         boolean outOfOrder = false;
