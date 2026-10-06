@@ -435,17 +435,8 @@ public class CellRendererSanitizer {
                     // editor categories, RE-installing a stale delegate — so
                     // check every paint (cheap: hasStaleUi short-circuits) and
                     // refresh whenever it has gone stale again, not just once.
-                    // Synchronous so there is no wrong-style flash; the
-                    // reentrancy guard stops the refresh's repaint recursing.
-                    if (c instanceof javax.swing.JComponent && !refreshingDelegates
-                            && ThemeManager.hasStaleUi(c, true)) {
-                        refreshingDelegates = true;
-                        try {
-                            refreshDelegatePreservingColors((javax.swing.JComponent) c);
-                        } finally {
-                            refreshingDelegates = false;
-                        }
-                    }
+                    // Synchronous so there is no wrong-style flash.
+                    refreshIfStale(c);
                     sanitize(c);
                     if (DebugLog.verbose()) {
                         // A recursive walk of the renderer's own tree, on every
@@ -463,6 +454,22 @@ public class CellRendererSanitizer {
     }
 
     /**
+     * Refresh a stamped renderer component whose delegate is from Synthetica.
+     * The reentrancy guard stops the refresh's own repaint recursing.
+     */
+    private void refreshIfStale(Component c) {
+        if (c instanceof javax.swing.JComponent && !refreshingDelegates
+                && ThemeManager.hasStaleUi(c, true)) {
+            refreshingDelegates = true;
+            try {
+                refreshDelegatePreservingColors((javax.swing.JComponent) c);
+            } finally {
+                refreshingDelegates = false;
+            }
+        }
+    }
+
+    /**
      * Run the dark switch's tree update with stale renderer components
      * refreshed as a renderer pane stamps them, which is what
      * {@link SanitizingCellRendererPane} does once {@link #install()} has run.
@@ -472,7 +479,7 @@ public class CellRendererSanitizer {
      * their renderer pane after every paint, so the component has no parent
      * while the windows are walked, and keeps Synthetica's delegates. Nothing
      * paints it until the switch is over, except on X11, where the frame
-     * repaints inside {@code FlatRootPaneUI.installDefaults} — before
+     * repaints inside {@code FlatRootPaneUI.installDefaults}, before
      * {@code install()} has given any table a sanitizing pane. Vision's
      * property editor was the case: its {@code EditorComboBox} panel threw
      * from Synthetica's {@code ImagePainter} under FlatLaf, which stopped the
@@ -493,20 +500,14 @@ public class CellRendererSanitizer {
             java.awt.event.ContainerEvent added = (java.awt.event.ContainerEvent) event;
             Component c = added.getChild();
             if (added.getContainer() instanceof javax.swing.CellRendererPane
-                    && c instanceof javax.swing.JComponent
-                    && javax.swing.SwingUtilities.isEventDispatchThread()
-                    && !refreshingDelegates
-                    && ThemeManager.hasStaleUi(c, true)) {
-                refreshingDelegates = true;
+                    && javax.swing.SwingUtilities.isEventDispatchThread()) {
                 try {
-                    refreshDelegatePreservingColors((javax.swing.JComponent) c);
+                    refreshIfStale(c);
                 } catch (Throwable t) {
                     // The paint goes ahead either way; a refresh that throws
                     // is no worse than none.
                     DebugLog.log("Could not refresh the renderer component "
                         + c.getClass().getName() + " before its paint.", t);
-                } finally {
-                    refreshingDelegates = false;
                 }
             }
         };
