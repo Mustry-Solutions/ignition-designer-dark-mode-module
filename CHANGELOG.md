@@ -27,6 +27,19 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   live in a Linux Designer over two switches: compared screen by screen with
   the previous build, only the palette changed.
 
+- **Toolbar separators, table editors and combo boxes keep what the
+  Designer set on them through a switch.** An audit of everything else
+  Synthetica writes back when it is uninstalled, after
+  [#174](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/174),
+  found three more things it undid. A toolbar separator given a size, such
+  as the 4 px gap in the UDT definition hierarchy toolbar, became 10×10 for
+  the rest of the session. A table's own default editor went back to Swing's:
+  the Tag Browser's table lost Ignition's number editor. And every combo box
+  had its layout removed; one that was not on screen during the switch had
+  no arrow button when it was shown later. The switch now keeps all three.
+  Every other kind of value Synthetica records was checked and does no harm
+  under Ignition's theme.
+
 - **Three intermittent look-and-feel harness failures on macOS CI**
   ([#179](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/179),
   [#160](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/160),
