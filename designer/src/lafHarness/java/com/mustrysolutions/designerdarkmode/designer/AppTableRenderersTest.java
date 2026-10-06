@@ -119,6 +119,37 @@ class AppTableRenderersTest {
     }
 
     /**
+     * Date and Number inherit the owner's Object renderer. From the second
+     * switch to dark on, {@code SynthTableUI} saved that inherited renderer at
+     * install and writes it back as Date's and Number's own, so a later
+     * change to the Object renderer stopped reaching them.
+     */
+    @Test
+    @DisplayName("inherited renderers still follow the Object renderer after repeated cycles")
+    void inheritedRenderersStillFollowObjectAfterRepeatedCycles() {
+        JTable table = new JTable(new DefaultTableModel(
+            new Object[][] {{"a"}}, new Object[] {"Name"}));
+        table.setDefaultRenderer(Object.class, new AppObjectRenderer());
+        frame(table);
+
+        for (int cycle = 0; cycle < 2; cycle++) {
+            manager.apply(true);
+            assertEquals(List.of(), manager.failedPhases());
+            manager.apply(false);
+            assertEquals(List.of(), manager.failedPhases());
+        }
+
+        AppObjectRenderer later = new AppObjectRenderer();
+        table.setDefaultRenderer(Object.class, later);
+        for (Class<?> valueClass : new Class<?>[] {java.util.Date.class, Number.class}) {
+            assertSame(later, table.getDefaultRenderer(valueClass),
+                valueClass.getSimpleName() + " kept a renderer of its own after two cycles ("
+                    + describe(table.getDefaultRenderer(valueClass)) + ") and no longer "
+                    + "inherits the Object renderer");
+        }
+    }
+
+    /**
      * The other half: a table with no renderer of its own still gets the look
      * and feel's. The JDK's {@code SynthTableUI} renderers are not
      * {@code UIResource}s, and one kept into dark would paint Synth cells

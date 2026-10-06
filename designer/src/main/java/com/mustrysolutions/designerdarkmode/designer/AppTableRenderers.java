@@ -163,18 +163,28 @@ final class AppTableRenderers {
             for (Map.Entry<Class<?>, TableCellRenderer> entry : before.entrySet()) {
                 Class<?> valueClass = entry.getKey();
                 TableCellRenderer own = entry.getValue();
-                if (!isOwn(own) || table.getDefaultRenderer(valueClass) == own) {
+                if (!isOwn(own)) {
                     continue;
                 }
+                boolean lost = table.getDefaultRenderer(valueClass) != own;
                 // Inherited before the switch (Synthetica's UI clears the
                 // Date, Number and Icon entries, so they fall through to
                 // Object): drop the entry the uninstall put back and it
-                // inherits the parent's again, as it did.
+                // inherits the parent's again, as it did. Also when that entry
+                // already holds the same renderer: SynthTableUI saved the
+                // inherited one at install and wrote it back as the class's
+                // own, and left there it would stop following a later change
+                // to the parent's. JTable cannot say whether a mapping is
+                // explicit, so one the owner set to the parent's very renderer
+                // goes too; it paints the same either way.
                 if (valueClass != Object.class && before.get(parentOf(valueClass)) == own) {
                     table.setDefaultRenderer(valueClass, null);
                 }
                 if (table.getDefaultRenderer(valueClass) != own) {
                     table.setDefaultRenderer(valueClass, own);
+                }
+                if (!lost) {
+                    continue;
                 }
                 changed = true;
                 DebugLog.detail("Kept " + table.getClass().getName() + "'s own "

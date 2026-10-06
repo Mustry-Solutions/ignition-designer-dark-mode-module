@@ -595,6 +595,10 @@ public class ThemeManager {
                 });
                 safely("jideOverrides", () -> applyJideDarkOverrides(true));
             }
+            if (dark) {
+                // Synthetica's uninitialize may already have overwritten them.
+                safely("tableRenderers", tableRenderers::restore);
+            }
             return;
         }
         // Phase 2 — styling passes. Each is isolated: one failure is logged
