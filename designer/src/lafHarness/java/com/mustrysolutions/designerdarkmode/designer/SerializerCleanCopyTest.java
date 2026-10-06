@@ -45,7 +45,7 @@ class SerializerCleanCopyTest {
     @BeforeEach
     void installStockDesignerLookAndFeel() throws Exception {
         DesignerLookAndFeel.installStock();
-        manager = new ThemeManager();
+        manager = ManagerCleanup.newManager();
         manager.captureStockLaf();
         // Other tests' saves must not leak into this one's counts.
         SerializerCleanCopies.refresh();

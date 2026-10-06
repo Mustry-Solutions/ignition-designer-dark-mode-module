@@ -62,7 +62,7 @@ class QueryBrowserButtonTest {
             BUTTON + " is not on this harness classpath, so #51 cannot be exercised "
                 + "against this Ignition version.");
         DesignerLookAndFeel.installStock();
-        manager = new ThemeManager();
+        manager = ManagerCleanup.newManager();
         manager.captureStockLaf();
         tokens = new IaColorTokens();
     }

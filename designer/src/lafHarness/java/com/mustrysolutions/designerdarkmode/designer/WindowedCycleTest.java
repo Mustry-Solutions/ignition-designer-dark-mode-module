@@ -125,7 +125,7 @@ class WindowedCycleTest {
             // Class-init under the light theme, as a Designer does — see
             // TagBrowserHeaderBandTest for why the order matters.
             Class.forName(SimpleTreeTable.class.getName());
-            manager = new ThemeManager();
+            manager = ManagerCleanup.newManager();
             manager.captureStockLaf();
         });
     }

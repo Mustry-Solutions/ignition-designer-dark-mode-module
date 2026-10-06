@@ -10,6 +10,23 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Three intermittent look-and-feel harness failures on macOS CI**
+  ([#179](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/179),
+  [#160](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/160),
+  [#171](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/171)).
+  None was a module bug. Harness tests never shut their `ThemeManager` down,
+  so every light restore left its watcher live, and those watchers kept
+  updating components on the EDT during later tests. One hung the EDT. In
+  `ThemeSwitchCycleTest`, which ran its switches off the EDT, a JIDE
+  component updated mid-switch made JIDE install its defaults from the wrong
+  font (#160) or left its lazy action map behind (#171). Each was reproduced
+  by forcing that update once. Tests now make their managers through
+  `ManagerCleanup`, which shuts them down and fails a test that leaks a
+  listener, and `ThemeSwitchCycleTest` runs on the EDT. A local windowed
+  harness run went from 54 s to 22 s of test time.
+
 ## [0.6.2] - 2026-10-05
 
 Tag Editor colour fixes, and the Linux root-pane switch.
