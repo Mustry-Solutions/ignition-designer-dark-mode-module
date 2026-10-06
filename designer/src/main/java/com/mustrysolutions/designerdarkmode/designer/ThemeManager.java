@@ -65,6 +65,7 @@ public class ThemeManager {
     private final LookAndFeelColors lafColors = new LookAndFeelColors();
     private final VisionConstructionColors visionConstruction = new VisionConstructionColors();
     private final CellRendererSanitizer cellRenderers = new CellRendererSanitizer();
+    private final AppTableRenderers tableRenderers = new AppTableRenderers();
     private final TreeClipboardKeys treeClipboardKeys = new TreeClipboardKeys();
 
     private DesignerContext context;
@@ -522,6 +523,11 @@ public class ThemeManager {
                 // And which keystrokes the stock tree map binds, after the
                 // Project Browser has stripped the clipboard keys from it (#168).
                 treeClipboardKeys.captureStock();
+                // And each table's own default renderers: Synthetica's
+                // uninitialize, inside setLookAndFeel, overwrites them, and
+                // so does SynthTableUI's uninstall in the tree walk.
+                trace("tableRenderers");
+                tableRenderers.capture();
                 // Read now, while the stock look and feel is still the one
                 // answering: this is the font the Designer has been drawing
                 // with, and the one dark mode keeps (see below).
@@ -688,6 +694,10 @@ public class ThemeManager {
                     + ". Their subtrees were still walked.");
             }
         });
+        if (dark) {
+            // Before the sanitizer wraps them, so it wraps the owner's.
+            safely("tableRenderers", tableRenderers::restore);
+        }
         safely("cachedPopups", this::refreshCachedPopups);
         // The macOS native title bar follows this root pane property; without
         // the explicit reset it stays dark after a switch back to light.
@@ -1931,7 +1941,7 @@ public class ThemeManager {
                 continue;
             }
             try {
-                ((javax.swing.JComponent) child).updateUI();
+                AppTableRenderers.updateUi((javax.swing.JComponent) child);
                 refreshed++;
                 if (isDarkLeftover(child)) {
                     DebugLog.detail("Still dark after updateUI: "
@@ -2852,7 +2862,8 @@ public class ThemeManager {
             // Prevention, not containment — see the method's javadoc.
             java.awt.Color pinned = neutraliseInternalFrameBackground(child);
             try {
-                child.updateUI();
+                // A table's own default renderers survive the swap.
+                AppTableRenderers.updateUi(child);
                 // Under dark, a Vision component's look-and-feel border is
                 // put back to what a fresh one has, which is what its save
                 // is compared against (VisionConstructionBorders).

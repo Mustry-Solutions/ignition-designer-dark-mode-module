@@ -12,6 +12,21 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ### Fixed
 
+- **A table's own cell renderers survive switching to dark mode.** A plain
+  `JTable` gets Synthetica's UI inside its constructor, so any default
+  renderer its owner sets comes afterwards. On the switch to dark, two things
+  put the old renderer back without checking: Synthetica's property store,
+  when Synthetica uninstalls, and `SynthTableUI`'s uninstall, when the table
+  gets FlatLaf's UI. The owner's renderer was gone in dark and did not come
+  back in light. This probably affects the permission-model editors' Boolean
+  columns, `SecurityTable` and the thread viewer, but none of those was
+  checked in a Designer. The switch now records each table's own renderers
+  before the look-and-feel change and puts back any that were replaced.
+  Renderers that belong to the look and feel are left alone, including
+  `SynthTableUI`'s own, which are not `UIResource`s. A windowed harness test
+  checks a custom Object and Boolean renderer through a cycle. A second test
+  checks that a stock table keeps the look and feel's renderers.
+
 - **Three intermittent look-and-feel harness failures on macOS CI**
   ([#179](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/179),
   [#160](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/160),
