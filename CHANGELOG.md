@@ -94,9 +94,11 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   cell component the moment a table, list or tree paints it. Windowed
   harness tests paint a table with a kept combo box panel inside the root
   pane's install, and a table, list and tree during the update on every OS,
-  and fail without the change. Checked live in a Linux 8.3.6 Designer: four switches with the
-  property editor showing a window, no failures logged, and the root pane
-  fully on each look and feel's UI.
+  and fail without the change. A first, dark-only version of the fix was
+  checked live in a Linux 8.3.6 Designer: four switches with the property
+  editor showing a window, no failures logged, and the root pane fully on
+  each look and feel's UI. The version shipped, which also refreshes going
+  light, is harness-verified only.
 
 - **Three intermittent look-and-feel harness failures on macOS CI**
   ([#179](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/179),
