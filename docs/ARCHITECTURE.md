@@ -124,11 +124,11 @@ Steps marked *dark only* or *light only* are skipped in the other direction.
    every paint, so the panel is in no tree while the windows are walked, and
    the root pane's repaint stamps it with Synthetica's delegates. So the
    walk runs with a listener that refreshes a stale component as a renderer
-   pane adds it (`CellRendererSanitizer.installStampRefresh`), in either
-   direction and whichever look and feel built it. Going dark it also
-   sanitizes a table's stamp, as step 11's sanitizing panes do on every
-   paint once they are in. It is on only for the walk, since it runs under
-   the AWT tree lock.
+   pane adds it, or as a renderer adds an editor into a stamp the pane
+   holds (`CellRendererSanitizer.installStampRefresh`), in either direction
+   and whichever look and feel built it. It refreshes delegates only, not
+   colours, and is on only for the walk, since it runs under the AWT tree
+   lock.
    Under dark, each Vision component's look-and-feel border is aligned with a
    fresh instance's as it goes ([VisionConstructionBorders](#visionconstructionborders)).
    A window-level failure is reported by `TreeUpdateDiagnostic`. Straight

@@ -446,6 +446,94 @@ class WindowedCycleTest {
         assertKeptRenderersRefreshedFirst(true);
     }
 
+    /**
+     * A renderer that keeps one panel and swaps a different editor into it
+     * for each row, as a panel shared between property types would. The
+     * table adds the panel to its renderer pane once per paint, at the first
+     * row; the editors of the later rows are added to the panel while it is
+     * already stamped, so a check at the pane's own add never sees them.
+     */
+    @Test
+    @DisplayName("an editor a kept renderer panel swaps in during the tree update is refreshed first")
+    void editorsSwappedIntoAKeptPanelDuringTheTreeUpdateAreRefreshedFirst() throws Throwable {
+        onEdt(() -> {
+            boolean[] armed = {false};
+            List<String> stalePaints = new ArrayList<>();
+            List<JComboBox<String>> editors = new ArrayList<>();
+            for (int row = 0; row < 3; row++) {
+                int editorRow = row;
+                editors.add(new JComboBox<>(new String[] {"Tag", "Expression"}) {
+                    @Override
+                    public void paint(java.awt.Graphics graphics) {
+                        if (armed[0] && ThemeManager.hasStaleOwnUi(this, true)) {
+                            stalePaints.add("row " + editorRow + ": " + getUI());
+                        }
+                        super.paint(graphics);
+                    }
+                });
+            }
+            JPanel shared = new JPanel(new BorderLayout());
+            javax.swing.table.TableCellRenderer swaps = (table, value, selected, focused, row, column) -> {
+                shared.removeAll();
+                shared.add(editors.get(row), BorderLayout.CENTER);
+                return shared;
+            };
+            JTable table = new JTable(new DefaultTableModel(new Object[][] {
+                {"binding 0", "Tag"}, {"binding 1", "Tag"}, {"binding 2", "Tag"}},
+                new Object[] {"Property", "Value"})) {
+                @Override
+                public javax.swing.table.TableCellRenderer getCellRenderer(int row, int column) {
+                    return column == 1 ? swaps : super.getCellRenderer(row, column);
+                }
+            };
+            List<Throwable> paintFailures = new ArrayList<>();
+            JPanel painter = new JPanel() {
+                @Override
+                public void updateUI() {
+                    super.updateUI();
+                    if (!armed[0]) {
+                        return;
+                    }
+                    BufferedImage image = new BufferedImage(
+                        Math.max(1, table.getWidth()), Math.max(1, table.getHeight()),
+                        BufferedImage.TYPE_INT_RGB);
+                    Graphics2D graphics = image.createGraphics();
+                    try {
+                        table.paint(graphics);
+                    } catch (RuntimeException e) {
+                        paintFailures.add(e);
+                    } finally {
+                        graphics.dispose();
+                    }
+                }
+            };
+            JPanel content = new JPanel(new GridLayout(1, 0));
+            content.add(new JScrollPane(table));
+            content.add(painter);
+            X11PaintingFrame frame = x11PaintingFrame(content);
+
+            render(frame);
+            assertNull(shared.getParent(), "the table kept the shared panel in its renderer "
+                + "pane, so the tree walk reaches it and the test is vacuous");
+            for (JComboBox<String> editor : editors) {
+                assertTrue(ThemeManager.hasStaleOwnUi(editor, true), "an editor is not on a "
+                    + "Synthetica delegate under stock: " + editor.getUI());
+            }
+
+            armed[0] = true;
+            try {
+                manager.apply(true);
+            } finally {
+                armed[0] = false;
+            }
+            manager.apply(false);
+            assertEquals(List.of(), manager.failedPhases());
+            assertEquals(List.of(), paintFailures, "the table threw stamping a swapped-in editor");
+            assertEquals(List.of(), stalePaints, "an editor swapped into the kept panel was "
+                + "painted on Synthetica's delegate under dark");
+        });
+    }
+
     private void assertKeptRenderersRefreshedFirst(boolean builtUnderDark) throws Throwable {
         onEdt(() -> {
             if (builtUnderDark) {
