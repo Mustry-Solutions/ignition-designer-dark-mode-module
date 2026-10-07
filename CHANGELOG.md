@@ -78,27 +78,15 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   listener runs after the UI handler, as it has in dark since #130.
 
 - **Linux: switching with a Vision window open no longer breaks the main
-  frame's root pane.** Found in a Linux Designer with a Vision window open:
-  every switch logged `updateUI failed for javax.swing.JRootPane`, a
-  Synthetica `NullPointerException` going into dark and one in
-  `FlatRootPaneUI.uninstallClientDecorations` coming back to light. This was
-  the [#164](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/164)
-  failure through a path its fix does not cover. On X11 the frame repaints
-  while its root pane gets FlatLaf's UI, and the Vision Property Editor
-  painted its combo box cells with a panel it keeps between paints. That
-  panel is in no window while the switch walks them, so it still had
-  Synthetica's delegates, and they throw under FlatLaf. The root pane was
-  left half on FlatLaf's UI for the rest of the session, and the binding
-  icons on the editor's combo box rows looked dimmed under dark. While it
-  updates the windows, a switch in either direction now refreshes a kept
-  cell component the moment a table, list or tree paints it. Windowed
-  harness tests paint a table with a kept combo box panel inside the root
-  pane's install, and a table, list and tree during the update on every OS,
-  and fail without the change. A first, dark-only version of the fix was
-  checked live in a Linux 8.3.6 Designer: four switches with the property
-  editor showing a window, no failures logged, and the root pane fully on
-  each look and feel's UI. The version shipped, which also refreshes going
-  light, is harness-verified only.
+  frame's root pane.** Every switch logged `updateUI failed for
+  javax.swing.JRootPane`, the root pane stayed half on FlatLaf's UI for the
+  rest of the session, and under dark the binding icons on the Vision
+  Property Editor's combo box rows looked dimmed. This was the
+  [#164](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/164)
+  failure through a cell renderer the editor keeps between paints, which the
+  #164 fix could not reach. A first, dark-only version of the fix was checked
+  live in a Linux 8.3.6 Designer; the version shipped, which also refreshes
+  going light, is harness-verified only.
 
 - **Three intermittent look-and-feel harness failures on macOS CI**
   ([#179](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/179),
