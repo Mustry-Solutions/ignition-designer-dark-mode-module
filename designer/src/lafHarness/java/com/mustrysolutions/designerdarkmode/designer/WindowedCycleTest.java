@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -341,75 +342,304 @@ class WindowedCycleTest {
             // FlatLaf is in. On a live Linux Designer, with the title panes
             // repointed, a text field's border was the next to fail.
             content.add(new JTextField("filter"), BorderLayout.NORTH);
-            List<Throwable> paintFailures = new ArrayList<>();
-            int[] paints = {0};
-            boolean[] armed = {false};
-            JFrame frame = new JFrame("WindowedCycleTest") {
-                @Override
-                public void setBackground(Color background) {
-                    super.setBackground(background);
-                    if (!armed[0]) {
-                        return;
-                    }
-                    paints[0]++;
-                    BufferedImage image = new BufferedImage(
-                        Math.max(1, getWidth()), Math.max(1, getHeight()),
-                        BufferedImage.TYPE_INT_RGB);
-                    Graphics2D graphics = image.createGraphics();
-                    try {
-                        getRootPane().paint(graphics);
-                    } catch (RuntimeException e) {
-                        // Rethrown: on X11 nothing between the peer and the
-                        // root pane's installUI catches it either.
-                        paintFailures.add(e);
-                        throw e;
-                    } finally {
-                        graphics.dispose();
-                    }
-                }
-            };
-            frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-            frame.setContentPane(content);
-            frame.pack();
-            frames.add(frame);
+            X11PaintingFrame frame = x11PaintingFrame(content);
             assertTrue(painterFields(content).values().stream().anyMatch(painter ->
                     painter.getClass().getName().equals(
                         "com.jidesoft.plaf.synthetica.SyntheticaJidePainter")),
                 "no dock title pane caches Synthetica's painter under stock, so the paint "
                     + "below has nothing to trip over");
+            assertWholeRootPaneUiBothWays(frame);
+        });
+    }
+
+    /**
+     * The same paint inside the root pane's install, meeting a cell renderer
+     * instead of a component in the tree (found live on a Linux 8.3.6
+     * Designer with a Vision window open).
+     *
+     * <p>Vision's property editor keeps one editor panel per property type and
+     * hands the same one back for every paint, and {@code BasicTableUI}
+     * empties its renderer pane after each paint. So when the switch walks the
+     * windows, the panel (an {@code EditorComboBox} with its arrow button) has
+     * no parent and keeps Synthetica's delegates. The root pane's install then
+     * paints the frame, the table stamps the panel through its renderer pane,
+     * and {@code SynthComboBoxUI} throws under FlatLaf ({@code ImagePainter}:
+     * "this.dInsets is null"). That aborts {@code FlatRootPaneUI.installUI}
+     * part-way, and every light restore after it NPEs in
+     * {@code FlatRootPaneUI.uninstallClientDecorations}. That is the #164
+     * failure, through a component the #164 fix cannot reach.
+     *
+     * <p>The table here has the property editor's shape: a renderer that keeps
+     * one panel holding a combo box, built under the stock look and feel.
+     */
+    @Test
+    @DisplayName("a frame that paints inside setBackground, as on X11, gets a whole root pane UI past a kept renderer")
+    void rootPaneInstallSurvivesAKeptRendererPaintedInsideSetBackground() throws Throwable {
+        onEdt(() -> {
+            JPanel editor = new JPanel(new BorderLayout());
+            JComboBox<String> combo = new JComboBox<>(new String[] {"Tag", "Expression"});
+            editor.add(combo, BorderLayout.CENTER);
+            javax.swing.table.TableCellRenderer keeps = (table, value, selected, focused, row, column) -> {
+                combo.setSelectedItem(value);
+                return editor;
+            };
+            DefaultTableModel model = new DefaultTableModel(new Object[] {"Property", "Value"}, 0);
+            for (int row = 0; row < 3; row++) {
+                model.addRow(new Object[] {"binding " + row, "Tag"});
+            }
+            JTable properties = new JTable(model) {
+                @Override
+                public javax.swing.table.TableCellRenderer getCellRenderer(int row, int column) {
+                    return column == 1 ? keeps : super.getCellRenderer(row, column);
+                }
+            };
+            JPanel content = new JPanel(new BorderLayout());
+            content.add(new JScrollPane(properties), BorderLayout.CENTER);
+            X11PaintingFrame frame = x11PaintingFrame(content);
+
+            // A paint under stock, as the Designer has done long before any switch.
+            render(frame);
+            assertNull(editor.getParent(), "the table kept the editor panel in its "
+                + "renderer pane, so the tree walk reaches it and the test is vacuous");
+            assertTrue(ThemeManager.hasStaleOwnUi(combo, true), "the kept combo box is not "
+                + "on a Synthetica delegate under stock: " + combo.getUI());
+            assertWholeRootPaneUiBothWays(frame, () -> {
+                // macOS never paints inside the root pane's install, so
+                // nothing there stamps the panel before the switch ends.
+                if (!com.formdev.flatlaf.util.SystemInfo.isMacOS) {
+                    assertFalse(ThemeManager.hasStaleUi(editor, true), "the kept panel was "
+                        + "painted inside the switch but is still on Synthetica: " + combo.getUI());
+                }
+            }, () -> assertFalse(ThemeManager.hasStaleUi(editor, false), "the kept panel is "
+                + "still on FlatLaf after the light restore: " + combo.getUI()));
+        });
+    }
+
+    /**
+     * The kept renderer of the test above, for a table, a list and a tree, and
+     * painted during the tree update on every OS rather than only where X11
+     * repaints inside the root pane's install: a component after the views
+     * paints them from its own {@code updateUI}. The walk is pre-order, so by
+     * then each view has the incoming look and feel's UI and a fresh renderer
+     * pane, and the kept panel still has the outgoing one's delegates.
+     *
+     * <p>Checked at the paint, not after the switch: on the light restore,
+     * {@code CellRendererSanitizer.uninstall()} refreshes the panel anyway once
+     * the walk is over, so only the paint inside the walk shows whether it was
+     * refreshed before it was stamped.
+     */
+    @Test
+    @DisplayName("a kept table, list or tree renderer painted during the tree update is refreshed first, both ways")
+    void keptRenderersPaintedDuringTheTreeUpdateAreRefreshedFirst() throws Throwable {
+        assertKeptRenderersRefreshedFirst(false);
+    }
+
+    /**
+     * The same, for kept panels first built under dark, as when the property
+     * editor is first opened in a dark Designer: this module never refreshed
+     * them, and the light restore's paint must still not meet their FlatLaf
+     * delegates.
+     */
+    @Test
+    @DisplayName("a kept renderer built under dark is refreshed before the light restore paints it")
+    void keptRenderersBuiltUnderDarkAreRefreshedFirstGoingLight() throws Throwable {
+        assertKeptRenderersRefreshedFirst(true);
+    }
+
+    /**
+     * A renderer that keeps one panel and swaps a different editor into it
+     * for each row, as a panel shared between property types would. The
+     * table adds the panel to its renderer pane once per paint, at the first
+     * row; the editors of the later rows are added to the panel while it is
+     * already stamped, so a check at the pane's own add never sees them.
+     */
+    @Test
+    @DisplayName("an editor a kept renderer panel swaps in during the tree update is refreshed first")
+    void editorsSwappedIntoAKeptPanelDuringTheTreeUpdateAreRefreshedFirst() throws Throwable {
+        onEdt(() -> {
+            boolean[] armed = {false};
+            List<String> stalePaints = new ArrayList<>();
+            List<JComboBox<String>> editors = new ArrayList<>();
+            for (int row = 0; row < 3; row++) {
+                int editorRow = row;
+                editors.add(new JComboBox<>(new String[] {"Tag", "Expression"}) {
+                    @Override
+                    public void paint(java.awt.Graphics graphics) {
+                        if (armed[0] && ThemeManager.hasStaleOwnUi(this, true)) {
+                            stalePaints.add("row " + editorRow + ": " + getUI());
+                        }
+                        super.paint(graphics);
+                    }
+                });
+            }
+            JPanel shared = new JPanel(new BorderLayout());
+            javax.swing.table.TableCellRenderer swaps = (table, value, selected, focused, row, column) -> {
+                shared.removeAll();
+                shared.add(editors.get(row), BorderLayout.CENTER);
+                return shared;
+            };
+            JTable table = new JTable(new DefaultTableModel(new Object[][] {
+                {"binding 0", "Tag"}, {"binding 1", "Tag"}, {"binding 2", "Tag"}},
+                new Object[] {"Property", "Value"})) {
+                @Override
+                public javax.swing.table.TableCellRenderer getCellRenderer(int row, int column) {
+                    return column == 1 ? swaps : super.getCellRenderer(row, column);
+                }
+            };
+            List<Throwable> paintFailures = new ArrayList<>();
+            JPanel painter = new JPanel() {
+                @Override
+                public void updateUI() {
+                    super.updateUI();
+                    if (!armed[0]) {
+                        return;
+                    }
+                    BufferedImage image = new BufferedImage(
+                        Math.max(1, table.getWidth()), Math.max(1, table.getHeight()),
+                        BufferedImage.TYPE_INT_RGB);
+                    Graphics2D graphics = image.createGraphics();
+                    try {
+                        table.paint(graphics);
+                    } catch (RuntimeException e) {
+                        paintFailures.add(e);
+                    } finally {
+                        graphics.dispose();
+                    }
+                }
+            };
+            JPanel content = new JPanel(new GridLayout(1, 0));
+            content.add(new JScrollPane(table));
+            content.add(painter);
+            X11PaintingFrame frame = x11PaintingFrame(content);
+
+            render(frame);
+            assertNull(shared.getParent(), "the table kept the shared panel in its renderer "
+                + "pane, so the tree walk reaches it and the test is vacuous");
+            for (JComboBox<String> editor : editors) {
+                assertTrue(ThemeManager.hasStaleOwnUi(editor, true), "an editor is not on a "
+                    + "Synthetica delegate under stock: " + editor.getUI());
+            }
+
             armed[0] = true;
             try {
                 manager.apply(true);
-                if (!com.formdev.flatlaf.util.SystemInfo.isMacOS) {
-                    assertTrue(paints[0] > 0, "FlatRootPaneUI never set the frame's background, "
-                        + "so the root pane's install was never painted through; the test is "
-                        + "vacuous");
-                }
-                assertEquals(List.of(), paintFailures, "a paint inside the root pane's install "
-                    + "threw under dark. On X11 that aborts FlatRootPaneUI.installUI part-way");
-                javax.swing.plaf.RootPaneUI darkUi = frame.getRootPane().getUI();
-                assertTrue(darkUi instanceof com.formdev.flatlaf.ui.FlatRootPaneUI,
-                    "the root pane is not on FlatLaf's UI under dark: " + darkUi);
-                Field installedOn = com.formdev.flatlaf.ui.FlatRootPaneUI.class
-                    .getDeclaredField("rootPane");
-                installedOn.setAccessible(true);
-                assertSame(frame.getRootPane(), installedOn.get(darkUi),
-                    "FlatRootPaneUI.installUI did not finish: its rootPane field is only set "
-                        + "after BasicRootPaneUI.installUI returns, and uninstallUI NPEs "
-                        + "without it");
-
-                manager.apply(false);
-                assertEquals(List.of(), manager.failedPhases());
-                assertEquals(List.of(), paintFailures, "a paint inside the root pane's install "
-                    + "threw on the light restore");
-                String lightUi = frame.getRootPane().getUI().getClass().getName();
-                assertFalse(lightUi.startsWith("com.formdev.flatlaf."),
-                    "the root pane is still on " + lightUi + " after the light restore");
             } finally {
-                // macOS runs FlatLaf's setBackground later, from the event
-                // queue. Nothing should paint for this test once it is over.
                 armed[0] = false;
             }
+            manager.apply(false);
+            assertEquals(List.of(), manager.failedPhases());
+            assertEquals(List.of(), paintFailures, "the table threw stamping a swapped-in editor");
+            assertEquals(List.of(), stalePaints, "an editor swapped into the kept panel was "
+                + "painted on Synthetica's delegate under dark");
+        });
+    }
+
+    private void assertKeptRenderersRefreshedFirst(boolean builtUnderDark) throws Throwable {
+        onEdt(() -> {
+            if (builtUnderDark) {
+                manager.apply(true);
+            }
+            // One panel per view: a list or tree that shares the table's panel
+            // attaches it to its own renderer pane while it lays out, and the
+            // walk would then reach it.
+            Map<javax.swing.JComponent, JPanel> kept = new LinkedHashMap<>();
+            String[] values = {"Tag", "Tag", "Tag"};
+            JPanel tableEditor = keptComboPanel();
+            javax.swing.table.TableCellRenderer tableKeeps =
+                (table, value, selected, focused, row, column) -> tableEditor;
+            JTable table = new JTable(new DefaultTableModel(new Object[][] {
+                {"binding 0", "Tag"}, {"binding 1", "Tag"}}, new Object[] {"Property", "Value"})) {
+                @Override
+                public javax.swing.table.TableCellRenderer getCellRenderer(int row, int column) {
+                    return column == 1 ? tableKeeps : super.getCellRenderer(row, column);
+                }
+            };
+            kept.put(table, tableEditor);
+            JList<String> list = new JList<>(values);
+            JPanel listEditor = keptComboPanel();
+            list.setCellRenderer((owner, value, index, selected, focused) -> listEditor);
+            kept.put(list, listEditor);
+            JTree tree = new JTree(values);
+            JPanel treeEditor = keptComboPanel();
+            // A light background of the renderer's own: no sanitizing pane
+            // paints a tree, so the dark switch must leave it alone. Light
+            // but saturated: the white-token swap darkens light neutrals on
+            // purpose, and leaves this one to sanitize alone.
+            Color treeBackground = new Color(0xFFF2B3);
+            treeEditor.setBackground(treeBackground);
+            tree.setCellRenderer((owner, value, selected, expanded, leaf, row, focused) -> treeEditor);
+            kept.put(tree, treeEditor);
+            List<javax.swing.JComponent> views = List.copyOf(kept.keySet());
+
+            List<String> stalePaints = new ArrayList<>();
+            List<Throwable> paintFailures = new ArrayList<>();
+            boolean[] armed = {false};
+            boolean[] dark = {false};
+            int[] paints = {0};
+            JPanel painter = new JPanel() {
+                @Override
+                public void updateUI() {
+                    super.updateUI();
+                    if (!armed[0]) {
+                        return;
+                    }
+                    for (javax.swing.JComponent view : views) {
+                        BufferedImage image = new BufferedImage(
+                            Math.max(1, view.getWidth()), Math.max(1, view.getHeight()),
+                            BufferedImage.TYPE_INT_RGB);
+                        Graphics2D graphics = image.createGraphics();
+                        paints[0]++;
+                        try {
+                            view.paint(graphics);
+                        } catch (RuntimeException e) {
+                            paintFailures.add(e);
+                        } finally {
+                            graphics.dispose();
+                        }
+                        if (ThemeManager.hasStaleUi(kept.get(view), dark[0])) {
+                            stalePaints.add((dark[0] ? "dark " : "light ")
+                                + (view instanceof JTable ? "JTable" : view.getClass().getSimpleName()));
+                        }
+                    }
+                }
+            };
+            JPanel content = new JPanel(new GridLayout(1, 0));
+            for (javax.swing.JComponent view : views) {
+                content.add(new JScrollPane(view));
+            }
+            content.add(painter);
+            X11PaintingFrame frame = x11PaintingFrame(content);
+
+            // A paint before the switch, as the Designer has done long before.
+            render(frame);
+            kept.forEach((view, editor) -> {
+                assertNull(editor.getParent(), view.getClass().getSimpleName() + " kept its "
+                    + "editor panel in its renderer pane, so the tree walk reaches it and "
+                    + "the test is vacuous");
+                assertTrue(ThemeManager.hasStaleUi(editor, !builtUnderDark), "the kept combo "
+                    + "box of " + view.getClass().getSimpleName() + " is not on the outgoing "
+                    + "look and feel's delegate before the switch");
+            });
+
+            armed[0] = true;
+            try {
+                if (!builtUnderDark) {
+                    dark[0] = true;
+                    manager.apply(true);
+                    assertEquals(treeBackground, treeEditor.getBackground(), "the dark switch "
+                        + "darkened a kept tree renderer that no sanitizing pane paints");
+                }
+                dark[0] = false;
+                manager.apply(false);
+            } finally {
+                armed[0] = false;
+            }
+            assertEquals(builtUnderDark ? 3 : 6, paints[0], "the painter did not paint each "
+                + "view once in each tree update; the test is vacuous");
+            assertEquals(List.of(), manager.failedPhases());
+            assertEquals(List.of(), paintFailures, "a view threw stamping the kept panel");
+            assertEquals(List.of(), stalePaints, "a view stamped the kept panel on the "
+                + "outgoing look and feel's delegates");
         });
     }
 
@@ -623,6 +853,111 @@ class WindowedCycleTest {
         frame.pack();
         frames.add(frame);
         return frame;
+    }
+
+    /** A panel holding a combo box, as a renderer that keeps its component returns it. */
+    private static JPanel keptComboPanel() {
+        JPanel editor = new JPanel(new BorderLayout());
+        editor.add(new JComboBox<>(new String[] {"Tag", "Expression"}), BorderLayout.CENTER);
+        return editor;
+    }
+
+    /**
+     * A frame that paints its root pane synchronously in {@code setBackground},
+     * as an X11 peer does once it has been shown: {@code XComponentPeer
+     * .setBackground} ends in a repaint that, on the dispatch thread, paints
+     * the frame there and then.
+     */
+    private static final class X11PaintingFrame extends JFrame {
+        final List<Throwable> paintFailures = new ArrayList<>();
+        int paints;
+        boolean armed;
+
+        X11PaintingFrame() {
+            super("WindowedCycleTest");
+        }
+
+        @Override
+        public void setBackground(Color background) {
+            super.setBackground(background);
+            if (!armed) {
+                return;
+            }
+            paints++;
+            BufferedImage image = new BufferedImage(
+                Math.max(1, getWidth()), Math.max(1, getHeight()),
+                BufferedImage.TYPE_INT_RGB);
+            Graphics2D graphics = image.createGraphics();
+            try {
+                getRootPane().paint(graphics);
+            } catch (RuntimeException e) {
+                // Rethrown: on X11 nothing between the peer and the
+                // root pane's installUI catches it either.
+                paintFailures.add(e);
+                throw e;
+            } finally {
+                graphics.dispose();
+            }
+        }
+    }
+
+    /** An {@link X11PaintingFrame} around the content, packed, not yet armed. */
+    private X11PaintingFrame x11PaintingFrame(Container content) {
+        X11PaintingFrame frame = new X11PaintingFrame();
+        frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+        frame.setContentPane(content);
+        frame.pack();
+        frames.add(frame);
+        return frame;
+    }
+
+    /**
+     * A dark switch and a light restore with the frame painting inside
+     * {@code setBackground}: no paint may throw, and the root pane must end
+     * each switch wholly on the new look and feel's UI.
+     */
+    private void assertWholeRootPaneUiBothWays(X11PaintingFrame frame) throws Throwable {
+        assertWholeRootPaneUiBothWays(frame, () -> { }, () -> { });
+    }
+
+    /** The same, with extra checks run after each switch. */
+    private void assertWholeRootPaneUiBothWays(X11PaintingFrame frame, Executable underDark,
+            Executable underLight) throws Throwable {
+        frame.armed = true;
+        try {
+            manager.apply(true);
+            if (!com.formdev.flatlaf.util.SystemInfo.isMacOS) {
+                assertTrue(frame.paints > 0, "FlatRootPaneUI never set the frame's background, "
+                    + "so the root pane's install was never painted through; the test is "
+                    + "vacuous");
+            }
+            assertEquals(List.of(), frame.paintFailures, "a paint inside the root pane's install "
+                + "threw under dark. On X11 that aborts FlatRootPaneUI.installUI part-way");
+            javax.swing.plaf.RootPaneUI darkUi = frame.getRootPane().getUI();
+            assertTrue(darkUi instanceof com.formdev.flatlaf.ui.FlatRootPaneUI,
+                "the root pane is not on FlatLaf's UI under dark: " + darkUi);
+            Field installedOn = com.formdev.flatlaf.ui.FlatRootPaneUI.class
+                .getDeclaredField("rootPane");
+            installedOn.setAccessible(true);
+            assertSame(frame.getRootPane(), installedOn.get(darkUi),
+                "FlatRootPaneUI.installUI did not finish: its rootPane field is only set "
+                    + "after BasicRootPaneUI.installUI returns, and uninstallUI NPEs "
+                    + "without it");
+            underDark.execute();
+
+            manager.apply(false);
+            assertEquals(List.of(), manager.failedPhases());
+            assertEquals(List.of(), frame.paintFailures, "a paint inside the root pane's install "
+                + "threw on the light restore");
+            String lightUi = frame.getRootPane().getUI().getClass().getName();
+            assertFalse(lightUi.startsWith("com.formdev.flatlaf."),
+                "the root pane is still on " + lightUi + " after the light restore");
+            underLight.execute();
+        } finally {
+            // macOS runs FlatLaf's setBackground later, from the event
+            // queue. Nothing should paint for this test once it is over.
+            frame.armed = false;
+        }
     }
 
     private static Container wrap(Component component) {
