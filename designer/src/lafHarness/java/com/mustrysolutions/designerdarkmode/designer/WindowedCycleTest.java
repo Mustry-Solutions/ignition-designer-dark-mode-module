@@ -431,7 +431,26 @@ class WindowedCycleTest {
     @Test
     @DisplayName("a kept table, list or tree renderer painted during the tree update is refreshed first, both ways")
     void keptRenderersPaintedDuringTheTreeUpdateAreRefreshedFirst() throws Throwable {
+        assertKeptRenderersRefreshedFirst(false);
+    }
+
+    /**
+     * The same, for kept panels first built under dark, as when the property
+     * editor is first opened in a dark Designer: this module never refreshed
+     * them, and the light restore's paint must still not meet their FlatLaf
+     * delegates.
+     */
+    @Test
+    @DisplayName("a kept renderer built under dark is refreshed before the light restore paints it")
+    void keptRenderersBuiltUnderDarkAreRefreshedFirstGoingLight() throws Throwable {
+        assertKeptRenderersRefreshedFirst(true);
+    }
+
+    private void assertKeptRenderersRefreshedFirst(boolean builtUnderDark) throws Throwable {
         onEdt(() -> {
+            if (builtUnderDark) {
+                manager.apply(true);
+            }
             // One panel per view: a list or tree that shares the table's panel
             // attaches it to its own renderer pane while it lays out, and the
             // walk would then reach it.
@@ -454,6 +473,12 @@ class WindowedCycleTest {
             kept.put(list, listEditor);
             JTree tree = new JTree(values);
             JPanel treeEditor = keptComboPanel();
+            // A light background of the renderer's own: no sanitizing pane
+            // paints a tree, so the dark switch must leave it alone. Light
+            // but saturated: the white-token swap darkens light neutrals on
+            // purpose, and leaves this one to sanitize alone.
+            Color treeBackground = new Color(0xFFF2B3);
+            treeEditor.setBackground(treeBackground);
             tree.setCellRenderer((owner, value, selected, expanded, leaf, row, focused) -> treeEditor);
             kept.put(tree, treeEditor);
             List<javax.swing.JComponent> views = List.copyOf(kept.keySet());
@@ -497,28 +522,32 @@ class WindowedCycleTest {
             content.add(painter);
             X11PaintingFrame frame = x11PaintingFrame(content);
 
-            // A paint under stock, as the Designer has done long before any switch.
+            // A paint before the switch, as the Designer has done long before.
             render(frame);
             kept.forEach((view, editor) -> {
                 assertNull(editor.getParent(), view.getClass().getSimpleName() + " kept its "
                     + "editor panel in its renderer pane, so the tree walk reaches it and "
                     + "the test is vacuous");
-                assertTrue(ThemeManager.hasStaleUi(editor, true), "the kept combo box of "
-                    + view.getClass().getSimpleName() + " is not on a Synthetica delegate "
-                    + "under stock");
+                assertTrue(ThemeManager.hasStaleUi(editor, !builtUnderDark), "the kept combo "
+                    + "box of " + view.getClass().getSimpleName() + " is not on the outgoing "
+                    + "look and feel's delegate before the switch");
             });
 
             armed[0] = true;
-            dark[0] = true;
             try {
-                manager.apply(true);
+                if (!builtUnderDark) {
+                    dark[0] = true;
+                    manager.apply(true);
+                    assertEquals(treeBackground, treeEditor.getBackground(), "the dark switch "
+                        + "darkened a kept tree renderer that no sanitizing pane paints");
+                }
                 dark[0] = false;
                 manager.apply(false);
             } finally {
                 armed[0] = false;
             }
-            assertEquals(6, paints[0], "the painter did not paint each view once in each "
-                + "tree update; the test is vacuous");
+            assertEquals(builtUnderDark ? 3 : 6, paints[0], "the painter did not paint each "
+                + "view once in each tree update; the test is vacuous");
             assertEquals(List.of(), manager.failedPhases());
             assertEquals(List.of(), paintFailures, "a view threw stamping the kept panel");
             assertEquals(List.of(), stalePaints, "a view stamped the kept panel on the "

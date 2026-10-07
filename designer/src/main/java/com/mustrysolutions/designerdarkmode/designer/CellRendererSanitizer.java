@@ -280,11 +280,16 @@ public class CellRendererSanitizer {
 
     /** Wrap the renderers of every table, header, and list currently in the UI. */
     public void install() {
-        darkBackground = orDefault(UIManager.getColor("Table.background"), new Color(0x3A3D3F));
-        lightForeground = orDefault(UIManager.getColor("Table.foreground"), new Color(0xDDE0E3));
+        readDarkColors();
         for (Window window : Window.getWindows()) {
             installIn(window);
         }
+    }
+
+    /** What {@link #sanitize} paints with. */
+    private void readDarkColors() {
+        darkBackground = orDefault(UIManager.getColor("Table.background"), new Color(0x3A3D3F));
+        lightForeground = orDefault(UIManager.getColor("Table.foreground"), new Color(0xDDE0E3));
     }
 
     /** Package-private so tests can drive the walk without a real Window. */
@@ -435,8 +440,11 @@ public class CellRendererSanitizer {
                     // editor categories, RE-installing a stale delegate — so
                     // check every paint (cheap: hasStaleUi short-circuits) and
                     // refresh whenever it has gone stale again, not just once.
-                    // Synchronous so there is no wrong-style flash.
-                    refreshIfStale(c, true);
+                    // Synchronous so there is no wrong-style flash. Against
+                    // the active look and feel: the pane survives into the
+                    // light restore until the table's UI is rebuilt.
+                    refreshIfStale(c,
+                        UIManager.getLookAndFeel() instanceof com.formdev.flatlaf.FlatDarkLaf);
                     sanitize(c);
                     if (DebugLog.verbose()) {
                         // A recursive walk of the renderer's own tree, on every
@@ -500,11 +508,13 @@ public class CellRendererSanitizer {
      * #uninstallStampRefresh()}). After a dark update, the sanitizing panes
      * and the theme manager's component watcher refresh stamps instead.
      *
-     * <p>Going dark it also sanitizes, as the panes do, so the stamp is not
-     * painted with its stock colours. Going light it refreshes only what this
-     * class refreshed to FlatLaf, which {@link #uninstall()} would refresh
-     * anyway after the update: that paint must not meet FlatLaf delegates
-     * under Synthetica's defaults either.
+     * <p>Going light it refreshes any stamp on FlatLaf's delegates, including
+     * one first built under dark, which neither this class nor {@link
+     * #uninstall()} ever refreshed: that paint must not meet FlatLaf
+     * delegates under Synthetica's defaults either. Going dark it also
+     * sanitizes a table's stamp, as the table's sanitizing pane will after the
+     * update, so it is not painted with its stock colours. Nothing sanitizes
+     * the other stamps in a dark session, so neither does this.
      */
     void installStampRefresh() {
         if (stampRefresh != null) {
@@ -512,10 +522,14 @@ public class CellRendererSanitizer {
         }
         boolean dark = UIManager.getLookAndFeel() instanceof com.formdev.flatlaf.FlatDarkLaf;
         if (dark) {
-            // What sanitize() paints with; install() reads them again later.
-            darkBackground = orDefault(UIManager.getColor("Table.background"), new Color(0x3A3D3F));
-            lightForeground = orDefault(UIManager.getColor("Table.foreground"), new Color(0xDDE0E3));
+            // install() reads them again later.
+            readDarkColors();
         }
+        // Each component is checked once per update, not once per cell: a
+        // table stamps its renderer for every visible cell, and the check is
+        // a reflective walk of the renderer's tree.
+        java.util.Set<Component> checked =
+            java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
         stampRefresh = event -> {
             if (event.getID() != java.awt.event.ContainerEvent.COMPONENT_ADDED
                     || !javax.swing.SwingUtilities.isEventDispatchThread()) {
@@ -523,20 +537,21 @@ public class CellRendererSanitizer {
             }
             java.awt.event.ContainerEvent added = (java.awt.event.ContainerEvent) event;
             Container pane = added.getContainer();
-            // A sanitizing pane has refreshed and sanitized the component
-            // already, before its add and outside the tree lock. Not so going
-            // light: it checks for Synthetica only.
+            // A sanitizing pane has handled the component already, before its
+            // add and outside the tree lock.
             if (!(pane instanceof javax.swing.CellRendererPane)
-                    || (dark && pane instanceof SanitizingCellRendererPane)) {
+                    || pane instanceof SanitizingCellRendererPane) {
                 return;
             }
             Component c = added.getChild();
             try {
-                if (dark) {
-                    refreshIfStale(c, true);
+                // Not marked while a refresh is running: refreshIfStale skips
+                // it then, so it still needs its check.
+                if (!refreshingDelegates && checked.add(c)) {
+                    refreshIfStale(c, dark);
+                }
+                if (dark && pane.getParent() instanceof JTable) {
                     sanitize(c);
-                } else if (refreshedRenderers.containsKey(c)) {
-                    refreshIfStale(c, false);
                 }
             } catch (Throwable t) {
                 // The paint goes ahead either way; a refresh that throws is no
