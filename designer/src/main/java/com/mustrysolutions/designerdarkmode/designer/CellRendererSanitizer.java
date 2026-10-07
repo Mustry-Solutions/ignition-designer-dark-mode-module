@@ -436,7 +436,7 @@ public class CellRendererSanitizer {
                     // check every paint (cheap: hasStaleUi short-circuits) and
                     // refresh whenever it has gone stale again, not just once.
                     // Synchronous so there is no wrong-style flash.
-                    refreshIfStale(c);
+                    refreshIfStale(c, true);
                     sanitize(c);
                     if (DebugLog.verbose()) {
                         // A recursive walk of the renderer's own tree, on every
@@ -454,12 +454,13 @@ public class CellRendererSanitizer {
     }
 
     /**
-     * Refresh a stamped renderer component whose delegate is from Synthetica.
+     * Refresh a stamped renderer component whose delegate is from the other
+     * look and feel: Synthetica when {@code darkActive}, FlatLaf otherwise.
      * The reentrancy guard stops the refresh's own repaint recursing.
      */
-    private void refreshIfStale(Component c) {
+    private void refreshIfStale(Component c, boolean darkActive) {
         if (c instanceof javax.swing.JComponent && !refreshingDelegates
-                && ThemeManager.hasStaleUi(c, true)) {
+                && ThemeManager.hasStaleUi(c, darkActive)) {
             refreshingDelegates = true;
             try {
                 refreshDelegatePreservingColors((javax.swing.JComponent) c);
@@ -469,54 +470,93 @@ public class CellRendererSanitizer {
         }
     }
 
+    /** The listener {@link #installStampRefresh()} adds, while it is on. EDT only. */
+    private java.awt.event.AWTEventListener stampRefresh;
+
+    /** Renderer classes whose stamp-time refresh threw, to log each once. */
+    private final java.util.Set<String> reportedStampFailures = new java.util.HashSet<>();
+
     /**
-     * Run the dark switch's tree update with stale renderer components
-     * refreshed as a renderer pane stamps them, which is what
-     * {@link SanitizingCellRendererPane} does once {@link #install()} has run.
+     * For the tree update of a switch: refresh a renderer component the moment
+     * a renderer pane stamps it, the way {@link SanitizingCellRendererPane}
+     * does on every paint once {@link #install()} has run.
      *
      * <p>The tree update cannot reach a renderer component the renderer keeps:
      * {@code BasicTableUI}, {@code BasicListUI} and {@code BasicTreeUI} empty
      * their renderer pane after every paint, so the component has no parent
-     * while the windows are walked, and keeps Synthetica's delegates. Nothing
-     * paints it until the switch is over, except on X11, where the frame
-     * repaints inside {@code FlatRootPaneUI.installDefaults}, before
-     * {@code install()} has given any table a sanitizing pane. Vision's
-     * property editor was the case: its {@code EditorComboBox} panel threw
-     * from Synthetica's {@code ImagePainter} under FlatLaf, which stopped the
-     * root pane's install part-way, and every light restore after that failed
-     * to uninstall it.
+     * while the windows are walked, and keeps the outgoing look and feel's
+     * delegates. Nothing paints it until the switch is over, except on X11,
+     * where the frame repaints inside the root pane's {@code installDefaults}.
+     * Vision's property editor was the case: going dark, its
+     * {@code EditorComboBox} panel threw from Synthetica's {@code ImagePainter}
+     * under FlatLaf, which stopped the root pane's install part-way, and every
+     * light restore after that failed to uninstall it.
      *
      * <p>A {@code CellRendererPane} adds the component to itself before it
      * paints it, and the container event for that is dispatched synchronously,
-     * so a listener refreshes the component before its first paint. It is
-     * installed only for the tree update: after it, the sanitizing panes do
-     * the same on every paint.
+     * so the listener refreshes the component before its first paint. That
+     * happens inside {@code Container.addImpl}, under the tree lock, which is
+     * why the listener is on only for the tree update ({@link
+     * #uninstallStampRefresh()}). After a dark update, the sanitizing panes
+     * and the theme manager's component watcher refresh stamps instead.
+     *
+     * <p>Going dark it also sanitizes, as the panes do, so the stamp is not
+     * painted with its stock colours. Going light it refreshes only what this
+     * class refreshed to FlatLaf, which {@link #uninstall()} would refresh
+     * anyway after the update: that paint must not meet FlatLaf delegates
+     * under Synthetica's defaults either.
      */
-    void refreshingStampedRenderers(Runnable treeUpdate) {
-        java.awt.event.AWTEventListener stamped = event -> {
-            if (event.getID() != java.awt.event.ContainerEvent.COMPONENT_ADDED) {
+    void installStampRefresh() {
+        if (stampRefresh != null) {
+            return;
+        }
+        boolean dark = UIManager.getLookAndFeel() instanceof com.formdev.flatlaf.FlatDarkLaf;
+        if (dark) {
+            // What sanitize() paints with; install() reads them again later.
+            darkBackground = orDefault(UIManager.getColor("Table.background"), new Color(0x3A3D3F));
+            lightForeground = orDefault(UIManager.getColor("Table.foreground"), new Color(0xDDE0E3));
+        }
+        stampRefresh = event -> {
+            if (event.getID() != java.awt.event.ContainerEvent.COMPONENT_ADDED
+                    || !javax.swing.SwingUtilities.isEventDispatchThread()) {
                 return;
             }
             java.awt.event.ContainerEvent added = (java.awt.event.ContainerEvent) event;
+            Container pane = added.getContainer();
+            // A sanitizing pane has refreshed and sanitized the component
+            // already, before its add and outside the tree lock. Not so going
+            // light: it checks for Synthetica only.
+            if (!(pane instanceof javax.swing.CellRendererPane)
+                    || (dark && pane instanceof SanitizingCellRendererPane)) {
+                return;
+            }
             Component c = added.getChild();
-            if (added.getContainer() instanceof javax.swing.CellRendererPane
-                    && javax.swing.SwingUtilities.isEventDispatchThread()) {
-                try {
-                    refreshIfStale(c);
-                } catch (Throwable t) {
-                    // The paint goes ahead either way; a refresh that throws
-                    // is no worse than none.
+            try {
+                if (dark) {
+                    refreshIfStale(c, true);
+                    sanitize(c);
+                } else if (refreshedRenderers.containsKey(c)) {
+                    refreshIfStale(c, false);
+                }
+            } catch (Throwable t) {
+                // The paint goes ahead either way; a refresh that throws is no
+                // worse than none. Once per class: a table stamps its renderer
+                // once per visible cell.
+                if (reportedStampFailures.add(c.getClass().getName())) {
                     DebugLog.log("Could not refresh the renderer component "
                         + c.getClass().getName() + " before its paint.", t);
                 }
             }
         };
         java.awt.Toolkit.getDefaultToolkit().addAWTEventListener(
-            stamped, java.awt.AWTEvent.CONTAINER_EVENT_MASK);
-        try {
-            treeUpdate.run();
-        } finally {
-            java.awt.Toolkit.getDefaultToolkit().removeAWTEventListener(stamped);
+            stampRefresh, java.awt.AWTEvent.CONTAINER_EVENT_MASK);
+    }
+
+    /** End {@link #installStampRefresh()}. */
+    void uninstallStampRefresh() {
+        if (stampRefresh != null) {
+            java.awt.Toolkit.getDefaultToolkit().removeAWTEventListener(stampRefresh);
+            stampRefresh = null;
         }
     }
 

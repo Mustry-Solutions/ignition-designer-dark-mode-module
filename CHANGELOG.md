@@ -90,10 +90,11 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   Synthetica's delegates, and they throw under FlatLaf. The root pane was
   left half on FlatLaf's UI for the rest of the session, and the binding
   icons on the editor's combo box rows looked dimmed under dark. While it
-  updates the windows, the dark switch now refreshes a kept cell component
-  the moment a table paints it. A windowed harness test paints a table with
-  a kept combo box panel inside the root pane's install and fails without
-  the change. Checked live in a Linux 8.3.6 Designer: four switches with the
+  updates the windows, a switch in either direction now refreshes a kept
+  cell component the moment a table, list or tree paints it. Windowed
+  harness tests paint a table with a kept combo box panel inside the root
+  pane's install, and a table, list and tree during the update on every OS,
+  and fail without the change. Checked live in a Linux 8.3.6 Designer: four switches with the
   property editor showing a window, no failures logged, and the root pane
   fully on each look and feel's UI.
 

@@ -672,48 +672,43 @@ public class ThemeManager {
                 cellRenderers.unwrap();
             });
         }
+        // A renderer component the renderer keeps is outside every tree the
+        // walk reaches, and on X11 the root pane's install paints it. In its
+        // own phases, so a throwing walk cannot leave the listener on.
+        safely("stampRefresh", cellRenderers::installStampRefresh);
         safely("updateComponentTrees", () -> {
             java.util.Set<String> failed = new java.util.LinkedHashSet<>();
-            int[] failures = {0};
+            int failures = 0;
             // JIDE buttons take their margin from a Synth style on every
             // updateUI, over the application's (#174).
             JideButtonMargins margins = JideButtonMargins.capture(Window.getWindows());
-            Runnable walk = () -> {
-                for (Window window : Window.getWindows()) {
-                    // Isolate per WINDOW, not per phase. Synthetica can NPE out of
-                    // updateComponentTreeUI on a window holding a stale delegate
-                    // ("Cannot invoke java.awt.Font.getFamily() because font is
-                    // null"); with one guard around the whole loop that aborted
-                    // every window after it, leaving the light restore visibly
-                    // half-applied — some panels light, others still dark.
-                    try {
-                        failures[0] += updateComponentTreeUiResiliently(window, failed);
-                    } catch (Throwable t) {
-                        // The outer net. Since the walk contains a throwing
-                        // component itself, reaching here means something failed
-                        // that is not a single component's updateUI — so the whole
-                        // window is the right thing to report on.
-                        DebugLog.log("updateComponentTreeUI failed for "
-                            + window.getClass().getName() + "; continuing with the rest.", t);
-                        TreeUpdateDiagnostic.report(window, t);
-                    }
+            for (Window window : Window.getWindows()) {
+                // Isolate per WINDOW, not per phase. Synthetica can NPE out of
+                // updateComponentTreeUI on a window holding a stale delegate
+                // ("Cannot invoke java.awt.Font.getFamily() because font is
+                // null"); with one guard around the whole loop that aborted
+                // every window after it, leaving the light restore visibly
+                // half-applied — some panels light, others still dark.
+                try {
+                    failures += updateComponentTreeUiResiliently(window, failed);
+                } catch (Throwable t) {
+                    // The outer net. Since the walk contains a throwing
+                    // component itself, reaching here means something failed
+                    // that is not a single component's updateUI — so the whole
+                    // window is the right thing to report on.
+                    DebugLog.log("updateComponentTreeUI failed for "
+                        + window.getClass().getName() + "; continuing with the rest.", t);
+                    TreeUpdateDiagnostic.report(window, t);
                 }
-            };
-            if (dark) {
-                // A renderer component the renderer keeps is outside every
-                // tree the walk reaches, and on X11 the root pane's install
-                // paints it before the sanitizing panes are in.
-                cellRenderers.refreshingStampedRenderers(walk);
-            } else {
-                walk.run();
             }
             margins.restore();
-            if (failures[0] > 0) {
-                DebugLog.log("updateUI failed on " + failures[0] + " component(s) across "
+            if (failures > 0) {
+                DebugLog.log("updateUI failed on " + failures + " component(s) across "
                     + failed.size() + " class(es): " + failed
                     + ". Their subtrees were still walked.");
             }
         });
+        safely("stampRefreshOff", cellRenderers::uninstallStampRefresh);
         safely("cachedPopups", this::refreshCachedPopups);
         // The macOS native title bar follows this root pane property; without
         // the explicit reset it stays dark after a switch back to light.

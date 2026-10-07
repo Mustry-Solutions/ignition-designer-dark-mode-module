@@ -122,11 +122,12 @@ Steps marked *dark only* or *light only* are skipped in the other direction.
    That order cannot reach a renderer component the renderer keeps, such as
    Vision's property editor panels: a table empties its renderer pane after
    every paint, so the panel is in no tree while the windows are walked, and
-   the root pane's repaint stamps it with Synthetica's delegates. So under
-   dark the walk runs with a listener that refreshes a stale component as a
-   renderer pane adds it, the same refresh the sanitizing panes of step 11
-   do on every paint once they are in
-   (`CellRendererSanitizer.refreshingStampedRenderers`).
+   the root pane's repaint stamps it with Synthetica's delegates. So the
+   walk runs with a listener that refreshes a stale component as a renderer
+   pane adds it (`CellRendererSanitizer.installStampRefresh`). Going dark it
+   does what the sanitizing panes of step 11 do on every paint once they are
+   in; going light it refreshes what the module refreshed to FlatLaf. It is
+   on only for the walk, since it runs under the AWT tree lock.
    Under dark, each Vision component's look-and-feel border is aligned with a
    fresh instance's as it goes ([VisionConstructionBorders](#visionconstructionborders)).
    A window-level failure is reported by `TreeUpdateDiagnostic`. Straight

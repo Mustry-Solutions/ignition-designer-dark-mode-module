@@ -416,6 +416,117 @@ class WindowedCycleTest {
     }
 
     /**
+     * The kept renderer of the test above, for a table, a list and a tree, and
+     * painted during the tree update on every OS rather than only where X11
+     * repaints inside the root pane's install: a component after the views
+     * paints them from its own {@code updateUI}. The walk is pre-order, so by
+     * then each view has the incoming look and feel's UI and a fresh renderer
+     * pane, and the kept panel still has the outgoing one's delegates.
+     *
+     * <p>Checked at the paint, not after the switch: on the light restore,
+     * {@code CellRendererSanitizer.uninstall()} refreshes the panel anyway once
+     * the walk is over, so only the paint inside the walk shows whether it was
+     * refreshed before it was stamped.
+     */
+    @Test
+    @DisplayName("a kept table, list or tree renderer painted during the tree update is refreshed first, both ways")
+    void keptRenderersPaintedDuringTheTreeUpdateAreRefreshedFirst() throws Throwable {
+        onEdt(() -> {
+            // One panel per view: a list or tree that shares the table's panel
+            // attaches it to its own renderer pane while it lays out, and the
+            // walk would then reach it.
+            Map<javax.swing.JComponent, JPanel> kept = new LinkedHashMap<>();
+            String[] values = {"Tag", "Tag", "Tag"};
+            JPanel tableEditor = keptComboPanel();
+            javax.swing.table.TableCellRenderer tableKeeps =
+                (table, value, selected, focused, row, column) -> tableEditor;
+            JTable table = new JTable(new DefaultTableModel(new Object[][] {
+                {"binding 0", "Tag"}, {"binding 1", "Tag"}}, new Object[] {"Property", "Value"})) {
+                @Override
+                public javax.swing.table.TableCellRenderer getCellRenderer(int row, int column) {
+                    return column == 1 ? tableKeeps : super.getCellRenderer(row, column);
+                }
+            };
+            kept.put(table, tableEditor);
+            JList<String> list = new JList<>(values);
+            JPanel listEditor = keptComboPanel();
+            list.setCellRenderer((owner, value, index, selected, focused) -> listEditor);
+            kept.put(list, listEditor);
+            JTree tree = new JTree(values);
+            JPanel treeEditor = keptComboPanel();
+            tree.setCellRenderer((owner, value, selected, expanded, leaf, row, focused) -> treeEditor);
+            kept.put(tree, treeEditor);
+            List<javax.swing.JComponent> views = List.copyOf(kept.keySet());
+
+            List<String> stalePaints = new ArrayList<>();
+            List<Throwable> paintFailures = new ArrayList<>();
+            boolean[] armed = {false};
+            boolean[] dark = {false};
+            int[] paints = {0};
+            JPanel painter = new JPanel() {
+                @Override
+                public void updateUI() {
+                    super.updateUI();
+                    if (!armed[0]) {
+                        return;
+                    }
+                    for (javax.swing.JComponent view : views) {
+                        BufferedImage image = new BufferedImage(
+                            Math.max(1, view.getWidth()), Math.max(1, view.getHeight()),
+                            BufferedImage.TYPE_INT_RGB);
+                        Graphics2D graphics = image.createGraphics();
+                        paints[0]++;
+                        try {
+                            view.paint(graphics);
+                        } catch (RuntimeException e) {
+                            paintFailures.add(e);
+                        } finally {
+                            graphics.dispose();
+                        }
+                        if (ThemeManager.hasStaleUi(kept.get(view), dark[0])) {
+                            stalePaints.add((dark[0] ? "dark " : "light ")
+                                + (view instanceof JTable ? "JTable" : view.getClass().getSimpleName()));
+                        }
+                    }
+                }
+            };
+            JPanel content = new JPanel(new GridLayout(1, 0));
+            for (javax.swing.JComponent view : views) {
+                content.add(new JScrollPane(view));
+            }
+            content.add(painter);
+            X11PaintingFrame frame = x11PaintingFrame(content);
+
+            // A paint under stock, as the Designer has done long before any switch.
+            render(frame);
+            kept.forEach((view, editor) -> {
+                assertNull(editor.getParent(), view.getClass().getSimpleName() + " kept its "
+                    + "editor panel in its renderer pane, so the tree walk reaches it and "
+                    + "the test is vacuous");
+                assertTrue(ThemeManager.hasStaleUi(editor, true), "the kept combo box of "
+                    + view.getClass().getSimpleName() + " is not on a Synthetica delegate "
+                    + "under stock");
+            });
+
+            armed[0] = true;
+            dark[0] = true;
+            try {
+                manager.apply(true);
+                dark[0] = false;
+                manager.apply(false);
+            } finally {
+                armed[0] = false;
+            }
+            assertEquals(6, paints[0], "the painter did not paint each view once in each "
+                + "tree update; the test is vacuous");
+            assertEquals(List.of(), manager.failedPhases());
+            assertEquals(List.of(), paintFailures, "a view threw stamping the kept panel");
+            assertEquals(List.of(), stalePaints, "a view stamped the kept panel on the "
+                + "outgoing look and feel's delegates");
+        });
+    }
+
+    /**
      * Vision's {@code DockingInternalFrameUI.installDefaults} — inherited from
      * {@code BasicInternalFrameUI}, so plain Swing reproduces it — does
      * {@code if (contentPane.getBackground() instanceof UIResource)
@@ -625,6 +736,13 @@ class WindowedCycleTest {
         frame.pack();
         frames.add(frame);
         return frame;
+    }
+
+    /** A panel holding a combo box, as a renderer that keeps its component returns it. */
+    private static JPanel keptComboPanel() {
+        JPanel editor = new JPanel(new BorderLayout());
+        editor.add(new JComboBox<>(new String[] {"Tag", "Expression"}), BorderLayout.CENTER);
+        return editor;
     }
 
     /**
