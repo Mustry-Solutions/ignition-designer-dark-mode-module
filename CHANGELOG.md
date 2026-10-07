@@ -84,9 +84,10 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   Property Editor's combo box rows looked dimmed. This was the
   [#164](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/164)
   failure through a cell renderer the editor keeps between paints, which the
-  #164 fix could not reach. A first, dark-only version of the fix was checked
-  live in a Linux 8.3.6 Designer; the version shipped, which also refreshes
-  going light, is harness-verified only.
+  #164 fix could not reach. Checked live in a Linux 8.3.6 Designer with a
+  Vision window open: four switches logged no failures and left the root
+  pane fully on each look and feel's UI, where main logged the failure on
+  every switch.
 
 - **Three intermittent look-and-feel harness failures on macOS CI**
   ([#179](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/179),
