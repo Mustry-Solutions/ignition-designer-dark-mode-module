@@ -81,12 +81,16 @@ class CachedEditorAfterRestoreTest {
         JPanel host = host(table);
 
         // Dark first, and the editor for this row's type is built now, the
-        // way a Designer that starts dark builds the property editor.
+        // way a Designer that starts dark builds the property editor. Built
+        // by asking the renderer, not by a paint: an editor a sanitizing
+        // renderer pane stamped while dark is refreshed by the restore
+        // itself (#188, DarkBuiltRendererTest), and this test is about the
+        // one it cannot know.
         SwingUtilities.invokeAndWait(() -> {
             manager.apply(true);
             SwingUtilities.updateComponentTreeUI(host);
             renderers.installIn(host);
-            paint(table);
+            table.prepareRenderer(table.getCellRenderer(0, 1), 0, 1);
         });
         JTextField field = renderer.cachedField();
         assertTrue(ThemeManager.hasStaleUi(field, false),

@@ -250,6 +250,15 @@ mechanism. On each renderer paint it darkens light backgrounds and, if the
 renderer component's UI delegate has gone stale (Synthetica under FlatLaf),
 refreshes it. Undoes color mutations and restores original renderers on light.
 
+On light it also refreshes the renderer components the renderers keep, which
+no tree walk reaches. It knows the ones it refreshed while dark (built under
+the light theme), and it notes every component a sanitizing pane stamps, so
+one built under dark and off screen during the switch is refreshed too (#188:
+Vision's property editor builds an editor panel per property type on the
+first paint that shows it, so scrolling it under dark built the colour
+editors under FlatLaf). A component built under dark that no pane ever
+stamped is left to the light watcher, on the first light paint that shows it.
+
 Wrapping a **list** renderer has one rule that is not obvious:
 `getCellRenderer()` is not always the renderer `setCellRenderer()` replaces.
 JIDE's `CheckBoxList` returns a `CheckBoxListCellRenderer` it re-points at
