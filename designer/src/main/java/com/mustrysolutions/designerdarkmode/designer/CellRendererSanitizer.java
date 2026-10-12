@@ -703,34 +703,99 @@ public class CellRendererSanitizer {
      * (JIDE's {@code BasicCellSpanTableUI}) whether or not we refresh it, and
      * our own stale-delegate refresh replaces it too.
      *
-     * <p>Only listeners declared inside the table's owner are moved, and only
-     * when one of them sits ahead of a listener that is not, so a table that
-     * is already in the right order is left alone. Runs on every pass, not
-     * once per table, because a rescan can replace the UI again at any time.
-     * Package-private for the light restore's walk, which replaces them too.
+     * <p>Only listeners declared inside a component the table sits in are
+     * moved, and only those that sit ahead of the UI's own handler. They go
+     * directly behind it, in their order, and every other listener keeps its
+     * place relative to them. So a table already in the right order is left
+     * alone even if a helper added a listener after the owner's (#141). The
+     * owner walk starts at the table's parent, not the table: a listener the
+     * table's own class declares, such as JIDE's
+     * {@code TreeTable$ExpandMouseListener}, sits wherever the table put it,
+     * ahead of the handler on the Vision property table, and moving it changed
+     * that table's stock order (#186). Runs on every pass, not once per table,
+     * because a rescan can replace the UI again at any time. Package-private
+     * for the light restore's walk, which replaces them too.
      */
     static void moveOwnedMouseListenersLast(JTable table) {
         java.awt.event.MouseListener[] listeners = table.getMouseListeners();
-        java.util.List<java.awt.event.MouseListener> owned = new java.util.ArrayList<>();
-        boolean outOfOrder = false;
+        boolean anyOwned = false;
         for (java.awt.event.MouseListener listener : listeners) {
-            if (ownedListener(table, listener)) {
-                owned.add(listener);
-            } else if (!owned.isEmpty()) {
-                outOfOrder = true;
-            }
+            anyOwned |= ownedListener(table, listener);
         }
-        if (!outOfOrder) {
+        if (!anyOwned) {
             return;
         }
-        for (java.awt.event.MouseListener listener : owned) {
+        int handler = -1;
+        for (int i = listeners.length - 1; i >= 0 && handler < 0; i--) {
+            if (!ownedListener(table, listeners[i])
+                    && declaredByTheUi(table.getUI(), listeners[i].getClass())) {
+                handler = i;
+            }
+        }
+        java.util.List<java.awt.event.MouseListener> ahead = new java.util.ArrayList<>();
+        for (int i = 0; i < handler; i++) {
+            if (ownedListener(table, listeners[i])) {
+                ahead.add(listeners[i]);
+            }
+        }
+        if (ahead.isEmpty()) {
+            return;
+        }
+        // Listeners keep no position of their own: re-adding the ones behind
+        // the handler after the moved ones puts the moved ones straight
+        // behind it.
+        java.util.List<java.awt.event.MouseListener> behind =
+            java.util.Arrays.asList(listeners).subList(handler + 1, listeners.length);
+        for (java.awt.event.MouseListener listener : ahead) {
             table.removeMouseListener(listener);
+        }
+        for (java.awt.event.MouseListener listener : behind) {
+            table.removeMouseListener(listener);
+        }
+        for (java.awt.event.MouseListener listener : ahead) {
+            table.addMouseListener(listener);
+        }
+        for (java.awt.event.MouseListener listener : behind) {
             table.addMouseListener(listener);
         }
         if (reportedReorderedTables.add(table.getClass().getName())) {
-            DebugLog.detail("Moved " + owned.size() + " owner mouse listener(s) behind the "
+            DebugLog.detail("Moved " + ahead.size() + " owner mouse listener(s) behind the "
                 + "look and feel's on " + table.getClass().getName());
         }
+    }
+
+    /**
+     * Whether a listener class is the table UI's own: its outermost class is
+     * one of the UI's classes or sits in the package of one. The package half
+     * is for JIDE, whose table UIs install
+     * {@code BasicNavigableTableUIDelegate$a}, a class next to the UI rather
+     * than inside it. Swing's {@code BasicTableUI$Handler} is inside it. A
+     * class that only shares a package with the UI and is taken for its
+     * handler costs no more than the rule before #141: the owner's listeners
+     * go behind it. Not cached: a replaced UI changes the answer.
+     */
+    static boolean declaredByTheUi(Object ui, Class<?> type) {
+        if (ui == null) {
+            return false;
+        }
+        try {
+            Class<?> outermost = type;
+            while (outermost.getEnclosingClass() != null) {
+                outermost = outermost.getEnclosingClass();
+            }
+            for (Class<?> uiType = ui.getClass(); uiType != null && uiType != Object.class;
+                    uiType = uiType.getSuperclass()) {
+                if (uiType == outermost
+                        || uiType.getPackageName().equals(outermost.getPackageName())) {
+                    return true;
+                }
+            }
+        } catch (Throwable t) {
+            // As in declaringOwner: a missing outer class means no verdict.
+            // Detail, not log: uncached, so this would repeat every rescan.
+            DebugLog.detail("UI ownership check failed for " + type.getName(), t);
+        }
+        return false;
     }
 
     /**
@@ -744,10 +809,16 @@ public class CellRendererSanitizer {
      * listener is added by the code that built its table, and the sweep only
      * reaches tables already in a window). Weak keys: a closed dialog's
      * listeners must go.
+     *
+     * <p>A table with no parent yet has no owner, and that verdict is not
+     * cached, so the listener is judged again once the table is placed.
      */
     private static boolean ownedListener(JTable table, java.awt.event.MouseListener listener) {
+        if (table.getParent() == null) {
+            return false;
+        }
         return OWNED_LISTENERS.computeIfAbsent(listener,
-            l -> declaringOwner(table, l.getClass()) != null);
+            l -> declaringOwner(table.getParent(), l.getClass()) != null);
     }
 
     private static final Map<java.awt.event.MouseListener, Boolean> OWNED_LISTENERS =
