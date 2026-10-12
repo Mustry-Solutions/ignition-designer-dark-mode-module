@@ -672,6 +672,10 @@ public class ThemeManager {
                 cellRenderers.unwrap();
             });
         }
+        // A renderer component the renderer keeps is outside every tree the
+        // walk reaches, and on X11 the root pane's install paints it. In its
+        // own phases, so a throwing walk cannot leave the listener on.
+        safely("stampRefresh", cellRenderers::installStampRefresh);
         safely("updateComponentTrees", () -> {
             java.util.Set<String> failed = new java.util.LinkedHashSet<>();
             int failures = 0;
@@ -704,6 +708,7 @@ public class ThemeManager {
                     + ". Their subtrees were still walked.");
             }
         });
+        safely("stampRefreshOff", cellRenderers::uninstallStampRefresh);
         safely("cachedPopups", this::refreshCachedPopups);
         // The macOS native title bar follows this root pane property; without
         // the explicit reset it stays dark after a switch back to light.
