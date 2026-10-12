@@ -98,7 +98,11 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   On the property table only the order changed, and a macOS check showed
   each expand click toggling a group exactly once. New harness tests cover
   the helper, a replaced UI and the JIDE `TreeTable`. Each of them, or the
-  #130 tests, fails when any part of the rule is undone.
+  #130 tests, fails when any part of the rule is undone. Checked live in a
+  Linux 8.3.6 Designer: all 14 tables kept their stock listener order in
+  dark and after the light restore, where the #140 check found 13 of 14.
+  Each click on a property group's arrow toggled it once, and one click on
+  OPEN in File → Open… opened the project under dark.
 
 - **Linux: switching with a Vision window open no longer breaks the main
   frame's root pane.** Every switch logged `updateUI failed for
