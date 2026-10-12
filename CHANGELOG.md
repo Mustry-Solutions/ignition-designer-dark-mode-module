@@ -77,6 +77,18 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   after. The 14th is the Vision property table, where JIDE's own expand
   listener runs after the UI handler, as it has in dark since #130.
 
+- **Linux: switching with a Vision window open no longer breaks the main
+  frame's root pane.** Every switch logged `updateUI failed for
+  javax.swing.JRootPane`, the root pane stayed half on FlatLaf's UI for the
+  rest of the session, and under dark the binding icons on the Vision
+  Property Editor's combo box rows looked dimmed. This was the
+  [#164](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/164)
+  failure through a cell renderer the editor keeps between paints, which the
+  #164 fix could not reach. Checked live in a Linux 8.3.6 Designer with a
+  Vision window open: four switches logged no failures and left the root
+  pane fully on each look and feel's UI, where main logged the failure on
+  every switch.
+
 - **Three intermittent look-and-feel harness failures on macOS CI**
   ([#179](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/179),
   [#160](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/160),
