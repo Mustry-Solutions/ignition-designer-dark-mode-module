@@ -21,14 +21,17 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   like a Vision window's. The rulers, palette and docks around it stay dark.
   Found by the first QA pass to open an SFC chart.
 
-- **Resource icons are visible in the project Export and Import dialogs.**
+- **Resource icons are visible in the project Export and Import dialogs**
+  ([#41](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/41)).
   Both dialogs list the project in a checkbox tree that the module had left
   out of its icon pass, so each resource's icon kept its stock dark grey on
   the dark tree; a view's icon could hardly be seen. The icons are now
   lightened like the Project Browser's, without touching the tree's
-  checkboxes.
+  checkboxes. The security-level tree in permission editors is a checkbox
+  tree too and gets the same treatment.
 
-- **A selected tag's Value cell uses the dark selection colour.** In the Tag
+- **A selected tag's Value cell uses the dark selection colour**
+  ([#41](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/41)). In the Tag
   Browser, and in the Config column of its UDT Definitions tab, a selected
   row's value cell kept the light theme's bright blue with white text, next
   to a dark-blue Tag cell. The renderer copies its colours once, when the

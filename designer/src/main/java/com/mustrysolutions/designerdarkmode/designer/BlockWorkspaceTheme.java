@@ -14,7 +14,8 @@ import javax.swing.JComponent;
 
 /**
  * Dark-adapts the blocks on a block-and-connector workspace — alarm
- * notification pipelines and SFC charts.
+ * notification pipelines. SFC charts no longer use {@code BasicBlockUI} on
+ * 8.3; they stay white instead (see {@code ThemeManager.SFC_CHART}).
  *
  * <h2>Why the blocks stay light</h2>
  *

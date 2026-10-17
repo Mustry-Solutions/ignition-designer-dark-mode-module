@@ -1272,15 +1272,20 @@ public class CellRendererSanitizer {
      * Called under dark for every cell the wrapper paints, and from the light
      * side once the stock look and feel is back. Package-private for the
      * light restore's leftover pass.
+     *
+     * @return whether {@code renderer} is one of those renderers
      */
     @SuppressWarnings("unchecked")
-    static void syncCachedTreeColors(Object renderer) {
-        if (renderer == null || !ClassNames.extendsNamed(renderer.getClass(), TAG_VALUE_RENDERER)) {
-            return;
+    static boolean syncCachedTreeColors(Object renderer) {
+        if (renderer == null) {
+            return false;
+        }
+        java.lang.reflect.Method getColors = COLORS_GETTER.get(renderer.getClass());
+        if (getColors == null) {
+            return false;
         }
         try {
-            java.util.Map<String, Color> colors = (java.util.Map<String, Color>)
-                renderer.getClass().getMethod("getColors").invoke(renderer);
+            java.util.Map<String, Color> colors = (java.util.Map<String, Color>) getColors.invoke(renderer);
             putIfPresent(colors, "default", "Tree.textForeground");
             putIfPresent(colors, "selected", "Tree.selectionForeground");
             putIfPresent(colors, "background", "Tree.textBackground");
@@ -1291,7 +1296,29 @@ public class CellRendererSanitizer {
                     + renderer.getClass().getName() + "; its cells keep the theme they were built in.", t);
             }
         }
+        return true;
     }
+
+    /**
+     * Per class, {@code getColors} when the class is a {@link #TAG_VALUE_RENDERER},
+     * else null: the check runs for every table cell painted under dark, so
+     * the class walk and the method lookup are done once per class.
+     */
+    private static final ClassValue<java.lang.reflect.Method> COLORS_GETTER = new ClassValue<>() {
+        @Override
+        protected java.lang.reflect.Method computeValue(Class<?> type) {
+            if (!ClassNames.extendsNamed(type, TAG_VALUE_RENDERER)) {
+                return null;
+            }
+            try {
+                return type.getMethod("getColors");
+            } catch (Throwable t) {
+                DebugLog.log("Could not find getColors on " + type.getName()
+                    + "; its cells keep the theme they were built in.", t);
+                return null;
+            }
+        }
+    };
 
     private static void putIfPresent(java.util.Map<String, Color> colors, String key, String uiKey) {
         Color color = UIManager.getColor(uiKey);
@@ -1408,8 +1435,9 @@ public class CellRendererSanitizer {
         @Override
         public Component getTableCellRendererComponent(JTable table, Object value,
                 boolean isSelected, boolean hasFocus, int row, int column) {
-            syncCachedTreeColors(delegate);
-            syncedTableRenderers.add(delegate);
+            if (syncCachedTreeColors(delegate)) {
+                syncedTableRenderers.add(delegate);
+            }
             Component component = delegate.getTableCellRendererComponent(
                 table, value, isSelected, hasFocus, row, column);
             sanitize(component);

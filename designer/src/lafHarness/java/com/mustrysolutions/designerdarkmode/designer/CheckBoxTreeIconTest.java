@@ -76,6 +76,7 @@ class CheckBoxTreeIconTest {
         Icon stockIcon = solidIcon(STOCK_ICON);
         CheckBoxTree tree = checkBoxTree(stockIcon);
         TreeCellRenderer renderer = tree.getCellRenderer();
+        TreeCellRenderer actual = tree.getActualCellRenderer();
         JPanel panel = new JPanel(new BorderLayout());
         panel.add(tree, BorderLayout.CENTER);
         panel.setSize(300, 200);
@@ -84,7 +85,9 @@ class CheckBoxTreeIconTest {
 
         icons.installIn(panel);
 
-        assertSame(renderer, tree.getCellRenderer(),
+        // getCellRenderer() always hands back the cached checkbox renderer;
+        // a wrap replaces the actual one beneath it.
+        assertSame(actual, tree.getActualCellRenderer(),
             "the CheckBoxTree's renderer was wrapped, which recurses through its "
                 + "actual renderer");
         assertNotSame(CellRendererPane.class, rendererPane(tree).getClass(),
