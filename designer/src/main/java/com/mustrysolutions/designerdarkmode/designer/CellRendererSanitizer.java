@@ -102,6 +102,27 @@ public class CellRendererSanitizer {
     private final Map<javax.swing.JComponent, Boolean> refreshedRenderers = new WeakHashMap<>();
 
     /**
+     * Every renderer component a {@link SanitizingCellRendererPane} has
+     * stamped, for {@link #uninstall()} (#188). A pane that survives into
+     * light keeps recording; {@code uninstall()} refreshes only the stamps
+     * still on FlatLaf, so those light-built entries cost nothing.
+     *
+     * <p>{@link #refreshedRenderers} holds only what this class had to
+     * refresh, which is a component built under the light theme. One built
+     * under dark is on FlatLaf's delegates from the start and is never in it.
+     * Vision's property editor builds its editor panel for a property type the
+     * first time a paint shows that type, and keeps it, so going dark and
+     * scrolling the slider's properties built the colour editors under
+     * FlatLaf. Scrolled back up for the switch, they were in no tree the
+     * light update walks, no renderer pane stamped them, and the restore did
+     * not know them: probed live on 8.3.6, ten of them were still on FlatLaf
+     * after light, until a paint showed each one and the light watcher
+     * refreshed it, after that paint. Weak keys: a renderer that builds a
+     * new component per cell leaves only garbage here.
+     */
+    private final Map<javax.swing.JComponent, Boolean> stampedRenderers = new WeakHashMap<>();
+
+    /**
      * Record the colours of every renderer component in the UI, before the
      * switch to dark can wipe them.
      *
@@ -429,6 +450,9 @@ public class CellRendererSanitizer {
                 int x, int y, int w, int h, boolean shouldValidate) {
             if (c != null) {
                 try {
+                    if (c instanceof javax.swing.JComponent) {
+                        stampedRenderers.put((javax.swing.JComponent) c, Boolean.TRUE);
+                    }
                     // Cached renderer components keep Synthetica delegates
                     // (light rounded combo/field look under dark). IA reuses
                     // and reconfigures these renderers when you switch tag
@@ -512,9 +536,9 @@ public class CellRendererSanitizer {
      * every cell.
      *
      * <p>Going light it refreshes any stamp on FlatLaf's delegates, including
-     * one first built under dark, which neither this class nor {@link
-     * #uninstall()} ever refreshed: that paint must not meet FlatLaf
-     * delegates under Synthetica's defaults either. It does not sanitize
+     * one first built under dark, which {@link #uninstall()} refreshes only
+     * after the walk, and only if a sanitizing pane stamped it: that paint
+     * must not meet FlatLaf delegates under Synthetica's defaults either. It does not sanitize
      * colours: nothing else in a paint inside the walk is sanitized either,
      * and the sanitizing panes repaint every stamp once {@link #install()}
      * has run.
@@ -1063,6 +1087,15 @@ public class CellRendererSanitizer {
                 stale.add((javax.swing.JComponent) component);
             }
         }
+        // And any stamp a renderer built under dark still has on FlatLaf's
+        // delegates (#188). Only those: the rest of the record are
+        // components the tree update or a paint has already refreshed.
+        for (javax.swing.JComponent stamp : stampedRenderers.keySet()) {
+            if (ThemeManager.hasStaleUi(stamp, false)) {
+                stale.add(stamp);
+            }
+        }
+        stampedRenderers.clear();
         for (javax.swing.JComponent renderer : stale) {
             try {
                 refreshDelegatePreservingColors(renderer);

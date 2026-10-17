@@ -81,12 +81,16 @@ class CachedEditorAfterRestoreTest {
         JPanel host = host(table);
 
         // Dark first, and the editor for this row's type is built now, the
-        // way a Designer that starts dark builds the property editor.
+        // way a Designer that starts dark builds the property editor. Built
+        // by asking the renderer, not by a paint: an editor a sanitizing
+        // renderer pane stamped while dark is refreshed by the restore
+        // itself (#188, DarkBuiltRendererTest), and this test is about the
+        // one it cannot know.
         SwingUtilities.invokeAndWait(() -> {
             manager.apply(true);
             SwingUtilities.updateComponentTreeUI(host);
             renderers.installIn(host);
-            paint(table);
+            table.prepareRenderer(table.getCellRenderer(0, 1), 0, 1);
         });
         JTextField field = renderer.cachedField();
         assertTrue(ThemeManager.hasStaleUi(field, false),
@@ -428,7 +432,9 @@ class CachedEditorAfterRestoreTest {
             manager.apply(true);
             SwingUtilities.updateComponentTreeUI(host);
             renderers.installIn(host);
-            paint(table);
+            // Built by asking the renderer, not by a paint, so the restore
+            // leaves the editor to the watcher (see aCachedEditorIsRefreshedWhenPainted).
+            table.prepareRenderer(table.getCellRenderer(0, 1), 0, 1);
         });
         JTextField field = renderer.cachedField();
         SwingUtilities.invokeAndWait(() -> {
@@ -437,6 +443,8 @@ class CachedEditorAfterRestoreTest {
             SwingUtilities.updateComponentTreeUI(host);
             renderers.uninstall();
         });
+        assertTrue(ThemeManager.hasStaleUi(field, false),
+            "the restore refreshed the editor itself, so this test no longer exercises the watcher");
         // The restore swapped the dark renderer pane out, and the watcher
         // holds containers weakly. Collect it before the light paint: whether
         // the editor was a renderer must not depend on that pane still being
@@ -462,7 +470,9 @@ class CachedEditorAfterRestoreTest {
             manager.apply(true);
             SwingUtilities.updateComponentTreeUI(host);
             renderers.installIn(host);
-            paint(table);
+            // Built by asking the renderer, not by a paint, so the restore
+            // leaves the editor to the watcher (see aCachedEditorIsRefreshedWhenPainted).
+            table.prepareRenderer(table.getCellRenderer(0, 1), 0, 1);
         });
         JTextField field = renderer.cachedField();
         SwingUtilities.invokeAndWait(() -> {
@@ -471,6 +481,8 @@ class CachedEditorAfterRestoreTest {
             SwingUtilities.updateComponentTreeUI(host);
             renderers.uninstall();
         });
+        assertTrue(ThemeManager.hasStaleUi(field, false),
+            "the restore refreshed the editor itself, so this test no longer exercises the watcher");
 
         // Every paint re-attaches the cached editor. When each attach
         // restarted the 150 ms countdown, a table painting every 50 ms kept

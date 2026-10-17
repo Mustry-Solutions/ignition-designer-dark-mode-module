@@ -136,6 +136,23 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   the Titlebar Font value had 105 colours after one switch, against 4 never
   switched; with the change it had 4 after each of three switches.
 
+- **Vision Property Editor rows that were off screen during the switch to
+  light are on the light theme straight away**
+  ([#188](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/188)).
+  The property editor builds the editor for a property type the first time
+  a row of that type is shown, and keeps it. One first shown in dark mode,
+  such as the slider's colour editors after scrolling its properties, was
+  built on the dark theme. If its row was scrolled out of view when you
+  switched back to light, the restore did not know about it, and it stayed
+  on the dark theme's UI until a paint showed it. The light watcher then
+  refreshed it, but only after that first paint, so that paint used the dark
+  theme's UI. The restore now also refreshes every such editor it saw
+  painted in dark mode. A windowed harness test builds an editor in dark
+  mode below the fold and fails without the change. Checked live in a Linux
+  8.3.6 Designer: dark, the slider selected, its properties scrolled down and
+  back up, light: on main 10 editor components were still on FlatLaf after
+  the switch; with the change none were, after each of two switches.
+
 - **Three intermittent look-and-feel harness failures on macOS CI**
   ([#179](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/179),
   [#160](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/160),
