@@ -103,7 +103,9 @@ public class CellRendererSanitizer {
 
     /**
      * Every renderer component a {@link SanitizingCellRendererPane} has
-     * stamped while dark, for {@link #uninstall()} (#188).
+     * stamped, for {@link #uninstall()} (#188). A pane that survives into
+     * light keeps recording; {@code uninstall()} refreshes only the stamps
+     * still on FlatLaf, so those light-built entries cost nothing.
      *
      * <p>{@link #refreshedRenderers} holds only what this class had to
      * refresh, which is a component built under the light theme. One built
