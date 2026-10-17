@@ -1833,6 +1833,14 @@ public class ThemeManager {
                 // the canvas may be touched by hand.
                 continue;
             }
+            if (ClassNames.extendsNamed(child.getClass(), SFC_CHART)) {
+                // An SFC chart is drawn by the same panel a client monitors
+                // it with, on its Base000 white, and its steps and links are
+                // JDK Color.WHITE and Color.BLACK, which nothing may restyle.
+                // Darkened, the panel left black links on #3A3D3F; left as it
+                // is, the chart reads exactly as in a client.
+                continue;
+            }
             if (child instanceof javax.swing.JComponent) {
                 javax.swing.JComponent component = (javax.swing.JComponent) child;
                 java.awt.Color background = component.isBackgroundSet()
@@ -1970,6 +1978,13 @@ public class ThemeManager {
                 // behind the owner's listeners again (#140). This walk runs
                 // after both, and no dark pass will come to fix the order.
                 CellRendererSanitizer.moveOwnedMouseListenersLast((javax.swing.JTable) child);
+                // The table counterpart of the tree sync above: a Tag Browser
+                // rebuilt under dark has a value renderer holding dark colours.
+                javax.swing.table.TableColumnModel columns =
+                    ((javax.swing.JTable) child).getColumnModel();
+                for (int i = 0; i < columns.getColumnCount(); i++) {
+                    CellRendererSanitizer.syncCachedTreeColors(columns.getColumn(i).getCellRenderer());
+                }
             }
         }
         return refreshed;
@@ -2374,6 +2389,13 @@ public class ThemeManager {
     // resolves against the Ignition the harness runs.
     static final String DESIGNABLE_WORKSPACE =
         "com.inductiveautomation.ignition.designer.designable.AbstractDesignableWorkspace";
+
+    /**
+     * The SFC chart, in the chart editor and in a client alike. In the SFC
+     * module's client jar, so not on the harness classpath: named here, not
+     * pinned by {@code ReflectiveSurfaceTest}.
+     */
+    static final String SFC_CHART = "com.inductiveautomation.sfc.client.SfcDisplayPanel";
 
     /**
      * Vision design canvases render user content; never restyle inside them.

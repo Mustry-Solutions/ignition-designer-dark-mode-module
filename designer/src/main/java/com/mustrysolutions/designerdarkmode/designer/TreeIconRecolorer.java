@@ -115,10 +115,13 @@ public class TreeIconRecolorer {
             }
             // JIDE's CheckBoxTree hands out a CheckBoxTreeCellRenderer that
             // calls back into the tree's configured renderer — wrapping it
-            // recurses infinitely (StackOverflow). Leave those trees to the
-            // renderer-pane sanitizer.
+            // recurses infinitely (StackOverflow). Recolour its cells at paint
+            // time instead, which never touches the renderer: skipped
+            // outright, the Export and Import dialogs drew the project's
+            // resource icons in their stock dark grey on the dark tree.
             if (current.getClass().getName().contains("CheckBoxTreeCellRenderer")
                     || tree.getClass().getName().contains("CheckBoxTree")) {
+                recolorThroughPane(tree, current);
                 continue;
             }
             // A tree that publishes its renderer through a TYPED accessor casts
@@ -792,7 +795,8 @@ public class TreeIconRecolorer {
     /**
      * Recolour an owned tree's cells at paint time, through its UI's
      * {@code CellRendererPane}, instead of wrapping a renderer its owner casts
-     * (#136). Every row {@code BasicTreeUI} paints goes through that pane with
+     * (#136) or one a wrapper would recurse into (JIDE's {@code CheckBoxTree}).
+     * Every row {@code BasicTreeUI} paints goes through that pane with
      * the configured renderer component, so the pane does what
      * {@link RecoloringRenderer} does after its delegate: tint the icons and
      * lift a white background. The renderer's cached colours are pushed on
@@ -826,7 +830,7 @@ public class TreeIconRecolorer {
             tree.add(replacement);
             tree.repaint();
             DebugLog.detail("TreeIconRecolorer: recolouring " + tree.getClass().getName()
-                + " at paint time; its owner may cast " + renderer.getClass().getName() + ".");
+                + " at paint time instead of wrapping " + renderer.getClass().getName() + ".");
         } catch (Throwable t) {
             paneUnavailable = true;
             DebugLog.log("TreeIconRecolorer: tree renderer pane unavailable; owned trees keep "
