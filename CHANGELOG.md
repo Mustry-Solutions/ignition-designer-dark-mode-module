@@ -77,6 +77,33 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   after. The 14th is the Vision property table, where JIDE's own expand
   listener runs after the UI handler, as it has in dark since #130.
 
+- **The table click-order fix moves only what it has to**
+  ([#141](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/141),
+  [#186](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/186)).
+  The #130 fix moved a table owner's listeners behind every other listener
+  whenever one of them sat ahead of anything else. That was broader than
+  #130 needs in two ways. A helper listener added after the owner's was a
+  reason to move the owner's behind it, reversing an order the application
+  had set up (#141). And a listener the table's own class declares counted
+  as the owner's, so on the Vision property table JIDE's expand listener
+  was moved behind the UI handler in dark and stayed there after the light
+  restore (#186). Now only listeners declared by a component the table sits
+  in are moved, only when they are ahead of the table UI's own handler, and
+  only to directly behind it. Every other listener keeps its place, and the
+  Vision property table keeps its stock order in dark and after the
+  restore. JIDE tables install a handler declared next to their UI class,
+  not inside it, so a listener from the UI's own package also counts as the
+  handler. Without that, the OPEN buttons from #130 broke again: under dark
+  that dialog's table has a JIDE UI. Neither case was seen to break a click.
+  On the property table only the order changed, and a macOS check showed
+  each expand click toggling a group exactly once. New harness tests cover
+  the helper, a replaced UI and the JIDE `TreeTable`. Each of them, or the
+  #130 tests, fails when any part of the rule is undone. Checked live in a
+  Linux 8.3.6 Designer: all 14 tables kept their stock listener order in
+  dark and after the light restore, where the #140 check found 13 of 14.
+  Each click on a property group's arrow toggled it once, and one click on
+  OPEN in File → Open… opened the project under dark.
+
 - **Linux: switching with a Vision window open no longer breaks the main
   frame's root pane.** Every switch logged `updateUI failed for
   javax.swing.JRootPane`, the root pane stayed half on FlatLaf's UI for the
