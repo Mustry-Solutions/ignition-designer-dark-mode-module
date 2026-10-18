@@ -75,6 +75,10 @@ class ReflectiveSurfaceTest {
         named.put("SerializerCleanCopies", SerializerCleanCopies.SERIALIZER_CLASS);
         named.put("SyntheticaPropertyStore", SyntheticaPropertyStore.STYLE_FACTORY_CLASS);
         named.put("JideButtonMargins", JideButtonMargins.JIDE_BUTTON_CLASS);
+        named.put("CellRendererSanitizer.tagValueRenderer", CellRendererSanitizer.TAG_VALUE_RENDERER);
+        // ThemeManager.SFC_CHART is NOT listed: the SFC module's jars are not
+        // on this classpath, and SfcChartWhiteSwapTest's stand-in would make
+        // the check pass whatever the name.
 
         List<String> missing = new ArrayList<>();
         named.forEach((owner, className) -> {
@@ -229,7 +233,7 @@ class ReflectiveSurfaceTest {
         // --- ScriptEditorTheme ---------------------------------------------
         methods(missing, ScriptEditorTheme.NAMED_THEME, "getTheme");
 
-        // --- BlockWorkspaceTheme (alarm pipelines, SFC) ---------------------
+        // --- BlockWorkspaceTheme (alarm pipelines) --------------------------
         for (String property : BlockWorkspaceTheme.FILLS) {
             methods(missing, BlockWorkspaceTheme.BASIC_BLOCK_UI, "get" + property);
             method(missing, BlockWorkspaceTheme.BASIC_BLOCK_UI, "set" + property, Color.class);
@@ -243,6 +247,9 @@ class ReflectiveSurfaceTest {
         // (#79 follow-up: glyphs tinted with a restyled token are left alone)
         fields(missing, "com.inductiveautomation.ignition.client.icons.SvgIconUtil$AbstractSvgIcon",
             TreeIconRecolorer.SWAP_COLOR_FIELD);
+
+        // --- CellRendererSanitizer: the Tag Browser value renderer's colours --
+        methods(missing, CellRendererSanitizer.TAG_VALUE_RENDERER, "getColors");
 
         // --- CellRendererSanitizer + IaColorTokens reach into the JDK -------
         // These break on a JDK upgrade rather than an Ignition one, and the

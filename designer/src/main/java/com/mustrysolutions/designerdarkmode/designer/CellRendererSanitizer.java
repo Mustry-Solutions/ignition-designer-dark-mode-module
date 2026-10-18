@@ -123,6 +123,14 @@ public class CellRendererSanitizer {
     private final Map<javax.swing.JComponent, Boolean> stampedRenderers = new WeakHashMap<>();
 
     /**
+     * Wrapped table renderers {@link #syncCachedTreeColors} has pushed dark
+     * colours into, for {@link #uninstall()} to push the light ones back.
+     * Weak, as above.
+     */
+    private final java.util.Set<TableCellRenderer> syncedTableRenderers =
+        java.util.Collections.newSetFromMap(new WeakHashMap<>());
+
+    /**
      * Record the colours of every renderer component in the UI, before the
      * switch to dark can wipe them.
      *
@@ -1105,6 +1113,9 @@ public class CellRendererSanitizer {
             }
         }
         refreshedRenderers.clear();
+        // The light theme is installed by now, so this re-reads its colours.
+        syncedTableRenderers.forEach(CellRendererSanitizer::syncCachedTreeColors);
+        syncedTableRenderers.clear();
         // Undo the color mutations on long-lived renderer instances so light
         // mode gets their constructor-era colors back.
         mutatedBackgrounds.forEach(Component::setBackground);
@@ -1246,6 +1257,80 @@ public class CellRendererSanitizer {
         return String.format("#%06X", color.getRGB() & 0xFFFFFF);
     }
 
+    /** The Tag Browser's value column renderer, in both its tabs. */
+    static final String TAG_VALUE_RENDERER =
+        "com.inductiveautomation.ignition.designer.tags.tree.ValueRenderer";
+
+    /**
+     * Push the current {@code Tree.*} colours into a renderer that copied them
+     * at construction, the table counterpart of
+     * {@link TreeIconRecolorer#syncRendererColors}. The Tag Browser's
+     * {@code ValueRenderer} reads four of them into a private map in its
+     * constructor and paints every Value and Config cell from it, so one built
+     * light gave a selected row the stock #47A9E6 under dark, beside a dark
+     * Tag cell, and one built dark would do the reverse after the restore.
+     * Called under dark for every cell the wrapper paints, and from the light
+     * side once the stock look and feel is back. Package-private for the
+     * light restore's leftover pass.
+     *
+     * @return whether {@code renderer} is one of those renderers
+     */
+    @SuppressWarnings("unchecked")
+    static boolean syncCachedTreeColors(Object renderer) {
+        if (renderer == null) {
+            return false;
+        }
+        java.lang.reflect.Method getColors = COLORS_GETTER.get(renderer.getClass());
+        if (getColors == null) {
+            return false;
+        }
+        try {
+            java.util.Map<String, Color> colors = (java.util.Map<String, Color>) getColors.invoke(renderer);
+            putIfPresent(colors, "default", "Tree.textForeground");
+            putIfPresent(colors, "selected", "Tree.selectionForeground");
+            putIfPresent(colors, "background", "Tree.textBackground");
+            putIfPresent(colors, "background-selected", "Tree.selectionBackground");
+        } catch (Throwable t) {
+            if (unsyncableRenderers.add(renderer.getClass().getName())) {
+                DebugLog.log("Could not re-sync the cached colours of "
+                    + renderer.getClass().getName() + "; its cells keep the theme they were built in.", t);
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Per class, {@code getColors} when the class is a {@link #TAG_VALUE_RENDERER},
+     * else null: the check runs for every table cell painted under dark, so
+     * the class walk and the method lookup are done once per class.
+     */
+    private static final ClassValue<java.lang.reflect.Method> COLORS_GETTER = new ClassValue<>() {
+        @Override
+        protected java.lang.reflect.Method computeValue(Class<?> type) {
+            if (!ClassNames.extendsNamed(type, TAG_VALUE_RENDERER)) {
+                return null;
+            }
+            try {
+                return type.getMethod("getColors");
+            } catch (Throwable t) {
+                DebugLog.log("Could not find getColors on " + type.getName()
+                    + "; its cells keep the theme they were built in.", t);
+                return null;
+            }
+        }
+    };
+
+    private static void putIfPresent(java.util.Map<String, Color> colors, String key, String uiKey) {
+        Color color = UIManager.getColor(uiKey);
+        if (color != null && colors.containsKey(key)) {
+            colors.put(key, color);
+        }
+    }
+
+    /** Renderer classes whose colours could not be re-synced, logged once each. */
+    private static final java.util.Set<String> unsyncableRenderers =
+        java.util.concurrent.ConcurrentHashMap.newKeySet();
+
     private void sanitize(Component component) {
         // The sanitizing renderer pane survives until updateComponentTreeUI
         // rebuilds the UI on the light restore — never darken outside dark mode.
@@ -1350,6 +1435,9 @@ public class CellRendererSanitizer {
         @Override
         public Component getTableCellRendererComponent(JTable table, Object value,
                 boolean isSelected, boolean hasFocus, int row, int column) {
+            if (syncCachedTreeColors(delegate)) {
+                syncedTableRenderers.add(delegate);
+            }
             Component component = delegate.getTableCellRendererComponent(
                 table, value, isSelected, hasFocus, row, column);
             sanitize(component);

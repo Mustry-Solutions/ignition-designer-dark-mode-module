@@ -225,6 +225,15 @@ colour (`swapWhiteBorder`, including a `JScrollPane`'s separate
 `MatteBorder` drew a pale band that survived two dozen inspections because
 nothing examined borders.
 
+The background swap skips two kinds of subtree that render what a client
+shows: Vision windows (see [Vision](#vision)) and SFC charts. On 8.3 the chart
+editor draws a chart with the SFC client's own
+`com.inductiveautomation.sfc.client.SfcDisplayPanel` on `Base000`, and its
+steps and links are filled with JDK `Color.WHITE` and drawn in `Color.BLACK`,
+which nothing may restyle; darkening the panel left black links on #3A3D3F
+(#41). The chart stays white, as in a client. SFC charts are not
+`BasicBlockUI` workspaces on 8.3, so `BlockWorkspaceTheme` does not reach them.
+
 ### TreeIconRecolorer
 Wraps every `JTree`'s cell renderer so that, per render: SVG/vector/bitmap icons
 get a cached **smart-invert** dark variant (neutral strokes lighten and take the
@@ -356,7 +365,7 @@ Vision windows render *user* charts, and repainting those would misrepresent
 what an operator sees.
 
 ### BlockWorkspaceTheme
-Alarm pipeline and SFC blocks. A block *is* a component — `BasicBlockUI extends
+Alarm pipeline blocks. A block *is* a component — `BasicBlockUI extends
 JPanel` — but it does not paint from its own background: `paintComponent` fills
 a shape with one of two `Color` fields and strokes it with one of three others,
 all assigned literals in the constructor. No look-and-feel swap reaches a
@@ -875,7 +884,10 @@ with Ignition Maker Edition"). It registers nothing.
   short-circuits, so it's cheap) behind a reentrancy flag.
 - **Never wrap a JIDE `CheckBoxTree` renderer.** Its `CheckBoxTreeCellRenderer`
   calls back into the tree's configured renderer, so wrapping it recurses
-  infinitely (`StackOverflowError`). `TreeIconRecolorer` skips them.
+  infinitely (`StackOverflowError`). `TreeIconRecolorer` recolours them at
+  paint time through the renderer pane instead (`recolorThroughPane`): the
+  Export/Import resource trees and the security-level tree behind
+  `PermissionTreePanel` (`SecurityLevelTree` extends `CheckBoxTree`).
 - **Restores must iterate tracked sets, not the hierarchy** (see above).
 - **macOS native title bar** stays dark after a light switch unless the root
   pane's `apple.awt.windowAppearance` client property is explicitly cleared.

@@ -243,7 +243,7 @@ designer/                   Everything else: Designer-side code
     CodeEditorTheme            Dark-themes the SQL/expression editors (JIDE CodeEditor)
     ConsoleTextTheme           Recolours the console output styles
     DiagnosticsChartTheme      Dark-adapts the Diagnostics chart axes and background
-    BlockWorkspaceTheme        Dark-adapts alarm pipeline and SFC blocks
+    BlockWorkspaceTheme        Dark-adapts alarm pipeline blocks
     DeveloperDefaults          Keeps Ignition's own UIManager defaults across the swap
     SerializerCleanCopies      Vision saves: rebuilds the serializer's clean-copy cache
     TokenColorDelegate         Vision saves: writes restyled tokens as their stock colour

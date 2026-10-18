@@ -85,3 +85,9 @@ module starting, not just that the gateway answers and holds the file.
 Install the Designer Launcher on your machine, add the
 gateway at `http://localhost:8088`, launch a Designer, and use
 **Tools → Dark Mode**.
+
+On Linux as root, in a container for instance, Perspective's embedded
+browser cannot start its sandbox and the Perspective workspace never loads.
+Add `-Dignition.jxBrowser.sandboxMode=DISABLE` to the Designer Launcher's
+per-gateway *Additional JVM Arguments* (the Designer's JVM, not the
+gateway server's).
