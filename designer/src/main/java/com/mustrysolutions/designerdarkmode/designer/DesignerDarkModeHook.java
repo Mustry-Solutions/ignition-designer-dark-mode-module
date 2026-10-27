@@ -1,6 +1,8 @@
 package com.mustrysolutions.designerdarkmode.designer;
 
 import java.awt.event.ItemEvent;
+import java.util.EnumMap;
+import java.util.Map;
 
 import com.inductiveautomation.ignition.client.util.action.BaseAction;
 import com.inductiveautomation.ignition.client.util.action.StateChangeAction;
@@ -26,17 +28,18 @@ public class DesignerDarkModeHook extends AbstractDesignerModuleHook {
     private DesignerContext context;
 
     /**
-     * The Tools menu action, kept so the checkmark can be corrected once a
-     * switch has actually happened (#15). Built once, with the menu.
+     * The Tools → Dark Mode actions, one per mode, kept so the selection can
+     * be corrected once a switch has actually happened (#15). Built once,
+     * with the menu.
      */
-    private StateChangeAction darkModeAction;
+    private final Map<ThemeMode, StateChangeAction> modeActions = new EnumMap<>(ThemeMode.class);
 
     /**
-     * True while we are correcting the checkmark ourselves.
+     * True while we are correcting the selection ourselves.
      * {@code StateChangeAction} adds itself as its own {@code ItemListener} in
      * its constructor, so {@code setSelected(...)} calls
      * {@link StateChangeAction#itemStateChanged} — without this guard a
-     * correction would read as a user click and toggle the theme straight back.
+     * correction would read as a user click and switch the theme straight back.
      */
     private boolean syncing;
 
@@ -55,7 +58,10 @@ public class DesignerDarkModeHook extends AbstractDesignerModuleHook {
             @Override
             public void switchFinished(boolean darkActive) {
                 setMenuEnabled(true);
-                syncMenu(darkActive);
+                // The mode, not darkActive: Match System stays selected
+                // whichever theme it resolved to. A switch that failed has
+                // already moved the mode to the theme that is installed.
+                syncMenu(themes.getThemeMode());
             }
         });
         themes.startup(context);
@@ -102,35 +108,34 @@ public class DesignerDarkModeHook extends AbstractDesignerModuleHook {
     }
 
     private MenuBarMerge buildModuleMenu() {
-        StateChangeAction darkMode =
-                new StateChangeAction("designerdarkmode.Action.DarkMode", new MoonIcon(16)) {
-            @Override
-            public void itemStateChanged(ItemEvent e) {
-                if (syncing) {
-                    return;
-                }
-                themes.setDark(e.getStateChange() == ItemEvent.SELECTED);
-            }
-        };
+        for (ThemeMode mode : ThemeMode.values()) {
+            modeActions.put(mode, modeAction(mode));
+        }
         // Seeded under the guard: StateChangeAction fires itemStateChanged
-        // from setSelected. Unguarded, ticking the fresh checkbox for a "dark"
-        // preference would read as a click and run a full theme switch before
-        // the menu is even on screen. (Until the merge was cached, this ran on
+        // from setSelected. Unguarded, selecting the saved mode in the fresh
+        // menu would read as a click and run a full theme switch before the
+        // menu is even on screen. (Until the merge was cached, this ran on
         // every getModuleMenu call, including the one LoadedModule.shutdown
         // makes on the way out; until 0.4.0 that also raised the Vision
         // refusal dialog and lost the preference.)
         syncing = true;
         try {
-            darkMode.setSelected(themes.isDarkModeEnabled());
+            modeActions.get(themes.getThemeMode()).setSelected(true);
         } finally {
             syncing = false;
         }
-        darkModeAction = darkMode;
 
         MenuBarMerge merge = new MenuBarMerge("com.mustrysolutions.designerdarkmode");
         JMenuMerge tools =
             new JMenuMerge(WellKnownMenuConstants.TOOLS_MENU_NAME, "designerdarkmode.Menu.Tools");
-        tools.addCheckBox(darkMode);
+        // A submenu of three radio items: Light, Dark, and Match System.
+        // Light comes first and is the default — a Designer that has never
+        // been told otherwise stays stock.
+        JMenuMerge darkMode = new JMenuMerge("designerdarkmode.DarkMode",
+            "designerdarkmode.Menu.DarkMode", new MoonIcon(16));
+        darkMode.addRadioGroup(modeActions.get(ThemeMode.LIGHT),
+            modeActions.get(ThemeMode.DARK), modeActions.get(ThemeMode.SYSTEM));
+        tools.add(darkMode);
         tools.add(BaseAction.create("designerdarkmode.Action.About", null,
             () -> AboutDialog.show(context != null ? context.getFrame() : null)));
         // The Designer registers its built-in Tools menu under TOOLS_MENU_LOCATION,
@@ -141,29 +146,57 @@ public class DesignerDarkModeHook extends AbstractDesignerModuleHook {
     }
 
     /**
-     * Point the checkmark at the theme that is actually in effect.
+     * One radio item's action. Only the item being selected acts: the
+     * group deselects the previous one, and that event is not a choice.
+     */
+    private StateChangeAction modeAction(ThemeMode mode) {
+        String key = "designerdarkmode.Action.DarkMode."
+            + (mode == ThemeMode.SYSTEM ? "System" : mode == ThemeMode.DARK ? "Dark" : "Light");
+        return new StateChangeAction(key, null) {
+            @Override
+            public void itemStateChanged(ItemEvent e) {
+                if (syncing || e.getStateChange() != ItemEvent.SELECTED) {
+                    return;
+                }
+                themes.setThemeMode(mode);
+            }
+        };
+    }
+
+    /**
+     * Point the selection at the mode that is actually in effect.
      *
      * <p>The item used to track the <em>request</em>: it was ticked the moment
      * you clicked, whether or not the switch then worked, and a switch that
      * failed left it permanently disagreeing with the Designer in front of you.
+     *
+     * <p>The target is selected first. Once the menu is built, its radio
+     * group deselects the others and their actions follow; a group never lets
+     * its selected item be deselected directly, so clearing first would leave
+     * the action and its item disagreeing. Before the menu is built there is
+     * no group, so the others are cleared here.
      */
-    private void syncMenu(boolean darkActive) {
-        StateChangeAction action = darkModeAction;
-        if (action == null || action.isSelected() == darkActive) {
+    private void syncMenu(ThemeMode mode) {
+        StateChangeAction target = modeActions.get(mode);
+        if (target == null) {
             return;
         }
         syncing = true;
         try {
-            action.setSelected(darkActive);
+            target.setSelected(true);
+            for (StateChangeAction action : modeActions.values()) {
+                if (action != target && action.isSelected()) {
+                    action.setSelected(false);
+                }
+            }
         } finally {
             syncing = false;
         }
     }
 
-    /** The menu item is bound to the action, so it follows the action's enabled state. */
+    /** Each menu item is bound to its action, so it follows the action's enabled state. */
     private void setMenuEnabled(boolean enabled) {
-        StateChangeAction action = darkModeAction;
-        if (action != null) {
+        for (StateChangeAction action : modeActions.values()) {
             action.setEnabled(enabled);
         }
     }

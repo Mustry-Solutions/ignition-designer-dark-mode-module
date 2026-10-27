@@ -469,7 +469,8 @@ suspect a renamed class or field before suspecting the theming logic — see
 ## Recovering from a bricked launch
 
 If a bad theme state ever prevents the Designer from launching, clear the saved
-preference so it starts light: remove the `java.util.prefs` node
+preference so it starts light (this clears Match System too): remove the
+`java.util.prefs` node
 `com/mustrysolutions/designerdarkmode/designer` (a tiny one-off program using
 `Preferences.userRoot().node(...).removeNode()`). `ThemeManager` also
 auto-reverts the preference when an apply fails in the essential phase, so this

@@ -48,6 +48,9 @@ class ThemePreferencePersistenceTest {
      */
     private static final String KEY = "darkMode";
 
+    /** Match System's key, pinned for the same reason. */
+    private static final String FOLLOW_SYSTEM = "followSystem";
+
     private InMemoryPreferences prefs;
     private ThemeManager manager;
     private RecordingThemeStateListener listener;
@@ -196,6 +199,121 @@ class ThemePreferencePersistenceTest {
             "the saved choice is applied at launch, or dark mode lasts one session");
         assertTrue(manager.isDarkModeEnabled(),
             "the switch worked, so the preference it is squared with must survive it");
+        assertEquals(List.of(true), listener.darkActive);
+    }
+
+    // ---- Match System ----------------------------------------------------
+
+    /** A manager whose system reads as {@code appearance}, sharing this test's node. */
+    private ThemeManager systemManager(SystemTheme.Appearance appearance) {
+        ThemeManager system = new ThemeManager(prefs, () -> appearance);
+        system.setThemeStateListener(listener);
+        system.captureStockLaf();
+        manager = system;
+        return system;
+    }
+
+    @Test
+    @DisplayName("a Designer that has never been told otherwise is Light")
+    void lightIsTheDefault() {
+        assertEquals(ThemeMode.LIGHT, manager.getThemeMode());
+    }
+
+    @Test
+    @DisplayName("Match System is saved under its own key, flushed, and read back")
+    void matchSystemRoundTrips() {
+        manager.setThemeMode(ThemeMode.SYSTEM);
+
+        assertEquals(ThemeMode.SYSTEM, manager.getThemeMode());
+        assertTrue(prefs.getBoolean(FOLLOW_SYSTEM, false));
+        assertEquals(1, prefs.flushes, "as durable as Light and Dark");
+    }
+
+    @Test
+    @DisplayName("choosing Light or Dark leaves Match System")
+    void anExplicitChoiceLeavesMatchSystem() {
+        manager.setThemeMode(ThemeMode.SYSTEM);
+
+        manager.setDark(true);
+
+        assertEquals(ThemeMode.DARK, manager.getThemeMode());
+        assertFalse(prefs.getBoolean(FOLLOW_SYSTEM, true));
+
+        manager.setThemeMode(ThemeMode.SYSTEM);
+        manager.setThemeMode(ThemeMode.LIGHT);
+
+        assertEquals(ThemeMode.LIGHT, manager.getThemeMode());
+    }
+
+    @Test
+    @DisplayName("the startup apply under Match System applies dark when the system is dark")
+    void startupFollowsADarkSystem() {
+        prefs.putBoolean(FOLLOW_SYSTEM, true);
+        ThemeManager system = systemManager(SystemTheme.Appearance.DARK);
+
+        system.applyStartupPreference();
+
+        assertTrue(UIManager.getLookAndFeel() instanceof FlatDarkLaf);
+        assertEquals(ThemeMode.SYSTEM, system.getThemeMode(),
+            "a switch that worked must not take the mode out of Match System");
+        assertTrue(prefs.getBoolean(KEY, false),
+            "the dark value follows the installed theme, for a module version "
+                + "that predates Match System");
+        assertEquals(List.of(true), listener.darkActive);
+    }
+
+    /**
+     * Last session the system was dark, so dark was saved. Today it is
+     * light: the Designer stays stock, and the saved dark value follows, so a
+     * downgrade to a module without Match System does not come up dark.
+     */
+    @Test
+    @DisplayName("the startup apply under Match System leaves the Designer stock when the system is light")
+    void startupFollowsALightSystem() {
+        prefs.putBoolean(FOLLOW_SYSTEM, true);
+        prefs.putBoolean(KEY, true);
+        ThemeManager system = systemManager(SystemTheme.Appearance.LIGHT);
+
+        system.applyStartupPreference();
+
+        assertFalse(UIManager.getLookAndFeel() instanceof FlatDarkLaf);
+        assertEquals(ThemeMode.SYSTEM, system.getThemeMode());
+        assertFalse(prefs.getBoolean(KEY, true));
+    }
+
+    @Test
+    @DisplayName("a system that cannot be read is treated as light")
+    void unknownIsLight() {
+        prefs.putBoolean(FOLLOW_SYSTEM, true);
+        ThemeManager system = systemManager(SystemTheme.Appearance.UNKNOWN);
+
+        system.applyStartupPreference();
+
+        assertFalse(UIManager.getLookAndFeel() instanceof FlatDarkLaf,
+            "the stock Designer is the safe answer to a question nobody could answer");
+        assertEquals(ThemeMode.SYSTEM, system.getThemeMode(),
+            "the choice stays: tomorrow the system may be readable");
+    }
+
+    /**
+     * The same rule as an explicit choice: the saved value follows the theme
+     * installed. A Match System switch that did not reach the system's theme
+     * would otherwise be retried at every launch — for a dark system, the
+     * same broken dark switch the rule exists to stop.
+     */
+    @Test
+    @DisplayName("a Match System switch that did not complete leaves Match System for the installed theme")
+    void aFailedMatchSystemSwitchSettlesOnWhatIsInstalled() throws Exception {
+        prefs.putBoolean(FOLLOW_SYSTEM, true);
+        ThemeManager system = systemManager(SystemTheme.Appearance.LIGHT);
+        system.applyStartupPreference();
+        // The light switch the system asked for, failed: dark is still installed.
+        UIManager.setLookAndFeel(new FlatDarkLaf());
+
+        system.finishSwitch();
+
+        assertEquals(ThemeMode.DARK, system.getThemeMode(),
+            "the Tools menu must show the theme the Designer is in");
         assertEquals(List.of(true), listener.darkActive);
     }
 

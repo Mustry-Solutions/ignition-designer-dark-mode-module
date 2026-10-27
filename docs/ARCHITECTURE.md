@@ -172,26 +172,37 @@ The Designer-scope entry point. On startup it hands the Designer context to
 `ThemeManager`, which applies the saved theme once the UI is ready. It adds
 two items to the Designer's own **Tools** menu (merged under
 `TOOLS_MENU_LOCATION`, since any other group creates a second top-level
-Tools menu): **Dark Mode**, a checkbox with [MoonIcon](#moonicon), and
-**About Designer Dark Mode…** ([AboutDialog](#aboutdialog)). The checkbox
-shows the theme actually in effect, not the one last clicked: it is disabled
-while a switch runs, and corrected afterwards if the switch failed (#15).
-Because `StateChangeAction.setSelected` fires the action's own listener,
-every correction runs under a `syncing` guard so it is not read as a click.
+Tools menu): **Dark Mode**, a submenu with [MoonIcon](#moonicon) holding one
+radio group of **Light**, **Dark** and **Match System** (one
+`StateChangeAction` per [ThemeMode](#systemtheme-and-thememode)), and
+**About Designer Dark Mode…** ([AboutDialog](#aboutdialog)). The selection
+shows the mode actually in effect, not the one last clicked: the items are
+disabled while a switch runs, and corrected afterwards if the switch failed
+(#15). Because `StateChangeAction.setSelected` fires the action's own
+listener, every correction runs under a `syncing` guard so it is not read as
+a click, and only a `SELECTED` event is a choice — the group's deselection
+of the previous item is not. A correction selects the target first: a
+`ButtonGroup` never lets its selected item be deselected directly, so clearing
+first would leave an action and its item disagreeing.
 `configureSerializer`, called on every save, registers
 [TokenColorDelegate](#tokencolordelegate) and
 [LookAndFeelBorders](#lookandfeelborders).
 
 ### ThemeManager
 The orchestrator. Owns the preference (`java.util.prefs`, node
-`com/mustrysolutions/designerdarkmode/designer`, key `darkMode`), the `uiReady` gate, the
+`com/mustrysolutions/designerdarkmode/designer`, keys `darkMode` and
+`followSystem`), the `uiReady` gate, the
 per-phase error isolation, the JIDE/Synthetica/FlatLaf plumbing, the
 `UIManager` key overrides (dock, collapsible-pane, and container keys), the
 component watcher, and the popup / stale-delegate handling.
 
 The preference node is `Preferences.userNodeForPackage(ThemeManager.class)`:
 it lives on the machine running the Designer, under the OS user's own
-preference store, and holds a single boolean. Nothing gateway-specific goes
+preference store, and holds two booleans: `followSystem` is true for Match
+System, and `darkMode` is the theme last installed, so the mode is Match
+System, else Dark or Light by `darkMode`. A module version that predates
+Match System reads only `darkMode`, and comes up in the theme the user last
+saw. Nothing gateway-specific goes
 into the path or the key, so the value is shared by every Designer that user
 launches against any gateway carrying the module; a gateway without the module
 never loads `ThemeManager` and simply ignores it. `finishSwitch()` writes the
@@ -783,8 +794,40 @@ link colour starts from the theme's `Component.linkColor` and is moved toward
 white or black until it reads at 4.5:1 against `Panel.background` — FlatLaf
 Dark's own link blue is 3.8:1. `AboutDialogTest` holds both themes to that.
 
+### SystemTheme and ThemeMode
+`ThemeMode` is the three choices. `SystemTheme` answers what Match System
+resolves to, because neither the JDK nor FlatLaf can: FlatLaf's native
+libraries do window decorations and file choosers, not appearance. Each
+platform is asked with one short command, the way its own tools ask —
+`reg.exe query` for `AppsUseLightTheme` on Windows (by full path under
+`%SystemRoot%`), `/usr/bin/defaults read -g AppleInterfaceStyle` on macOS, and
+on Linux the XDG desktop portal's `org.freedesktop.appearance color-scheme`
+through `gdbus`, then GNOME's `color-scheme` and `gtk-theme` through
+`gsettings`. Each command has `TIMEOUT_MS` (3 s), and anything unreadable is
+`UNKNOWN`, which `ThemeManager` treats as light.
+
+The read runs a process, so it never runs on the event dispatch thread:
+`ThemeManager.startup` starts it on a daemon thread when the mode is Match
+System, and it has long finished by the time the Designer is ready to be
+themed. If it has not, the startup apply waits for it without blocking.
+Choosing Match System from the menu reads the system the same way, then
+switches.
+
+It is read at those two moments only, never on a timer. A switch blocks the
+Designer for seconds and leaves the residue a relaunch clears, so following
+the system live — macOS Auto and Windows schedulers flip at sunset — would
+freeze the Designer mid-edit, unasked. `finishSwitch()` keeps the
+preference-follows-reality rule under Match System: it compares the theme
+installed with the one the switch was asked for, and a switch that did not
+get there drops the mode to Dark or Light, the theme installed. Otherwise a
+dark system would retry the same broken switch at every launch.
+
+`SystemThemeTest` checks the parsing against each tool's real output;
+`SystemThemeLiveTest`, in the harness, runs the real command on each CI
+platform.
+
 ### MoonIcon
-The Dark Mode menu item's crescent, drawn as a vector shape in
+The Dark Mode submenu's crescent, drawn as a vector shape in
 `MenuItem.foreground`, so it stays legible in both themes without a bitmap
 per theme.
 
@@ -966,8 +1009,8 @@ tiers when one stops resolving:
   half-dark Designer comes with an explanation rather than only a log line.
 
 Afterwards, either way, `finishSwitch()` squares the preference and the Tools
-menu checkmark with the look and feel that is *actually* installed. The
-checkmark used to track the request, so a switch that failed left it claiming a
+menu selection with the look and feel that is *actually* installed. The
+selection used to track the request, so a switch that failed left it claiming a
 theme the Designer was not in, and the preference retried it at every launch.
 
 That shapes how to debug a regression after an Ignition upgrade. A surface that

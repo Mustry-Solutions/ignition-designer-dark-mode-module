@@ -446,8 +446,12 @@ either theme — nothing else in this checklist would catch them.
 
 | Surface | Where | Result | Last checked | Notes |
 |---|---|---|---|---|
-| Dark Mode menu item, unchecked | Tools → Dark Mode, light theme | `pass` | `2026-08-31` | Moon icon and label legible |
-| Dark Mode menu item, checked | Tools → Dark Mode, dark theme | `pass` | `2026-08-31` | Checkmark visible against the dark popup |
+| Dark Mode menu item, unchecked | Tools → Dark Mode, light theme | `pass` | `2026-08-31` | Moon icon and label legible. Checked on the old checkbox; now a submenu |
+| Dark Mode menu item, checked | Tools → Dark Mode, dark theme | `pass` | `2026-08-31` | Checkmark visible against the dark popup. Checked on the old checkbox; now a submenu |
+| Dark Mode submenu, both themes | Tools → Dark Mode | — | — | Moon icon on the submenu; Light, Dark and Match System as radio items, the saved one selected and its dot legible in both themes. A new install shows Light selected |
+| Match System, system dark | Set the OS to dark, choose Match System, relaunch | — | — | Dark after the choice and again after the relaunch, Match System still selected. The debug log has `Match System: the system reads as DARK (…)`. Once per OS: Windows (app mode), macOS (Appearance; also Auto), Linux |
+| Match System, system light | Set the OS to light with Match System chosen, relaunch | — | — | Comes up stock light, Match System still selected. Changing the OS setting with the Designer open changes nothing until a relaunch or choosing Match System again |
+| Light or Dark after Match System | Choose Dark, then Light, with Match System selected before | — | — | Each switches as before, and Match System is no longer selected after a relaunch |
 | Tools items after a project switch | File → Open another project, then open Tools | `pass` | `2026-09-24` | Exactly one Dark Mode and one About Designer Dark Mode…, however many projects the session has opened. Before [#131](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/pull/131) each open added another pair. `ModuleMenuReinstallTest` pins it in the harness. The dev gateway has an empty `test2` project to switch to |
 | About dialog, light | Tools → About Designer Dark Mode…, light theme | `pass` | `2026-09-24` | Shows a real version, not `development build` or `${version}`; links legible. Dev build read `Version 0.0.1-SNAPSHOT`, as expected. Links measured from screenshot pixels: #1F5FBF on #FAFAFB, **5.84:1** |
 | About dialog, dark | Tools → About Designer Dark Mode…, dark theme | `pass` | `2026-09-24` | Dialog dark, text legible, links at least 4.5:1 against the background — `AboutDialogTest` pins that in the windowed harness; by eye, compute it from screenshot pixels rather than judging it. Measured: #77AEF8 on #3C3F41, **4.64:1** |

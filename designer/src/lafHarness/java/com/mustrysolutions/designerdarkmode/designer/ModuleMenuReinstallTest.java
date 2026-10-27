@@ -1,6 +1,7 @@
 package com.mustrysolutions.designerdarkmode.designer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.awt.Component;
 
@@ -8,6 +9,7 @@ import javax.swing.Action;
 import javax.swing.JMenu;
 import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
+import javax.swing.JRadioButtonMenuItem;
 import javax.swing.SwingUtilities;
 
 import com.inductiveautomation.ignition.client.util.action.BaseAction;
@@ -79,6 +81,47 @@ class ModuleMenuReinstallTest {
             DesignerDarkModeHook second = new DesignerDarkModeHook();
             second.getModuleMenu().install(menuBar);
             assertEquals(2, ourItems(), "the second project's Tools menu");
+        });
+    }
+
+    /**
+     * Tools → Dark Mode is a submenu of three radio items, exactly one of
+     * them selected. Which one depends on the preference of whoever runs the
+     * build, so only the count is asserted; nothing here clicks an item,
+     * which would write that preference.
+     */
+    @Test
+    @DisplayName("Dark Mode is a submenu with Light, Dark and Match System, one selected")
+    void darkModeIsASubmenuOfThreeModes() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            DesignerDarkModeHook hook = new DesignerDarkModeHook();
+            hook.getModuleMenu().install(menuBar);
+
+            JMenu darkMode = null;
+            for (Component component : toolsMenu().getMenuComponents()) {
+                if (component instanceof JMenu
+                        && ((JMenu) component).getText().contains("designerdarkmode.Menu.DarkMode")) {
+                    darkMode = (JMenu) component;
+                }
+            }
+            assertNotNull(darkMode, "Tools carries the Dark Mode submenu");
+            assertNotNull(darkMode.getIcon(), "with the moon icon the checkbox had");
+
+            int radios = 0;
+            int selected = 0;
+            for (Component component : darkMode.getMenuComponents()) {
+                if (component instanceof JRadioButtonMenuItem) {
+                    radios++;
+                    if (((JRadioButtonMenuItem) component).isSelected()) {
+                        selected++;
+                    }
+                }
+            }
+            assertEquals(3, radios, "Light, Dark and Match System");
+            assertEquals(1, selected, "the saved mode, and only it");
+
+            hook.getModuleMenu().uninstall(menuBar);
+            assertEquals(0, ourItems(), "the submenu goes with the module");
         });
     }
 
