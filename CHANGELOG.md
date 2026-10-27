@@ -12,7 +12,8 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ### Added
 
-- **Match System: follow the operating system's light or dark setting.**
+- **Match System: follow the operating system's light or dark setting**
+  ([#201](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/201)).
   Tools → Dark Mode is now a submenu with three choices: **Light** (the
   default, and what an existing light install keeps), **Dark** (what an
   existing dark install keeps), and **Match System**, which uses dark when the
