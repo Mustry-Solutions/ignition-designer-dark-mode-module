@@ -1,7 +1,9 @@
 package com.mustrysolutions.designerdarkmode.designer;
 
+import java.awt.event.ActionEvent;
 import java.awt.event.ItemEvent;
 import java.util.EnumMap;
+import java.util.Locale;
 import java.util.Map;
 
 import com.inductiveautomation.ignition.client.util.action.BaseAction;
@@ -148,10 +150,16 @@ public class DesignerDarkModeHook extends AbstractDesignerModuleHook {
     /**
      * One radio item's action. Only the item being selected acts: the
      * group deselects the previous one, and that event is not a choice.
+     *
+     * <p>Match System also acts when clicked while already selected: a
+     * selected radio item fires no item event, only the action, and that
+     * click is how the system is read again after it changed. The click that
+     * selects it fires both; the second finds the system already being read.
      */
     private StateChangeAction modeAction(ThemeMode mode) {
-        String key = "designerdarkmode.Action.DarkMode."
-            + (mode == ThemeMode.SYSTEM ? "System" : mode == ThemeMode.DARK ? "Dark" : "Light");
+        // LIGHT -> Light, as the bundle keys are spelled.
+        String key = "designerdarkmode.Action.DarkMode." + mode.name().charAt(0)
+            + mode.name().substring(1).toLowerCase(Locale.ROOT);
         return new StateChangeAction(key, null) {
             @Override
             public void itemStateChanged(ItemEvent e) {
@@ -159,6 +167,14 @@ public class DesignerDarkModeHook extends AbstractDesignerModuleHook {
                     return;
                 }
                 themes.setThemeMode(mode);
+            }
+
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                if (!syncing && mode == ThemeMode.SYSTEM
+                        && themes.getThemeMode() == ThemeMode.SYSTEM) {
+                    themes.setThemeMode(mode);
+                }
             }
         };
     }

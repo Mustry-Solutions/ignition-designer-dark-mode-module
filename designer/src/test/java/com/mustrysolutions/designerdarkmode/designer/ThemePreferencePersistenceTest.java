@@ -4,9 +4,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 
 import javax.swing.LookAndFeel;
+import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 import javax.swing.plaf.metal.MetalLookAndFeel;
 
@@ -315,6 +319,102 @@ class ThemePreferencePersistenceTest {
         assertEquals(ThemeMode.DARK, system.getThemeMode(),
             "the Tools menu must show the theme the Designer is in");
         assertEquals(List.of(true), listener.darkActive);
+    }
+
+    /** A manager whose reads wait in {@code held} until the test runs them. */
+    private ThemeManager heldManager(Supplier<SystemTheme.Appearance> appearance, List<Runnable> held) {
+        ThemeManager system = new ThemeManager(prefs, appearance, held::add);
+        system.setThemeStateListener(listener);
+        system.captureStockLaf();
+        manager = system;
+        return system;
+    }
+
+    /** Run what is queued on the event dispatch thread, and what that queues in turn. */
+    private static void flushEdt() throws Exception {
+        for (int i = 0; i < 3; i++) {
+            SwingUtilities.invokeAndWait(() -> { });
+        }
+    }
+
+    /**
+     * Match System chosen before the Designer was ready, and the system
+     * slow to answer: the read's completion and the startup apply both
+     * waited on it, and both switched. Now one takes it, and the switch is
+     * announced like a click's, since the Designer is in use by then.
+     */
+    @Test
+    @DisplayName("a read that answers after the Designer is ready switches once, announced")
+    void aLateReadSwitchesOnce() throws Exception {
+        List<Runnable> held = new ArrayList<>();
+        ThemeManager system = heldManager(() -> SystemTheme.Appearance.DARK, held);
+        system.setThemeMode(ThemeMode.SYSTEM);
+        system.applyStartupPreference();
+        assertTrue(listener.darkActive.isEmpty(), "nothing to apply before the system answers");
+
+        held.forEach(Runnable::run);
+        flushEdt();
+
+        assertTrue(UIManager.getLookAndFeel() instanceof FlatDarkLaf);
+        assertEquals(List.of(true), listener.darkActive, "one switch, not one per waiter");
+        assertEquals(1, listener.started, "the menu is disabled and the status says so");
+    }
+
+    @Test
+    @DisplayName("a read that a later choice replaced does nothing")
+    void aSupersededReadDoesNothing() throws Exception {
+        List<Runnable> held = new ArrayList<>();
+        ThemeManager system = heldManager(() -> SystemTheme.Appearance.DARK, held);
+        system.applyStartupPreference();
+
+        system.setThemeMode(ThemeMode.SYSTEM);
+        system.setThemeMode(ThemeMode.LIGHT);
+        system.setThemeMode(ThemeMode.SYSTEM);
+        flushEdt();
+        held.forEach(Runnable::run);
+        flushEdt();
+
+        assertEquals(List.of(false, true), listener.darkActive,
+            "the Light switch, then one dark switch for the read still wanted");
+    }
+
+    /**
+     * The click that selects Match System fires the item event and the
+     * action; both reach setThemeMode. One read, not two.
+     */
+    @Test
+    @DisplayName("choosing Match System again while the system is being read starts no second read")
+    void oneReadPerChoice() {
+        List<Runnable> held = new ArrayList<>();
+        ThemeManager system = heldManager(() -> SystemTheme.Appearance.DARK, held);
+
+        system.setThemeMode(ThemeMode.SYSTEM);
+        system.setThemeMode(ThemeMode.SYSTEM);
+
+        assertEquals(1, held.size());
+    }
+
+    /** Clicking the selected Match System is how a change of the system is picked up. */
+    @Test
+    @DisplayName("choosing Match System again reads the system again")
+    void choosingMatchSystemAgainRereads() throws Exception {
+        AtomicReference<SystemTheme.Appearance> os =
+            new AtomicReference<>(SystemTheme.Appearance.LIGHT);
+        prefs.putBoolean(FOLLOW_SYSTEM, true);
+        List<Runnable> held = new ArrayList<>();
+        ThemeManager system = heldManager(os::get, held);
+        system.applyStartupPreference();
+        held.forEach(Runnable::run);
+        held.clear();
+        flushEdt();
+
+        os.set(SystemTheme.Appearance.DARK);
+        system.setThemeMode(ThemeMode.SYSTEM);
+        held.forEach(Runnable::run);
+        flushEdt();
+
+        assertTrue(UIManager.getLookAndFeel() instanceof FlatDarkLaf);
+        assertEquals(ThemeMode.SYSTEM, system.getThemeMode());
     }
 
 }

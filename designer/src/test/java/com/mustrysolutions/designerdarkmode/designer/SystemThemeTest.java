@@ -1,8 +1,12 @@
 package com.mustrysolutions.designerdarkmode.designer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+import java.io.File;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -133,6 +137,39 @@ class SystemThemeTest {
             Result.FAILED, ok("'Adwaita-dark'\n")));
     }
 
+    /** Each command can take the full timeout on a hung D-Bus, so none is asked needlessly. */
+    @Test
+    @DisplayName("Linux: GNOME's color-scheme answer is not followed by the theme name")
+    void linuxColorSchemeAnswerStops() {
+        List<List<String>> ran = new ArrayList<>();
+
+        Appearance appearance = SystemTheme.detect("Linux", name -> null, command -> {
+            ran.add(command);
+            return command.contains("color-scheme") && command.get(0).equals("gsettings")
+                ? ok("'prefer-dark'\n") : Result.FAILED;
+        });
+
+        assertEquals(Appearance.DARK, appearance);
+        assertEquals(2, ran.size(), "the portal, then color-scheme: " + ran);
+    }
+
+    @Test
+    @DisplayName("Linux: a color-scheme of 'default' still asks the theme name")
+    void linuxDefaultColorSchemeAsksTheTheme() {
+        List<List<String>> ran = new ArrayList<>();
+
+        Appearance appearance = SystemTheme.detect("Linux", name -> null, command -> {
+            ran.add(command);
+            if (command.contains("color-scheme") && command.get(0).equals("gsettings")) {
+                return ok("'default'\n");
+            }
+            return command.contains("gtk-theme") ? ok("'Adwaita-dark'\n") : Result.FAILED;
+        });
+
+        assertEquals(Appearance.DARK, appearance);
+        assertEquals(3, ran.size(), ran.toString());
+    }
+
     @Test
     @DisplayName("Linux with nothing to ask is unknown")
     void linuxNothingAnswers() {
@@ -151,6 +188,40 @@ class SystemThemeTest {
             return ok("");
         }));
         assertTrue(ran.isEmpty(), ran.toString());
+    }
+
+    /**
+     * A helper the command leaves behind (a session bus gdbus autolaunched)
+     * can keep its stdout open after the command has exited. Read from a
+     * pipe, that output ends only when the JDK's reaper thread drains it, and
+     * a read that gets there first blocks for as long as the helper lives: 2
+     * runs in 300 on JDK 21. Too rare to catch here every time; this pins
+     * that the output is read whole and in time with a child still holding it.
+     */
+    @Test
+    @DisplayName("a command that leaves a child holding its output open still returns")
+    void childHoldingStdoutDoesNotHang() {
+        assumeTrue(new File("/bin/sh").canExecute(), "needs a POSIX shell");
+
+        Result result = assertTimeoutPreemptively(Duration.ofSeconds(10),
+            () -> SystemTheme.run(List.of("/bin/sh", "-c", "sleep 20 & echo Dark")));
+
+        assertEquals(0, result.exitCode);
+        assertEquals(Appearance.DARK, SystemTheme.parseMac(result));
+    }
+
+    @Test
+    @DisplayName("how a read reached its answer is kept per thread")
+    void lastSourceIsPerThread() throws Exception {
+        SystemTheme.detect("SunOS", name -> null, command -> ok(""));
+        String here = SystemTheme.lastSource();
+
+        Thread other = new Thread(() -> SystemTheme.detect("Mac OS X", name -> null,
+            command -> ok("Dark\n")));
+        other.start();
+        other.join();
+
+        assertEquals(here, SystemTheme.lastSource());
     }
 
     @Test

@@ -803,15 +803,23 @@ platform is asked with one short command, the way its own tools ask —
 `%SystemRoot%`), `/usr/bin/defaults read -g AppleInterfaceStyle` on macOS, and
 on Linux the XDG desktop portal's `org.freedesktop.appearance color-scheme`
 through `gdbus`, then GNOME's `color-scheme` and `gtk-theme` through
-`gsettings`. Each command has `TIMEOUT_MS` (3 s), and anything unreadable is
-`UNKNOWN`, which `ThemeManager` treats as light.
+`gsettings`, each asked only when the one before gave no answer. Each command
+has `TIMEOUT_MS` (3 s), and anything unreadable is `UNKNOWN`, which
+`ThemeManager` treats as light. A command's output goes to a temporary file,
+not a pipe: a session bus that `gdbus` autolaunched can hold an inherited pipe
+open after the command exits, and a read of it would wait as long as the bus
+lives.
 
 The read runs a process, so it never runs on the event dispatch thread:
 `ThemeManager.startup` starts it on a daemon thread when the mode is Match
-System, and it has long finished by the time the Designer is ready to be
-themed. If it has not, the startup apply waits for it without blocking.
-Choosing Match System from the menu reads the system the same way, then
-switches.
+System, and it has usually finished by the time the Designer is ready to be
+themed. Choosing Match System from the menu, or choosing it again while it is
+selected, reads the system the same way; the menu is disabled and the status
+bar says so while it reads. Each read is the `pendingRead`, and exactly one
+party acts on it: the startup apply when the answer is already in, otherwise
+the read's own completion, which then switches through `beginSwitch` like a
+click, since the Designer is in use by then. Choosing Light or Dark drops the
+pending read, so a slow read never switches over a later choice.
 
 It is read at those two moments only, never on a timer. A switch blocks the
 Designer for seconds and leaves the residue a relaunch clears, so following

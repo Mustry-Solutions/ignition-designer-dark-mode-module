@@ -4,6 +4,8 @@ import java.io.File;
 import java.io.IOException;
 import java.lang.ProcessBuilder.Redirect;
 import java.nio.charset.Charset;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
@@ -81,8 +83,13 @@ final class SystemTheme {
         Pattern.compile("AppsUseLightTheme\\s+REG_DWORD\\s+0x([0-9a-fA-F]+)");
     private static final Pattern PORTAL_UINT = Pattern.compile("uint32\\s+(\\d+)");
 
-    /** The last detection's reasoning, one line, for the debug log. */
-    private static volatile String lastSource = "not read yet";
+    /**
+     * The last detection's reasoning, one line, for the debug log. Per
+     * thread: reads can overlap (the launch read and one from the menu), and
+     * a shared value could pair one read's answer with another's reasoning.
+     */
+    private static final ThreadLocal<String> lastSource =
+        ThreadLocal.withInitial(() -> "not read yet");
 
     private SystemTheme() {
     }
@@ -92,7 +99,7 @@ final class SystemTheme {
         try {
             return detect(System.getProperty("os.name", ""), System::getenv, SystemTheme::run);
         } catch (Throwable t) {
-            lastSource = "detection failed: " + t;
+            lastSource.set("detection failed: " + t);
             return Appearance.UNKNOWN;
         }
     }
@@ -108,13 +115,13 @@ final class SystemTheme {
         if (os.contains("linux") || os.contains("bsd")) {
             return linux(runner);
         }
-        lastSource = "no detection for os \"" + osName + "\"";
+        lastSource.set("no detection for os \"" + osName + "\"");
         return Appearance.UNKNOWN;
     }
 
-    /** How the last {@link #detect} reached its answer, for the debug log. */
+    /** How the last {@link #detect} on this thread reached its answer, for the debug log. */
     static String lastSource() {
-        return lastSource;
+        return lastSource.get();
     }
 
     private static Appearance windows(Function<String, String> env, CommandRunner runner) {
@@ -127,7 +134,7 @@ final class SystemTheme {
         Result result = runner.run(
             Arrays.asList(reg, "query", WINDOWS_KEY, "/v", "AppsUseLightTheme"));
         Appearance appearance = parseWindows(result);
-        lastSource = "reg AppsUseLightTheme (exit " + result.exitCode + "): " + appearance;
+        lastSource.set("reg AppsUseLightTheme (exit " + result.exitCode + "): " + appearance);
         return appearance;
     }
 
@@ -151,7 +158,7 @@ final class SystemTheme {
         Result result = runner.run(
             Arrays.asList("/usr/bin/defaults", "read", "-g", "AppleInterfaceStyle"));
         Appearance appearance = parseMac(result);
-        lastSource = "defaults AppleInterfaceStyle (exit " + result.exitCode + "): " + appearance;
+        lastSource.set("defaults AppleInterfaceStyle (exit " + result.exitCode + "): " + appearance);
         return appearance;
     }
 
@@ -174,22 +181,23 @@ final class SystemTheme {
             "--object-path", "/org/freedesktop/portal/desktop",
             "--method", "org.freedesktop.portal.Settings.Read",
             "org.freedesktop.appearance", "color-scheme"));
+        // Each command is asked only when the one before gave no answer: on a
+        // hung D-Bus each can take the full TIMEOUT_MS.
         Result colorScheme = Result.FAILED;
         Result gtkTheme = Result.FAILED;
-        Appearance fromPortal = parsePortal(portal);
-        if (fromPortal == Appearance.UNKNOWN) {
+        String source = "portal color-scheme (exit " + portal.exitCode + ")";
+        if (parsePortal(portal) == Appearance.UNKNOWN) {
             colorScheme = runner.run(Arrays.asList(
                 "gsettings", "get", "org.gnome.desktop.interface", "color-scheme"));
-            gtkTheme = runner.run(Arrays.asList(
-                "gsettings", "get", "org.gnome.desktop.interface", "gtk-theme"));
+            source += ", gsettings color-scheme (exit " + colorScheme.exitCode + ")";
+            if (parseColorScheme(colorScheme) == Appearance.UNKNOWN) {
+                gtkTheme = runner.run(Arrays.asList(
+                    "gsettings", "get", "org.gnome.desktop.interface", "gtk-theme"));
+                source += ", gtk-theme (exit " + gtkTheme.exitCode + ")";
+            }
         }
         Appearance appearance = parseLinux(portal, colorScheme, gtkTheme);
-        lastSource = "portal color-scheme (exit " + portal.exitCode + ")"
-            + (fromPortal == Appearance.UNKNOWN
-                ? ", gsettings color-scheme (exit " + colorScheme.exitCode
-                    + "), gtk-theme (exit " + gtkTheme.exitCode + ")"
-                : "")
-            + ": " + appearance;
+        lastSource.set(source + ": " + appearance);
         return appearance;
     }
 
@@ -229,14 +237,9 @@ final class SystemTheme {
         if (fromPortal != Appearance.UNKNOWN) {
             return fromPortal;
         }
-        if (colorScheme.exitCode == 0) {
-            String scheme = colorScheme.output.toLowerCase(Locale.ROOT);
-            if (scheme.contains("prefer-dark")) {
-                return Appearance.DARK;
-            }
-            if (scheme.contains("prefer-light")) {
-                return Appearance.LIGHT;
-            }
+        Appearance fromColorScheme = parseColorScheme(colorScheme);
+        if (fromColorScheme != Appearance.UNKNOWN) {
+            return fromColorScheme;
         }
         if (gtkTheme.exitCode == 0 && gtkTheme.output.toLowerCase(Locale.ROOT).contains("dark")) {
             return Appearance.DARK;
@@ -245,15 +248,40 @@ final class SystemTheme {
             ? Appearance.LIGHT : Appearance.UNKNOWN;
     }
 
+    /** GNOME 42's {@code color-scheme}: prefer-dark or prefer-light, else no answer. */
+    static Appearance parseColorScheme(Result colorScheme) {
+        if (colorScheme.exitCode != 0) {
+            return Appearance.UNKNOWN;
+        }
+        String scheme = colorScheme.output.toLowerCase(Locale.ROOT);
+        if (scheme.contains("prefer-dark")) {
+            return Appearance.DARK;
+        }
+        if (scheme.contains("prefer-light")) {
+            return Appearance.LIGHT;
+        }
+        return Appearance.UNKNOWN;
+    }
+
     /**
-     * Run a command with nothing on stdin and stderr thrown away. The output
-     * is a line or two, well inside a pipe's buffer, so it is read after the
-     * process ends rather than on a second thread.
+     * Run a command with nothing on stdin and stderr thrown away, for at
+     * most {@link #TIMEOUT_MS}.
+     *
+     * <p>Its output goes to a file, not a pipe. A helper the command leaves
+     * running — a session bus that {@code gdbus} or {@code gsettings}
+     * autolaunched — inherits the pipe and holds it open after the command
+     * itself has exited. The JDK's reaper drains the pipe when the command
+     * exits, but a read that starts first waits for the end of the pipe, as
+     * long as the helper lives (2 runs in 300 on JDK 21). A file is read to
+     * its end whoever still has it open.
      */
     static Result run(List<String> command) {
         Process process = null;
+        Path output = null;
         try {
+            output = Files.createTempFile("designer-dark-mode-", ".out");
             process = new ProcessBuilder(command)
+                .redirectOutput(output.toFile())
                 .redirectError(Redirect.DISCARD)
                 .start();
             process.getOutputStream().close();
@@ -261,9 +289,8 @@ final class SystemTheme {
                 process.destroyForcibly();
                 return Result.FAILED;
             }
-            String output = new String(process.getInputStream().readAllBytes(),
-                Charset.defaultCharset());
-            return new Result(process.exitValue(), output);
+            return new Result(process.exitValue(),
+                new String(Files.readAllBytes(output), Charset.defaultCharset()));
         } catch (IOException e) {
             // Not installed (gdbus, gsettings) or not runnable: no answer.
             return Result.FAILED;
@@ -273,6 +300,19 @@ final class SystemTheme {
                 process.destroyForcibly();
             }
             return Result.FAILED;
+        } finally {
+            if (output != null) {
+                deleteQuietly(output);
+            }
+        }
+    }
+
+    /** A helper still holding the file open stops Windows deleting it; then it goes at exit. */
+    private static void deleteQuietly(Path file) {
+        try {
+            Files.deleteIfExists(file);
+        } catch (IOException e) {
+            file.toFile().deleteOnExit();
         }
     }
 }
