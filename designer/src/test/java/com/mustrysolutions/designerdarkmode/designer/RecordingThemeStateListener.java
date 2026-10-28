@@ -9,8 +9,12 @@ final class RecordingThemeStateListener implements ThemeManager.ThemeStateListen
     /** One entry per finished switch: the theme the Designer was left in. */
     final List<Boolean> darkActive = new ArrayList<>();
 
+    /** How many switches were announced: the menu disabled, the status message up. */
+    int started;
+
     @Override
     public void switchStarted() {
+        started++;
     }
 
     @Override

@@ -4,9 +4,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 
 import javax.swing.LookAndFeel;
+import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 import javax.swing.plaf.metal.MetalLookAndFeel;
 
@@ -47,6 +51,9 @@ class ThemePreferencePersistenceTest {
      * read back off the class under test.
      */
     private static final String KEY = "darkMode";
+
+    /** Match System's key, pinned for the same reason. */
+    private static final String FOLLOW_SYSTEM = "followSystem";
 
     private InMemoryPreferences prefs;
     private ThemeManager manager;
@@ -197,6 +204,217 @@ class ThemePreferencePersistenceTest {
         assertTrue(manager.isDarkModeEnabled(),
             "the switch worked, so the preference it is squared with must survive it");
         assertEquals(List.of(true), listener.darkActive);
+    }
+
+    // ---- Match System ----------------------------------------------------
+
+    /** A manager whose system reads as {@code appearance}, sharing this test's node. */
+    private ThemeManager systemManager(SystemTheme.Appearance appearance) {
+        ThemeManager system = new ThemeManager(prefs, () -> appearance);
+        system.setThemeStateListener(listener);
+        system.captureStockLaf();
+        manager = system;
+        return system;
+    }
+
+    @Test
+    @DisplayName("a Designer that has never been told otherwise is Light")
+    void lightIsTheDefault() {
+        assertEquals(ThemeMode.LIGHT, manager.getThemeMode());
+    }
+
+    @Test
+    @DisplayName("Match System is saved under its own key, flushed, and read back")
+    void matchSystemRoundTrips() {
+        manager.setThemeMode(ThemeMode.SYSTEM);
+
+        assertEquals(ThemeMode.SYSTEM, manager.getThemeMode());
+        assertTrue(prefs.getBoolean(FOLLOW_SYSTEM, false));
+        assertEquals(1, prefs.flushes, "as durable as Light and Dark");
+    }
+
+    @Test
+    @DisplayName("choosing Light or Dark leaves Match System")
+    void anExplicitChoiceLeavesMatchSystem() {
+        manager.setThemeMode(ThemeMode.SYSTEM);
+
+        manager.setDark(true);
+
+        assertEquals(ThemeMode.DARK, manager.getThemeMode());
+        assertFalse(prefs.getBoolean(FOLLOW_SYSTEM, true));
+
+        manager.setThemeMode(ThemeMode.SYSTEM);
+        manager.setThemeMode(ThemeMode.LIGHT);
+
+        assertEquals(ThemeMode.LIGHT, manager.getThemeMode());
+    }
+
+    @Test
+    @DisplayName("the startup apply under Match System applies dark when the system is dark")
+    void startupFollowsADarkSystem() {
+        prefs.putBoolean(FOLLOW_SYSTEM, true);
+        ThemeManager system = systemManager(SystemTheme.Appearance.DARK);
+
+        system.applyStartupPreference();
+
+        assertTrue(UIManager.getLookAndFeel() instanceof FlatDarkLaf);
+        assertEquals(ThemeMode.SYSTEM, system.getThemeMode(),
+            "a switch that worked must not take the mode out of Match System");
+        assertTrue(prefs.getBoolean(KEY, false),
+            "the dark value follows the installed theme, for a module version "
+                + "that predates Match System");
+        assertEquals(List.of(true), listener.darkActive);
+    }
+
+    /**
+     * Last session the system was dark, so dark was saved. Today it is
+     * light: the Designer stays stock, and the saved dark value follows, so a
+     * downgrade to a module without Match System does not come up dark.
+     */
+    @Test
+    @DisplayName("the startup apply under Match System leaves the Designer stock when the system is light")
+    void startupFollowsALightSystem() {
+        prefs.putBoolean(FOLLOW_SYSTEM, true);
+        prefs.putBoolean(KEY, true);
+        ThemeManager system = systemManager(SystemTheme.Appearance.LIGHT);
+
+        system.applyStartupPreference();
+
+        assertFalse(UIManager.getLookAndFeel() instanceof FlatDarkLaf);
+        assertEquals(ThemeMode.SYSTEM, system.getThemeMode());
+        assertFalse(prefs.getBoolean(KEY, true));
+    }
+
+    @Test
+    @DisplayName("a system that cannot be read is treated as light")
+    void unknownIsLight() {
+        prefs.putBoolean(FOLLOW_SYSTEM, true);
+        ThemeManager system = systemManager(SystemTheme.Appearance.UNKNOWN);
+
+        system.applyStartupPreference();
+
+        assertFalse(UIManager.getLookAndFeel() instanceof FlatDarkLaf,
+            "the stock Designer is the safe answer to a question nobody could answer");
+        assertEquals(ThemeMode.SYSTEM, system.getThemeMode(),
+            "the choice stays: tomorrow the system may be readable");
+    }
+
+    /**
+     * The same rule as an explicit choice: the saved value follows the theme
+     * installed. A Match System switch that did not reach the system's theme
+     * would otherwise be retried at every launch — for a dark system, the
+     * same broken dark switch the rule exists to stop.
+     */
+    @Test
+    @DisplayName("a Match System switch that did not complete leaves Match System for the installed theme")
+    void aFailedMatchSystemSwitchSettlesOnWhatIsInstalled() throws Exception {
+        prefs.putBoolean(FOLLOW_SYSTEM, true);
+        ThemeManager system = systemManager(SystemTheme.Appearance.LIGHT);
+        system.applyStartupPreference();
+        // The light switch the system asked for, failed: dark is still installed.
+        UIManager.setLookAndFeel(new FlatDarkLaf());
+
+        system.finishSwitch();
+
+        assertEquals(ThemeMode.DARK, system.getThemeMode(),
+            "the Tools menu must show the theme the Designer is in");
+        assertEquals(List.of(true), listener.darkActive);
+    }
+
+    /** A manager whose reads wait in {@code held} until the test runs them. */
+    private ThemeManager heldManager(Supplier<SystemTheme.Appearance> appearance, List<Runnable> held) {
+        ThemeManager system = new ThemeManager(prefs, appearance, held::add);
+        system.setThemeStateListener(listener);
+        system.captureStockLaf();
+        manager = system;
+        return system;
+    }
+
+    /** Run what is queued on the event dispatch thread, and what that queues in turn. */
+    private static void flushEdt() throws Exception {
+        for (int i = 0; i < 3; i++) {
+            SwingUtilities.invokeAndWait(() -> { });
+        }
+    }
+
+    /**
+     * Match System chosen before the Designer was ready, and the system
+     * slow to answer: the read's completion and the startup apply both
+     * waited on it, and both switched. Now one takes it, and the switch is
+     * announced like a click's, since the Designer is in use by then.
+     */
+    @Test
+    @DisplayName("a read that answers after the Designer is ready switches once, announced")
+    void aLateReadSwitchesOnce() throws Exception {
+        List<Runnable> held = new ArrayList<>();
+        ThemeManager system = heldManager(() -> SystemTheme.Appearance.DARK, held);
+        system.setThemeMode(ThemeMode.SYSTEM);
+        system.applyStartupPreference();
+        assertTrue(listener.darkActive.isEmpty(), "nothing to apply before the system answers");
+
+        held.forEach(Runnable::run);
+        flushEdt();
+
+        assertTrue(UIManager.getLookAndFeel() instanceof FlatDarkLaf);
+        assertEquals(List.of(true), listener.darkActive, "one switch, not one per waiter");
+        assertEquals(1, listener.started, "the menu is disabled and the status says so");
+    }
+
+    @Test
+    @DisplayName("a read that a later choice replaced does nothing")
+    void aSupersededReadDoesNothing() throws Exception {
+        List<Runnable> held = new ArrayList<>();
+        ThemeManager system = heldManager(() -> SystemTheme.Appearance.DARK, held);
+        system.applyStartupPreference();
+
+        system.setThemeMode(ThemeMode.SYSTEM);
+        system.setThemeMode(ThemeMode.LIGHT);
+        system.setThemeMode(ThemeMode.SYSTEM);
+        flushEdt();
+        held.forEach(Runnable::run);
+        flushEdt();
+
+        assertEquals(List.of(false, true), listener.darkActive,
+            "the Light switch, then one dark switch for the read still wanted");
+    }
+
+    /**
+     * The click that selects Match System fires the item event and the
+     * action; both reach setThemeMode. One read, not two.
+     */
+    @Test
+    @DisplayName("choosing Match System again while the system is being read starts no second read")
+    void oneReadPerChoice() {
+        List<Runnable> held = new ArrayList<>();
+        ThemeManager system = heldManager(() -> SystemTheme.Appearance.DARK, held);
+
+        system.setThemeMode(ThemeMode.SYSTEM);
+        system.setThemeMode(ThemeMode.SYSTEM);
+
+        assertEquals(1, held.size());
+    }
+
+    /** Clicking the selected Match System is how a change of the system is picked up. */
+    @Test
+    @DisplayName("choosing Match System again reads the system again")
+    void choosingMatchSystemAgainRereads() throws Exception {
+        AtomicReference<SystemTheme.Appearance> os =
+            new AtomicReference<>(SystemTheme.Appearance.LIGHT);
+        prefs.putBoolean(FOLLOW_SYSTEM, true);
+        List<Runnable> held = new ArrayList<>();
+        ThemeManager system = heldManager(os::get, held);
+        system.applyStartupPreference();
+        held.forEach(Runnable::run);
+        held.clear();
+        flushEdt();
+
+        os.set(SystemTheme.Appearance.DARK);
+        system.setThemeMode(ThemeMode.SYSTEM);
+        held.forEach(Runnable::run);
+        flushEdt();
+
+        assertTrue(UIManager.getLookAndFeel() instanceof FlatDarkLaf);
+        assertEquals(ThemeMode.SYSTEM, system.getThemeMode());
     }
 
 }

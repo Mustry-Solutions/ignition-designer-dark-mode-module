@@ -10,6 +10,25 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ## [Unreleased]
 
+### Added
+
+- **Match System: follow the operating system's light or dark setting**
+  ([#201](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/201)).
+  Tools → Dark Mode is now a submenu with three choices: **Light** (the
+  default, and what an existing light install keeps), **Dark** (what an
+  existing dark install keeps), and **Match System**, which uses dark when the
+  operating system is set to dark. It reads Windows' app mode, macOS'
+  Appearance (Auto included) and, on Linux, the desktop's color scheme
+  through the XDG desktop portal or GNOME's settings; when the setting cannot
+  be read it uses light. The system is read when the Designer launches and
+  when Match System is chosen, not while the Designer is open: a switch takes
+  seconds, and it should not freeze the Designer because the system went dark
+  at sunset. As for Dark, a switch to the system's theme that fails leaves
+  the setting on the theme the Designer is in, so it is not retried at every
+  launch. Saved under a new `followSystem` key next to `darkMode`, which
+  keeps tracking the theme last applied, so an older module version still
+  comes up in the theme last seen.
+
 ### Fixed
 
 - **SFC charts read as they do in a client**
