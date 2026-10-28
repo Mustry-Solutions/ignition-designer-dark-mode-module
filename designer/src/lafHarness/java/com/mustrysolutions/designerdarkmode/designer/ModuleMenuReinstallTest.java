@@ -2,8 +2,11 @@ package com.mustrysolutions.designerdarkmode.designer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.awt.Component;
+import java.util.ArrayList;
+import java.util.List;
 
 import javax.swing.Action;
 import javax.swing.JMenu;
@@ -123,6 +126,49 @@ class ModuleMenuReinstallTest {
             hook.getModuleMenu().uninstall(menuBar);
             assertEquals(0, ourItems(), "the submenu goes with the module");
         });
+    }
+
+    /**
+     * Each merge into Tools re-sorts every item already there by its
+     * merge's menu id, read from a client property. A submenu that came from
+     * a nested merge has no such property and sorted with the Designer's own
+     * items, so once Vision merged after us the live Tools menu read
+     * Translation Manager, Dark Mode, Symbol Factory, Keyboard Layouts, About.
+     */
+    @Test
+    @DisplayName("Dark Mode and About stay together when another module merges into Tools after us")
+    void ourItemsStayTogetherAfterALaterMerge() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            DesignerDarkModeHook hook = new DesignerDarkModeHook();
+            hook.getModuleMenu().install(menuBar);
+
+            MenuBarMerge vision = new MenuBarMerge("com.inductiveautomation.vision");
+            JMenuMerge tools = new JMenuMerge(WellKnownMenuConstants.TOOLS_MENU_NAME, "Tools");
+            tools.add(BaseAction.create("Symbol Factory", null, () -> { }));
+            vision.add(WellKnownMenuConstants.TOOLS_MENU_LOCATION, tools);
+            vision.install(menuBar);
+
+            List<String> order = new ArrayList<>();
+            for (Component component : toolsMenu().getMenuComponents()) {
+                if (component instanceof JMenuItem) {
+                    order.add(((JMenuItem) component).getText());
+                }
+            }
+            int darkMode = indexContaining(order, "designerdarkmode.Menu.DarkMode");
+            int about = indexContaining(order, "designerdarkmode.Action.About");
+            assertEquals(darkMode + 1, about, "Dark Mode directly above About: " + order);
+            assertTrue(darkMode > indexContaining(order, "Symbol Factory"),
+                "both after the other module's items, as the checkbox was: " + order);
+        });
+    }
+
+    private static int indexContaining(List<String> texts, String key) {
+        for (int i = 0; i < texts.size(); i++) {
+            if (texts.get(i) != null && texts.get(i).contains(key)) {
+                return i;
+            }
+        }
+        throw new AssertionError("no item for " + key + " in " + texts);
     }
 
     /**

@@ -184,6 +184,11 @@ a click, and only a `SELECTED` event is a choice — the group's deselection
 of the previous item is not. A correction selects the target first: a
 `ButtonGroup` never lets its selected item be deselected directly, so clearing
 first would leave an action and its item disagreeing.
+Every module's merge into Tools re-sorts the items already there by the merge
+id each carries in the `menumerge.menukey` client property, and the SDK sets
+it on plain items but not on a submenu a nested merge creates. So the submenu
+tags itself in `createMenu`; untagged, it sorted in with the Designer's own
+items once Vision merged after us, away from About.
 `configureSerializer`, called on every save, registers
 [TokenColorDelegate](#tokencolordelegate) and
 [LookAndFeelBorders](#lookandfeelborders).

@@ -6,6 +6,8 @@ import java.util.EnumMap;
 import java.util.Locale;
 import java.util.Map;
 
+import javax.swing.JMenu;
+
 import com.inductiveautomation.ignition.client.util.action.BaseAction;
 import com.inductiveautomation.ignition.client.util.action.StateChangeAction;
 import com.inductiveautomation.ignition.common.BundleUtil;
@@ -24,6 +26,13 @@ import com.inductiveautomation.ignition.designer.model.menu.WellKnownMenuConstan
 public class DesignerDarkModeHook extends AbstractDesignerModuleHook {
 
     private static final String BUNDLE_PREFIX = "designerdarkmode";
+
+    /**
+     * The client property the SDK's menu merges sort a menu's items by
+     * ({@code AbstractMenuMerge.MENU_KEY}, private; the same in 8.1.33 and
+     * 8.3.0). {@code ModuleMenuReinstallTest} fails if it stops working.
+     */
+    private static final String MENU_ID_KEY = "menumerge.menukey";
 
     private final ThemeManager themes = new ThemeManager();
 
@@ -134,7 +143,21 @@ public class DesignerDarkModeHook extends AbstractDesignerModuleHook {
         // Light comes first and is the default — a Designer that has never
         // been told otherwise stays stock.
         JMenuMerge darkMode = new JMenuMerge("designerdarkmode.DarkMode",
-            "designerdarkmode.Menu.DarkMode", new MoonIcon(16));
+            "designerdarkmode.Menu.DarkMode", new MoonIcon(16)) {
+            /**
+             * Every merge into Tools re-sorts the items already there by the
+             * menu id each carries in a client property. The SDK tags a
+             * plain item with its merge's id but not a submenu it creates,
+             * so once Vision merged after us the submenu sorted in with the
+             * Designer's own items, away from About.
+             */
+            @Override
+            public JMenu createMenu() {
+                JMenu menu = super.createMenu();
+                menu.putClientProperty(MENU_ID_KEY, getMenuId());
+                return menu;
+            }
+        };
         darkMode.addRadioGroup(modeActions.get(ThemeMode.LIGHT),
             modeActions.get(ThemeMode.DARK), modeActions.get(ThemeMode.SYSTEM));
         tools.add(darkMode);
