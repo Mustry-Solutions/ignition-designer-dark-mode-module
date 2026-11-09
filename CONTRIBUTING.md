@@ -82,7 +82,9 @@ same spot dark and light and compare. Full walkthrough in
 4. Open a PR. The **Build & test** and **LaF harness** checks must pass —
    they are required status checks on `main`, so a red build cannot be
    merged. **LaF harness** passes only when every row of the harness matrix
-   (each OS against each supported SDK) has passed.
+   has passed. On a PR that is Linux against each supported SDK; macOS and
+   Windows join on `main`, or on a branch when you run the CI workflow by
+   hand.
 5. A maintainer merges it. `main` is always releasable.
 
 ## Conventions
