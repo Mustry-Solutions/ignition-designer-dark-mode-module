@@ -109,7 +109,7 @@ cached `ThemePainter` field is repointed and restored, a `JInternalFrame`
 survives the tree update, and the light theme renders pixel-identical
 after a cycle. It skips itself without a display (unless the property was
 given, in which case a headless JVM is a broken runner and it fails). CI runs
-it on Linux under Xvfb for every PR, and on macOS and Windows as well on
+it on Linux under Xvfb for every PR that changes code, and on macOS and Windows as well on
 `main`. A Designer and a pair of eyes
 still settle "does this look right".
 

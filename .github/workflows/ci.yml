@@ -251,7 +251,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(needs.changes.outputs.matrix) }}
+        # The fallback (the four Linux rows) keeps the fail-open promise of
+        # `build` when `changes` failed before it could write the output.
+        include: ${{ fromJSON(needs.changes.outputs.matrix || '[{"os":"ubuntu-latest","sdk":{"id":"8.3-current","name":"8.3 current","args":""}},{"os":"ubuntu-latest","sdk":{"id":"8.3-floor","name":"8.3 support floor","args":"-Pharness.sdk=8.3.0"}},{"os":"ubuntu-latest","sdk":{"id":"8.1-current","name":"8.1 current","args":"-Pignition.line=8.1"}},{"os":"ubuntu-latest","sdk":{"id":"8.1-floor","name":"8.1 support floor","args":"-Pignition.line=8.1 -Pharness.sdk=8.1.33"}}]') }}
     runs-on: ${{ matrix.os }}
     # One harness run: the watchdog's 15-minute deadline below, plus set-up
     # and a cold dependency download on the slow (Windows) runner.
