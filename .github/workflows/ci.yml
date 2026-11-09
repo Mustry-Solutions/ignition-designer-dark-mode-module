@@ -4,6 +4,14 @@ on:
   push:
     branches: [main]
   pull_request:
+  # On demand, for a branch that needs every OS against every SDK before it
+  # is merged (see `Pick the harness rows` below).
+  workflow_dispatch:
+    inputs:
+      all_rows:
+        description: 'Run every OS against every SDK (12 harness rows)'
+        default: true
+        type: boolean
 
 # Least privilege: CI only reads the repo. Fork PRs already run without
 # secrets — this keeps the token read-only too.
@@ -11,10 +19,11 @@ permissions:
   contents: read
 
 # A new push to a PR makes the run for the previous head moot: cancel it
-# rather than let it keep a dozen runners busy to the end. Pushes to
-# main are left to finish, so every merge keeps its own result.
+# rather than let it keep a dozen runners busy to the end. Each run on
+# main gets a group of its own: in a shared group a newer push replaces
+# the run still pending, and that merge would get no result.
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.ref }}
+  group: ci-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -33,6 +42,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       code: ${{ steps.diff.outputs.code }}
+      matrix: ${{ steps.rows.outputs.matrix }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -52,6 +62,7 @@ jobs:
           code=true
           if [ -n "$BASE" ] && [ "$BASE" != 0000000000000000000000000000000000000000 ] \
              && files="$(git diff --no-renames --name-only "$BASE...$HEAD")"; then
+            diffed=true
             echo "$files"
             if [ -n "$files" ] \
                && ! echo "$files" | grep -qvE '(^[^/]*\.md$|^docs/|^LICENSE$)'; then
@@ -59,6 +70,59 @@ jobs:
             fi
           fi
           echo "code=$code" | tee -a "$GITHUB_OUTPUT"
+
+          # CI plumbing that behaves differently per OS: a PR that changes it
+          # has to prove it on macOS and Windows before it lands, not after.
+          # Fails open like the docs check: no usable diff counts as a change.
+          platform=true
+          if [ "${diffed:-}" = true ] \
+             && ! echo "$files" | grep -qE '^(\.github/workflows/ci\.yml|ops/laf-harness-watchdog\.sh)$'; then
+            platform=false
+          fi
+          echo "platform=$platform" | tee -a "$GITHUB_OUTPUT"
+
+      # Which harness rows this run gets. The rows that matter differ by
+      # axis: the SDK axis catches renamed Ignition/JIDE internals, which is
+      # the same on every OS, and the OS axis catches JDK packages, fonts and
+      # Java2D, which is the same for every SDK. So the full cross product
+      # is mostly the same check run twice, and macOS minutes cost ten times
+      # Linux ones.
+      #
+      #   pull_request       Linux x 4 SDKs (plus the main rows below when
+      #                      the PR touches ci.yml or the watchdog)
+      #   push to main       Linux x 4 SDKs, macOS and Windows x the two
+      #                      current SDKs: 8 rows
+      #   workflow_dispatch  all_rows=true: every OS x every SDK, 12 rows
+      #
+      # A platform regression on a PR therefore shows up on main, one merge
+      # later; run the workflow by hand on the branch to see it before.
+      - name: Pick the harness rows
+        id: rows
+        env:
+          EVENT: ${{ github.event_name }}
+          ALL_ROWS: ${{ inputs.all_rows }}
+          PLATFORM: ${{ steps.diff.outputs.platform }}
+        run: |
+          sdks='[
+            {"id": "8.3-current", "name": "8.3 current", "args": "", "current": true},
+            {"id": "8.3-floor", "name": "8.3 support floor", "args": "-Pharness.sdk=8.3.0", "current": false},
+            {"id": "8.1-current", "name": "8.1 current", "args": "-Pignition.line=8.1", "current": true},
+            {"id": "8.1-floor", "name": "8.1 support floor", "args": "-Pignition.line=8.1 -Pharness.sdk=8.1.33", "current": false}
+          ]'
+          if [ "$EVENT" = workflow_dispatch ] && [ "$ALL_ROWS" = true ]; then
+            others=all
+          elif [ "$EVENT" = pull_request ] && [ "$PLATFORM" != true ]; then
+            others=none
+          else
+            others=current
+          fi
+          matrix="$(echo "$sdks" | jq -c --arg others "$others" '
+            [ .[] | {os: "ubuntu-latest", sdk: .} ]
+            + [ ("windows-latest", "macos-latest") as $os | .[]
+                | select($others == "all" or ($others == "current" and .current))
+                | {os: $os, sdk: .} ]')"
+          echo "macOS/Windows rows: $others"
+          echo "matrix=$matrix" | tee -a "$GITHUB_OUTPUT"
 
   build:
     name: Build & test
@@ -183,15 +247,14 @@ jobs:
     needs: changes
     # Same condition as `build`, for the same reason.
     if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}
+    # The rows come from `changes` (see `Pick the harness rows`): every SDK
+    # on Linux, macOS and Windows on main and on demand.
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        sdk:
-          - { id: 8.3-current, name: 8.3 current, args: "" }
-          - { id: 8.3-floor, name: 8.3 support floor, args: "-Pharness.sdk=8.3.0" }
-          - { id: 8.1-current, name: 8.1 current, args: "-Pignition.line=8.1" }
-          - { id: 8.1-floor, name: 8.1 support floor, args: "-Pignition.line=8.1 -Pharness.sdk=8.1.33" }
+        # The fallback (the four Linux rows) keeps the fail-open promise of
+        # `build` when `changes` failed before it could write the output.
+        include: ${{ fromJSON(needs.changes.outputs.matrix || '[{"os":"ubuntu-latest","sdk":{"id":"8.3-current","name":"8.3 current","args":""}},{"os":"ubuntu-latest","sdk":{"id":"8.3-floor","name":"8.3 support floor","args":"-Pharness.sdk=8.3.0"}},{"os":"ubuntu-latest","sdk":{"id":"8.1-current","name":"8.1 current","args":"-Pignition.line=8.1"}},{"os":"ubuntu-latest","sdk":{"id":"8.1-floor","name":"8.1 support floor","args":"-Pignition.line=8.1 -Pharness.sdk=8.1.33"}}]') }}
     runs-on: ${{ matrix.os }}
     # One harness run: the watchdog's 15-minute deadline below, plus set-up
     # and a cold dependency download on the slow (Windows) runner.
@@ -226,9 +289,12 @@ jobs:
             gradle-${{ runner.os }}-harness-${{ matrix.sdk.id }}-
             gradle-${{ runner.os }}-
 
+      # The hosted Ubuntu image already ships Xvfb; only refresh the package
+      # lists and install it when an image update drops it.
       - name: Install Xvfb
         if: runner.os == 'Linux'
         run: |
+          command -v xvfb-run >/dev/null && exit 0
           sudo apt-get update -q
           sudo apt-get install -y -q xvfb
 
@@ -269,6 +335,8 @@ jobs:
         with:
           name: laf-harness-${{ matrix.os }}-${{ matrix.sdk.id }}
           if-no-files-found: ignore
+          # Read when a row fails, days later at most; not kept for 90 days.
+          retention-days: 7
           path: |
             build/laf-harness-threads-*.txt
             designer/build/test-results/lafHarness/
