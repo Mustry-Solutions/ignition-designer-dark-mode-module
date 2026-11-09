@@ -19,10 +19,11 @@ permissions:
   contents: read
 
 # A new push to a PR makes the run for the previous head moot: cancel it
-# rather than let it keep a dozen runners busy to the end. Pushes to
-# main are left to finish, so every merge keeps its own result.
+# rather than let it keep a dozen runners busy to the end. Each run on
+# main gets a group of its own: in a shared group a newer push replaces
+# the run still pending, and that merge would get no result.
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.ref }}
+  group: ci-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
