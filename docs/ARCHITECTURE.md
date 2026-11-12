@@ -59,7 +59,10 @@ Steps marked *dark only* or *light only* are skipped in the other direction.
    clear (see [DeveloperDefaults](#developerdefaults)), the stock colours
    by key for [LookAndFeelColors](#lookandfeelcolors) and
    [VisionConstructionColors](#visionconstructioncolors), and the keystrokes
-   the stock tree map binds for [TreeClipboardKeys](#treeclipboardkeys) — then
+   the stock tree map binds for [TreeClipboardKeys](#treeclipboardkeys) —
+   and two passes that must run while Synthetica is still installed: the
+   [FieldBorders](#fieldborders) substitute (#194) and Synthetica's property
+   store kept for application-set properties (#174) — then
    `UIManager.setLookAndFeel(new FlatDarkLaf())`,
    then `keepStockFont(...)` puts the `Label.font` read just before the swap
    as FlatLaf's `defaultFont`, so the switch is colour-only (see
@@ -708,7 +711,8 @@ cannot be replaced (final, and possibly folded by the JIT), and a Vision
 component's `FieldBorder` serializes, so the `SynthBorder` keeps its identity
 and gets a different `ui` (a plain instance field): `FieldBorders.Substitute`
 paints FlatLaf's `TextField.border` while FlatLaf is installed and hands
-everything else to Synthetica's UI, insets included, so a Field Border
+everything else to Synthetica's UI. The insets never come from the UI
+(`SynthBorder` computes them from its own style), so a Field Border
 component's layout does not move. Installed before FlatLaf on the dark
 switch, which also makes sure the class is first used under stock; taken
 out at shutdown, since the static would pin the module's classloader. Needs

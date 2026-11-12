@@ -2,6 +2,7 @@ package com.mustrysolutions.designerdarkmode.designer;
 
 import java.awt.Graphics;
 import java.lang.reflect.Field;
+import java.lang.reflect.InaccessibleObjectException;
 
 import javax.swing.JComponent;
 import javax.swing.UIManager;
@@ -26,14 +27,19 @@ import com.formdev.flatlaf.FlatLaf;
  * folded it), and a Vision component's {@code FieldBorder} is user content
  * that serializes. So the {@code SynthBorder} behind it keeps its identity and
  * gets a different UI to paint with: {@link Substitute} paints FlatLaf's text
- * field border while FlatLaf is installed, and hands everything else, the
- * insets included, to the original. The layout of a Field Border component
- * does not change with the theme.
+ * field border while FlatLaf is installed, and hands everything else to the
+ * original. The insets never come from the UI: {@code SynthBorder} computes
+ * them itself, from the style it was built with, so the layout of a Field
+ * Border component does not change with the theme.
  *
  * <p>Installed under the stock look and feel, before the first switch to dark,
  * which also makes sure {@code FieldBorder} is first used under stock, as it
  * is in a Designer that never switches. Taken out at module shutdown: the
  * static outlives the module, and would pin its classloader.
+ *
+ * <p>Needs {@code --add-opens java.desktop/javax.swing.plaf.synth}, which the
+ * Designer passes. Without it the dark switch reports this one phase failed,
+ * and a Field Border stays as broken as it was.
  */
 final class FieldBorders {
 
@@ -41,6 +47,11 @@ final class FieldBorders {
     static final String SUB_BORDER_FIELD = "subBorder";
     static final String SYNTH_BORDER_CLASS = "javax.swing.plaf.synth.SynthBorder";
     static final String SYNTH_BORDER_UI_FIELD = "ui";
+
+    static final String OPENING_HINT =
+        "the Designer's JVM has not opened java.desktop/javax.swing.plaf.synth to modules "
+            + "(--add-opens java.desktop/javax.swing.plaf.synth=ALL-UNNAMED); "
+            + "a Field Border will not paint under dark";
 
     private static Border substituted;
 
@@ -66,11 +77,26 @@ final class FieldBorders {
                 + (shared == null ? "null" : shared.getClass().getName()) + "; left alone.");
             return;
         }
-        Field ui = uiField(shared);
+        Field ui;
+        try {
+            ui = uiField(shared);
+        } catch (InaccessibleObjectException closed) {
+            DebugLog.log("FieldBorders: " + OPENING_HINT, closed);
+            throw new IllegalStateException(OPENING_HINT, closed);
+        }
         SynthUI original = (SynthUI) ui.get(shared);
         if (original instanceof Substitute) {
             substituted = shared;
             return;
+        }
+        if (Substitute.class.getName().equals(original.getClass().getName())) {
+            // Left by an earlier load of this module whose shutdown did not
+            // finish: Ignition's static still holds that classloader's class.
+            // Wrap what it wraps, so this load's uninstall frees both.
+            Field stale = original.getClass().getDeclaredField("original");
+            stale.setAccessible(true);
+            original = (SynthUI) stale.get(original);
+            DebugLog.log("FieldBorders: replaced a substitute left by an earlier module load.");
         }
         ui.set(shared, new Substitute(original));
         substituted = shared;

@@ -229,12 +229,17 @@ public class ThemeManager {
     public void shutdown() {
         shutDown = true;
         onEdt(() -> {
-            exchangeScript.uninstall();
-            inspector.uninstall();
-            apply(false);
-            uninstallLightLeftoverWatcher();
-            uninstallComponentWatcher();
-            FieldBorders.uninstall();
+            try {
+                exchangeScript.uninstall();
+                inspector.uninstall();
+                apply(false);
+                uninstallLightLeftoverWatcher();
+                uninstallComponentWatcher();
+            } finally {
+                // Ignition's static would otherwise keep this module's
+                // class, and with it the classloader, past an unload.
+                FieldBorders.uninstall();
+            }
         });
     }
 

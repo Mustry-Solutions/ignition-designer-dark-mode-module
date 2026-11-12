@@ -4,18 +4,30 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.awt.Color;
+import java.awt.Font;
+import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.GraphicsEnvironment;
 import java.awt.image.BufferedImage;
 import java.lang.reflect.Field;
+import java.util.ArrayList;
+import java.util.List;
 
 import javax.swing.JComponent;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
 import javax.swing.UIManager;
 import javax.swing.border.Border;
+import javax.swing.plaf.synth.ColorType;
+import javax.swing.plaf.synth.Region;
+import javax.swing.plaf.synth.SynthConstants;
+import javax.swing.plaf.synth.SynthContext;
+import javax.swing.plaf.synth.SynthStyle;
+import javax.swing.plaf.synth.SynthUI;
 
 import com.formdev.flatlaf.FlatDarkLaf;
 import com.inductiveautomation.ignition.common.gui.border.FieldBorder;
@@ -71,12 +83,12 @@ class FieldBorderTest {
         return (Border) sub.get(null);
     }
 
-    /** What the shared border paints with: Synthetica's UI, or one of this module's classes. */
-    private static Class<?> sharedBorderUi() throws Exception {
+    /** What the shared border paints with: Synthetica's UI, or this module's substitute. */
+    private static Object sharedBorderUi() throws Exception {
         Border shared = sharedBorder();
         Field ui = shared.getClass().getDeclaredField("ui");
         ui.setAccessible(true);
-        return ui.get(shared).getClass();
+        return ui.get(shared);
     }
 
     private static boolean paintsSomething(int[] pixels) {
@@ -127,12 +139,71 @@ class FieldBorderTest {
         new FieldBorder();
         assertTakenUnderStock();
 
+        Object synthetica = sharedBorderUi();
+
         manager.apply(true);
-        assertEquals(FieldBorders.Substitute.class, sharedBorderUi(), "the switch installed nothing");
+        assertEquals(FieldBorders.Substitute.class, sharedBorderUi().getClass(), "the switch installed nothing");
+        assertSame(synthetica, ((FieldBorders.Substitute) sharedBorderUi()).original,
+            "the substitute does not hand the paint to the UI Synthetica built");
         manager.shutdown();
 
-        assertFalse(sharedBorderUi().getName().startsWith("com.mustrysolutions."),
-            "shutdown left this module's class in FieldBorder's static border");
+        assertSame(synthetica, sharedBorderUi(),
+            "shutdown did not give FieldBorder's static border its own UI back");
+    }
+
+    /**
+     * Pixels cannot show this under stock: there, {@code TextField.border}
+     * is another {@code SynthBorder} painting the same thing. So it is asked
+     * of the substitute directly, with a UI that records its paints.
+     */
+    @Test
+    @DisplayName("the substitute hands the paint to Synthetica under stock, and paints FlatLaf's border under dark")
+    void substitutePaintsByTheInstalledLookAndFeel() throws Exception {
+        List<String> painted = new ArrayList<>();
+        SynthStyle style = new SynthStyle() {
+            @Override
+            protected Color getColorForState(SynthContext context, ColorType type) {
+                return Color.GRAY;
+            }
+
+            @Override
+            protected Font getFontForState(SynthContext context) {
+                return null;
+            }
+        };
+        SynthUI recording = new SynthUI() {
+            @Override
+            public SynthContext getContext(JComponent c) {
+                return new SynthContext(c, Region.PANEL, style, SynthConstants.ENABLED);
+            }
+
+            @Override
+            public void paintBorder(SynthContext context, Graphics g, int x, int y, int w, int h) {
+                painted.add("synthetica");
+            }
+        };
+        FieldBorders.Substitute substitute = new FieldBorders.Substitute(recording);
+        JPanel panel = new JPanel();
+
+        paint(substituteBorder(substitute), panel);
+        assertEquals(List.of("synthetica"), painted, "under stock the paint is Synthetica's");
+
+        manager.apply(true);
+        painted.clear();
+        int[] dark = paint(substituteBorder(substitute), panel);
+
+        assertEquals(List.of(), painted, "under dark Synthetica's painter, which throws, was still asked");
+        assertTrue(paintsSomething(dark), "under dark nothing was painted in its place");
+    }
+
+    /** A border that paints through the substitute, as the shared SynthBorder does. */
+    private static Border substituteBorder(FieldBorders.Substitute substitute) {
+        return new javax.swing.border.AbstractBorder() {
+            @Override
+            public void paintBorder(java.awt.Component c, Graphics g, int x, int y, int w, int h) {
+                substitute.paintBorder(substitute.getContext((JComponent) c), g, x, y, w, h);
+            }
+        };
     }
 
     @Test
