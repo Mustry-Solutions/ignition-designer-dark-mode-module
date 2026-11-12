@@ -13,7 +13,7 @@ dependencies {
     compileOnly("com.inductiveautomation.ignitionsdk:ignition-common:${rootProject.extra["sdk_version"]}")
 
     // add designer scoped dependencies here
-    modlImplementation("com.formdev:flatlaf:3.7.2")
+    modlImplementation("com.formdev:flatlaf:3.8")
 
     testImplementation("org.junit.jupiter:junit-jupiter:6.1.3")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
@@ -120,7 +120,7 @@ dependencies {
     // dependency tree, which is where those look and feels come from.
     "lafHarnessImplementation"("com.inductiveautomation.ignitionsdk:designer-api:${rootProject.extra["harness_sdk_version"]}")
     "lafHarnessImplementation"("com.inductiveautomation.ignitionsdk:ignition-common:${rootProject.extra["harness_sdk_version"]}")
-    "lafHarnessImplementation"("com.formdev:flatlaf:3.7.2")
+    "lafHarnessImplementation"("com.formdev:flatlaf:3.8")
 
     "lafHarnessImplementation"("org.junit.jupiter:junit-jupiter:6.1.3")
     "lafHarnessRuntimeOnly"("org.junit.platform:junit-platform-launcher")

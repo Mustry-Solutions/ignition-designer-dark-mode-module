@@ -29,6 +29,12 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
   keeps tracking the theme last applied, so an older module version still
   comes up in the theme last seen.
 
+### Changed
+
+- The bundled FlatLaf is now 3.8 (was 3.7.2). It brings FlatLaf's fixes for
+  missing popup borders on Windows 11 in VMs and remote sessions, and for
+  gaps next to table grid lines on Windows at 125 %, 150 % and 175 % scaling.
+
 ### Fixed
 
 - **SFC charts read as they do in a client**

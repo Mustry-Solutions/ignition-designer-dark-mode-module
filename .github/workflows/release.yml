@@ -162,6 +162,9 @@ jobs:
             ${{ steps.modl.outputs.v83 }}
             ${{ steps.modl.outputs.v81 }}
           if-no-files-found: error
+          # Proof that signing works, not a deliverable: the release itself
+          # carries the files.
+          retention-days: 7
 
       - name: Publish GitHub Release
         if: ${{ steps.ver.outputs.publish == 'true' }}

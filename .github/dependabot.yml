@@ -28,6 +28,11 @@ updates:
     open-pull-requests-limit: 5
     commit-message:
       prefix: "build"
+    # Minor and patch bumps in one PR, so one CI run instead of one per
+    # library. Major bumps still come one by one, as they need reading.
+    groups:
+      gradle-minor-patch:
+        update-types: ["minor", "patch"]
     ignore:
       # DO NOT bump the Ignition SDK. `sdk_version` is the support FLOOR, not a
       # dependency to keep current: it is what the module compiles against (so a
