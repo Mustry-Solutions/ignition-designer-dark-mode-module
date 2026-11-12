@@ -7,7 +7,8 @@ most-requested Designer idea on Inductive Automation's ideas portal.
 
 **[Download the latest release](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/releases/latest)**,
 install the `.modl` on your gateway, relaunch the Designer, and turn it on with
-**Tools → Dark Mode**. Full steps in [Install](#install).
+**Tools → Dark Mode → Dark**, or **Match System** to follow your operating
+system's setting. Full steps in [Install](#install).
 
 Made by [Mustry Solutions](https://mustrysolutions.com), a Belgian IT/OT
 consultancy that builds Ignition systems and modules. See
@@ -21,15 +22,37 @@ consultancy that builds Ignition systems and modules. See
 ## What it does
 
 Ignition ships the Designer with a light, Synthetica-based look and feel and no
-dark option. Designer Dark Mode adds a **Tools → Dark Mode** toggle that restyles the
+dark option. Designer Dark Mode adds a **Tools → Dark Mode** menu that restyles the
 whole Designer — dock panels, trees, tables, menus, the Perspective component
 palette and property editor, the tag browser and tag editor, the script editors
 and output console, dialogs, and icons — to a dark theme built on
-[FlatLaf](https://www.formdev.com/flatlaf/). The choice is remembered between
-sessions: a Designer you left dark comes back dark, and one you left light
-comes back light.
+[FlatLaf](https://www.formdev.com/flatlaf/). The menu has three choices:
 
-Toggling back restores the stock Designer. Because a relaunch always starts
+| Choice | What the Designer does |
+|---|---|
+| **Light** (the default) | The stock Designer theme. |
+| **Dark** | The dark theme. |
+| **Match System** | Dark when your operating system is set to dark, light when it is set to light. |
+
+The choice is remembered between sessions: a Designer you left dark comes back
+dark, and one you left light comes back light.
+
+**Match System** reads the operating system's setting when the Designer
+launches and when you choose it, not while the Designer is open: a switch
+takes a few seconds, during which the Designer does not respond, and it should
+not happen while you are in the middle of something because the clock reached
+sunset. If you change the system's setting with the Designer open, relaunch
+the Designer or choose Match System again. It reads:
+
+| OS | The setting it follows |
+|---|---|
+| Windows 10 and 11 | Settings → Personalization → Colors → **Choose your app mode** |
+| macOS | System Settings → Appearance (Auto included: it follows what is showing at launch) |
+| Linux | The desktop's color scheme, as GNOME and KDE publish it through the XDG desktop portal; on a GNOME without the portal, its color scheme or a theme with "dark" in its name |
+
+When the setting cannot be read, Match System uses light.
+
+Switching back to Light restores the stock Designer. Because a relaunch always starts
 from the stock theme and applies dark on top of it only if the setting asks for
 it, a relaunch is also the sure way to clear any residue a toggle-off left
 behind. See [Where the setting is stored](#where-the-setting-is-stored) for
@@ -138,7 +161,8 @@ You do not need to build anything.
 3. The gateway will ask you to accept the module's certificate. It is signed by
    Mustry Solutions with our own certificate rather than one Ignition ships, so
    you are asked to trust it once, on first install.
-4. **Relaunch the Designer**, then turn it on with **Tools → Dark Mode**.
+4. **Relaunch the Designer**, then turn it on with **Tools → Dark Mode → Dark**
+   (or **Match System**).
 
 Requires Ignition **8.3.0** or newer, or **8.1.33** or newer on 8.1. Older 8.1
 releases run the Designer on Java 11, and this module needs Java 17. Both files
@@ -165,8 +189,9 @@ on the gateway, not in the project, and not in a tag. Nothing on the gateway
 changes when you toggle it, and a colleague launching the Designer against the
 same gateway from their own machine or account gets their own setting.
 
-It is the preference node `com/mustrysolutions/designerdarkmode/designer`, key
-`darkMode`:
+It is the preference node `com/mustrysolutions/designerdarkmode/designer`,
+keys `darkMode` (the theme last applied) and `followSystem` (true when
+**Match System** is chosen):
 
 | OS | Where |
 |---|---|
@@ -182,12 +207,14 @@ gateway *without* the module never loads this code, so its Designer stays
 stock; the saved value is left untouched and applies again the next time you
 open a gateway that has the module.
 
-One consequence of the shared value: after every toggle and every launch the
+One consequence of the shared value: after every switch and every launch the
 module rewrites the setting to match the theme that is actually installed. If
 applying dark mode fails on one gateway (for example after an Ignition upgrade
-the module does not yet support), the setting flips back to light, and that
-flip also applies to the Designers of your other gateways until you toggle it
-on again.
+the module does not yet support), the setting flips back to Light, and that
+flip also applies to the Designers of your other gateways until you choose
+Dark again. The same goes for Match System: a switch to the system's theme
+that fails sets the choice to the theme the Designer was left in, so a broken
+switch is not retried at every launch.
 
 If you need to reset it by hand, see
 [Recovering from a bricked launch](docs/DEVELOPMENT.md#recovering-from-a-bricked-launch).

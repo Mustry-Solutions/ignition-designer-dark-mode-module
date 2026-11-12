@@ -7,6 +7,10 @@ import java.awt.Window;
 import java.awt.event.AWTEventListener;
 import java.awt.event.ContainerEvent;
 import java.lang.reflect.Field;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 import java.util.prefs.Preferences;
 
 import javax.swing.LookAndFeel;
@@ -42,6 +46,12 @@ import org.slf4j.LoggerFactory;
 public class ThemeManager {
 
     private static final String PREF_DARK_MODE = "darkMode";
+    /**
+     * Set when the user chose Match System. {@link #PREF_DARK_MODE} keeps
+     * tracking the theme actually installed either way, so a module version
+     * that predates this key still comes up in the theme the user last saw.
+     */
+    private static final String PREF_FOLLOW_SYSTEM = "followSystem";
     // Package-private so ReflectiveSurfaceTest can assert this name still
     // resolves against the Ignition the harness runs.
     static final String STOCK_LAF_CLASS =
@@ -60,6 +70,33 @@ public class ThemeManager {
 
     private final Logger log = LoggerFactory.getLogger(ThemeManager.class);
     private final Preferences prefs;
+    private final Supplier<SystemTheme.Appearance> systemAppearance;
+
+    /** Where {@link #systemAppearance} runs: a thread of its own, outside tests. */
+    private final Executor systemReader;
+
+    /**
+     * The read of the system's appearance still waiting to be acted on:
+     * started in {@link #startup} or by choosing Match System, null otherwise.
+     *
+     * <p>One read, one switch. Whoever acts on it takes it first — the
+     * startup apply when the answer is already in, else the read's own
+     * completion — so the other finds it gone and does nothing. Choosing
+     * Light or Dark drops it, so a slow read can never switch over a later
+     * choice. Atomic: the startup apply and the completion can race when the
+     * startup apply is driven off the event dispatch thread, as tests do.
+     */
+    private final AtomicReference<CompletableFuture<SystemTheme.Appearance>> pendingRead =
+        new AtomicReference<>();
+
+    /**
+     * The theme the last switch was asked for. Under Match System it is what
+     * {@link #finishSwitch} compares the installed theme against: a switch
+     * that did not get there takes the mode out of Match System, as a failed
+     * dark switch takes an explicit Dark back to Light.
+     */
+    private boolean requestedDark;
+
     private final TreeIconRecolorer treeIcons = new TreeIconRecolorer();
     private final IaColorTokens tokens = new IaColorTokens();
     private final LookAndFeelColors lafColors = new LookAndFeelColors();
@@ -166,7 +203,17 @@ public class ThemeManager {
 
     /** The theme choice persists in this user's own preference node. */
     public ThemeManager() {
-        this(Preferences.userNodeForPackage(ThemeManager.class));
+        this(Preferences.userNodeForPackage(ThemeManager.class), () -> {
+            SystemTheme.Appearance appearance = SystemTheme.detect();
+            // Logged here, on the thread that read it: the reasoning is per thread.
+            DebugLog.log("Match System: the system reads as " + appearance
+                + " (" + SystemTheme.lastSource() + ").");
+            return appearance;
+        }, task -> {
+            Thread thread = new Thread(task, "designer-dark-mode-system-theme");
+            thread.setDaemon(true);
+            thread.start();
+        });
     }
 
     /**
@@ -174,9 +221,26 @@ public class ThemeManager {
      *
      * <p>The production node is shared with every Designer this user runs, so a
      * test that wrote to it would toggle the dark mode of whoever ran the build.
+     * The system's appearance reads as unknown, so nothing here runs a process.
      */
     ThemeManager(Preferences prefs) {
+        this(prefs, () -> SystemTheme.Appearance.UNKNOWN);
+    }
+
+    /**
+     * Test seam: also choose what the system's appearance reads as. The read
+     * runs on the calling thread, so it has finished when the call returns.
+     */
+    ThemeManager(Preferences prefs, Supplier<SystemTheme.Appearance> systemAppearance) {
+        this(prefs, systemAppearance, Runnable::run);
+    }
+
+    /** Test seam: also choose when the read runs, to hold it back past the startup apply. */
+    ThemeManager(Preferences prefs, Supplier<SystemTheme.Appearance> systemAppearance,
+            Executor systemReader) {
         this.prefs = prefs;
+        this.systemAppearance = systemAppearance;
+        this.systemReader = systemReader;
     }
 
     /** Register the menu's listener before {@link #startup}. */
@@ -201,6 +265,11 @@ public class ThemeManager {
         // and bring the permanent listener back. See #76 and
         // UiScaleDisableTest.
         System.setProperty("flatlaf.uiScale.enabled", "false");
+        if (getThemeMode() == ThemeMode.SYSTEM) {
+            // Off the event dispatch thread and started now: it runs a
+            // process, and the Designer takes seconds to become ready anyway.
+            switchWhenRead(readSystemAppearance());
+        }
         onEdt(() -> {
             captureStockLaf();
             inspector.install();
@@ -237,24 +306,107 @@ public class ThemeManager {
         });
     }
 
+    /**
+     * The saved dark preference, which tracks the theme last installed. Under
+     * Match System it is the theme the system last resolved to.
+     */
     public boolean isDarkModeEnabled() {
         return prefs.getBoolean(PREF_DARK_MODE, false);
     }
 
+    /** The user's choice under Tools → Dark Mode. Light until they make one. */
+    public ThemeMode getThemeMode() {
+        if (prefs.getBoolean(PREF_FOLLOW_SYSTEM, false)) {
+            return ThemeMode.SYSTEM;
+        }
+        return isDarkModeEnabled() ? ThemeMode.DARK : ThemeMode.LIGHT;
+    }
+
     public void setDark(boolean dark) {
+        setThemeMode(dark ? ThemeMode.DARK : ThemeMode.LIGHT);
+    }
+
+    /**
+     * Save the choice and switch to it. Match System reads the system off the
+     * event dispatch thread first, and switches once the answer is in.
+     */
+    public void setThemeMode(ThemeMode mode) {
         if (shutDown) {
-            DebugLog.detail("setDark(" + dark + ") after shutdown; ignored.");
+            DebugLog.detail("setThemeMode(" + mode + ") after shutdown; ignored.");
             return;
         }
-        savePreference(dark);
-        onEdt(() -> {
-            if (!uiReady) {
-                DebugLog.detail("setDark(" + dark + ") before the UI is ready; "
-                    + "deferred to the startup apply.");
+        if (mode == ThemeMode.SYSTEM) {
+            if (pendingRead.get() != null) {
+                // Already reading, and only Match System starts a read: this
+                // is the same choice again, from the same click.
+                DebugLog.detail("setThemeMode(SYSTEM) while the system is being read; ignored.");
                 return;
             }
-            beginSwitch(dark);
+            savePreference(true, isDarkModeEnabled());
+            if (uiReady) {
+                // The read can take seconds on Linux. It is the start of the
+                // switch, so it looks like one: the menu takes no second
+                // click, and the click visibly registered.
+                stateListener.switchStarted();
+                status.message("Reading the system's appearance\u2026");
+            }
+            switchWhenRead(readSystemAppearance());
+            return;
+        }
+        pendingRead.set(null);
+        boolean dark = mode == ThemeMode.DARK;
+        savePreference(false, dark);
+        onEdt(() -> switchWhenReady(mode, dark));
+    }
+
+    private void switchWhenReady(ThemeMode mode, boolean dark) {
+        if (shutDown) {
+            return;
+        }
+        if (!uiReady) {
+            DebugLog.detail("setThemeMode(" + mode + ") before the UI is ready; "
+                + "deferred to the startup apply.");
+            return;
+        }
+        beginSwitch(dark);
+    }
+
+    /**
+     * Start reading the system's appearance on a thread of its own, as the
+     * {@link #pendingRead}. The read runs a process, which must never block
+     * the event dispatch thread.
+     */
+    private CompletableFuture<SystemTheme.Appearance> readSystemAppearance() {
+        CompletableFuture<SystemTheme.Appearance> read = new CompletableFuture<>();
+        pendingRead.set(read);
+        systemReader.execute(() -> {
+            try {
+                read.complete(systemAppearance.get());
+            } catch (Throwable t) {
+                read.complete(SystemTheme.Appearance.UNKNOWN);
+            }
         });
+        return read;
+    }
+
+    /** Switch to what {@code read} answers once it is in, if it is still the read to act on. */
+    private void switchWhenRead(CompletableFuture<SystemTheme.Appearance> read) {
+        read.thenAccept(appearance -> onEdt(() -> {
+            if (shutDown || !uiReady) {
+                // Before the Designer is ready the startup apply takes the answer.
+                return;
+            }
+            if (!pendingRead.compareAndSet(read, null)) {
+                // Taken by the startup apply, or a later choice replaced it.
+                return;
+            }
+            beginSwitch(isSystemDark(appearance));
+        }));
+    }
+
+    /** Unknown is light: when the system cannot be read, the Designer stays stock. */
+    private static boolean isSystemDark(SystemTheme.Appearance appearance) {
+        return appearance == SystemTheme.Appearance.DARK;
     }
 
     /**
@@ -269,6 +421,7 @@ public class ThemeManager {
      * reasonably concludes the click did not register.
      */
     private void beginSwitch(boolean dark) {
+        requestedDark = dark;
         // A click is a good moment to look for the Exchange script's checkbox
         // again: it must not be live while ours is (#89). Cheap and never throws.
         exchangeScript.check();
@@ -303,7 +456,14 @@ public class ThemeManager {
      */
     void finishSwitch() {
         boolean darkActive = isDarkActive();
-        savePreference(darkActive);
+        boolean followSystem = getThemeMode() == ThemeMode.SYSTEM;
+        if (followSystem && darkActive != requestedDark) {
+            followSystem = false;
+            DebugLog.log("Match System: the switch to " + (requestedDark ? "dark" : "light")
+                + " did not complete; the setting is now "
+                + (darkActive ? "Dark" : "Light") + ", the theme installed.");
+        }
+        savePreference(followSystem, darkActive);
         stateListener.switchFinished(darkActive);
     }
 
@@ -321,7 +481,8 @@ public class ThemeManager {
      * <p>Windows (registry) and macOS (cfprefsd) both persist out of process
      * and survive it either way, which is why this went unnoticed.
      */
-    private void savePreference(boolean dark) {
+    private void savePreference(boolean followSystem, boolean dark) {
+        prefs.putBoolean(PREF_FOLLOW_SYSTEM, followSystem);
         prefs.putBoolean(PREF_DARK_MODE, dark);
         try {
             prefs.flush();
@@ -407,15 +568,54 @@ public class ThemeManager {
      * preference to light, so a broken dark state is not retried at every
      * launch.
      *
+     * <p>Under Match System the system's appearance decides instead, usually
+     * read by the time this runs (started in {@link #startup}). A dark system
+     * whose switch fails drops the mode to Light by the same rule.
+     *
      * <p>Package-private, and free of {@link DesignerContext}, so a test can
      * drive it directly: the readiness poll around it needs a live Designer
      * frame, this does not.
      */
     void applyStartupPreference() {
         uiReady = true;
-        if (isDarkModeEnabled()) {
+        if (getThemeMode() != ThemeMode.SYSTEM) {
+            pendingRead.set(null);
+            applyAtStartup(isDarkModeEnabled());
+            return;
+        }
+        CompletableFuture<SystemTheme.Appearance> read = pendingRead.get();
+        boolean started = read == null;
+        if (started) {
+            // Nothing read the system at launch: Match System was not the mode
+            // then (or this is a test, which drives this method alone).
+            read = readSystemAppearance();
+        }
+        if (read.isDone()) {
+            if (pendingRead.compareAndSet(read, null)) {
+                applyAtStartup(isSystemDark(read.join()));
+            }
+        } else if (started) {
+            switchWhenRead(read);
+        }
+        // Otherwise the read is still out: the Designer was ready before the
+        // system answered. Its own completion switches, as a click would —
+        // the Designer is in use by then. Each command gives up after
+        // SystemTheme.TIMEOUT_MS, and Linux asks at most three, so this is
+        // bounded.
+    }
+
+    /**
+     * Light needs nothing at launch: the Designer starts stock. Under Match
+     * System the saved dark value is still squared with it, so a module
+     * version without Match System comes up in the same theme.
+     */
+    private void applyAtStartup(boolean dark) {
+        requestedDark = dark;
+        if (dark) {
             apply(true);
             finishSwitch();
+        } else if (getThemeMode() == ThemeMode.SYSTEM && isDarkModeEnabled()) {
+            savePreference(true, false);
         }
     }
 
