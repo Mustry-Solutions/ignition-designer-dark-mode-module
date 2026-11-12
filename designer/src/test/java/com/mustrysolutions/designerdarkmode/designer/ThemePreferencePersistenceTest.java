@@ -417,4 +417,51 @@ class ThemePreferencePersistenceTest {
         assertEquals(ThemeMode.SYSTEM, system.getThemeMode());
     }
 
+    /**
+     * The usual launch under Match System: the system answers while the
+     * Designer is still being built. A switch then would theme a half-built
+     * Designer; the startup apply takes the answer once it is ready.
+     */
+    @Test
+    @DisplayName("a read that answers before the Designer is ready waits for the startup apply")
+    void anEarlyReadWaitsForTheStartupApply() throws Exception {
+        List<Runnable> held = new ArrayList<>();
+        ThemeManager system = heldManager(() -> SystemTheme.Appearance.DARK, held);
+        system.setThemeMode(ThemeMode.SYSTEM);
+
+        held.forEach(Runnable::run);
+        flushEdt();
+
+        assertEquals(0, listener.started, "no switch may start before the Designer is ready");
+        assertFalse(UIManager.getLookAndFeel() instanceof FlatDarkLaf);
+
+        system.applyStartupPreference();
+
+        assertTrue(UIManager.getLookAndFeel() instanceof FlatDarkLaf);
+        assertEquals(List.of(true), listener.darkActive);
+    }
+
+    /**
+     * Light or Dark chosen while the system is still being read (seconds, on
+     * Linux). The read answers afterwards and must not undo the choice.
+     */
+    @Test
+    @DisplayName("choosing Light or Dark while the system is being read drops the read")
+    void anExplicitChoiceDropsThePendingRead() throws Exception {
+        List<Runnable> held = new ArrayList<>();
+        ThemeManager system = heldManager(() -> SystemTheme.Appearance.LIGHT, held);
+        system.applyStartupPreference();
+
+        system.setThemeMode(ThemeMode.SYSTEM);
+        system.setThemeMode(ThemeMode.DARK);
+        flushEdt();
+        held.forEach(Runnable::run);
+        flushEdt();
+
+        assertTrue(UIManager.getLookAndFeel() instanceof FlatDarkLaf,
+            "the light system's late answer must not switch back");
+        assertEquals(List.of(true), listener.darkActive);
+        assertEquals(ThemeMode.DARK, system.getThemeMode());
+    }
+
 }
