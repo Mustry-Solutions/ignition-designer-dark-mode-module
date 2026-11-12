@@ -326,40 +326,45 @@ class VisionCorruptionSweepTest {
     }
 
     /**
-     * #189 and #193: under dark, the Property Editor shows a slider's Border
-     * as No Border (Other Border under stock) and its Foreground Color as
+     * #189: under dark, the Property Editor shows a slider's Border as No
+     * Border (Other Border under stock) and its Foreground Color as
      * 221,221,221 (46,46,46). Both are the look and feel's own defaults,
-     * which the editor shows as it shows any other: FlatLaf gives a slider
-     * no border and #DDDDDD text. What matters is that neither is written:
-     * a slider born under stock, edited and saved while dark, saves the same
-     * bytes as one saved under stock.
+     * which the editor shows like any other: FlatLaf gives a slider no
+     * border and #DDDDDD text. Neither is written: a slider born under
+     * stock and saved while dark saves what its stock save does, net of the
+     * sweep's accepted residue, and a client loads the same colours and
+     * border from both.
+     *
+     * <p>Untouched values only. A colour the user sets under dark that
+     * equals FlatLaf's default is a different case (#193): the dark save
+     * drops it, and a light save after the restore writes it.
      *
      * <p>A slider cannot be built headlessly, so this runs windowed only
      * ({@code -Pharness.windowed=true}).
      */
     @Test
-    @DisplayName("a slider shows the dark theme's border and foreground, and saves neither (#189, #193)")
+    @DisplayName("a slider shows the dark theme's border and foreground, and saves neither (#189)")
     void sliderReadingsAreTheThemesAndAreNotSaved() throws Exception {
         Assumptions.assumeFalse(GraphicsEnvironment.isHeadless(),
             "no display: a Vision slider cannot be built headlessly.");
         onEdt(() -> {
             BasicContainer window = windowWith("PMISlider");
             JSlider slider = (JSlider) window.getComponent(0);
-            javax.swing.JPanel desktop = new javax.swing.JPanel();
-            desktop.add(window);
-            ThemeManager.updateComponentTreeUiResiliently(desktop, new java.util.LinkedHashSet<>());
-            slider.setValue(42);
+            // Inside a template, as in the Designer: the walk's border
+            // alignment (VisionConstructionBorders) applies to Vision
+            // content only.
+            VisionTemplate holder = new VisionTemplate();
+            holder.addComponent(window);
+            ThemeManager.updateComponentTreeUiResiliently(holder, new java.util.LinkedHashSet<>());
             save(window);
-            String stock = comparable(save(window));
+            String stockRaw = save(window);
+            String stock = comparable(stockRaw);
             Color stockForeground = slider.getForeground();
             Border stockBorder = slider.getBorder();
 
             goDark();
-            ThemeManager.updateComponentTreeUiResiliently(desktop, new java.util.LinkedHashSet<>());
-            manager.swapWhiteTokenBackgrounds(desktop);
-            // An unrelated edit, then a save, as in a Designer.
-            slider.setValue(43);
-            slider.setValue(42);
+            ThemeManager.updateComponentTreeUiResiliently(holder, new java.util.LinkedHashSet<>());
+            manager.swapWhiteTokenBackgrounds(holder);
             String raw = save(window);
             String dark = comparable(raw);
 
@@ -369,13 +374,25 @@ class VisionCorruptionSweepTest {
             assertTrue(slider.getForeground() instanceof UIResource,
                 "the dark foreground is not the look and feel's: " + slider.getForeground());
             assertNotEquals(stockForeground, slider.getForeground(),
-                "the reading this test documents has changed; re-check #193");
+                "the reading this test documents has changed; re-check #189");
             Border darkBorder = slider.getBorder();
             assertTrue(darkBorder == null || darkBorder instanceof UIResource,
                 "the dark border is not the look and feel's: " + darkBorder);
             assertTrue(stockBorder instanceof UIResource,
                 "the stock border is not the look and feel's: " + stockBorder);
+
+            // What a client gets: loaded under the stock theme, like a client is.
+            goLight();
+            assertEquals(clientView(stockRaw), clientView(raw),
+                "a client shows the slider differently from the dark save than from the stock one");
         });
+    }
+
+    /** What a client shows of a one-component window: its colours and its border's class. */
+    private static String clientView(String xml) throws Exception {
+        JComponent back = (JComponent) ((BasicContainer) load(xml)).getComponent(0);
+        return reloaded(xml) + " border="
+            + (back.getBorder() == null ? "null" : back.getBorder().getClass().getName());
     }
 
     // --- fixtures -------------------------------------------------------------
