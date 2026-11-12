@@ -59,7 +59,7 @@ import com.inductiveautomation.ignition.common.xmlserialization.serialization.eq
  */
 final class LookAndFeelBorders {
 
-    /** Every concrete {@code javax.swing.border.Border} in FlatLaf 3.7.2. */
+    /** Every concrete {@code javax.swing.border.Border} in FlatLaf 3.8. */
     static final List<String> FLATLAF_BORDER_CLASSES = List.of(
         "com.formdev.flatlaf.ui.FlatBorder",
         "com.formdev.flatlaf.ui.FlatButtonBorder",
@@ -73,6 +73,7 @@ final class LookAndFeelBorders {
         "com.formdev.flatlaf.ui.FlatListCellBorder$Focused",
         "com.formdev.flatlaf.ui.FlatListCellBorder$Selected",
         "com.formdev.flatlaf.ui.FlatMarginBorder",
+        "com.formdev.flatlaf.ui.FlatMatteBorder",
         "com.formdev.flatlaf.ui.FlatMenuBarBorder",
         "com.formdev.flatlaf.ui.FlatMenuItemBorder",
         "com.formdev.flatlaf.ui.FlatNativeWindowBorder$WindowTopBorder",
