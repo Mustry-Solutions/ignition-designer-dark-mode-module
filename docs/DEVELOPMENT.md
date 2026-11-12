@@ -12,8 +12,8 @@ How to build, run, debug, sign and release Designer Dark Mode.
 - Network access to `https://nexus.inductiveautomation.com/repository/public`,
   where the Ignition SDK artifacts live.
 
-Everything else is resolved by Gradle: Gradle 9.7.1 via the wrapper, the
-`io.ia.sdk.modl` 0.5.0 module plugin, and FlatLaf 3.7.2.
+Everything else is resolved by Gradle: Gradle 9.8.2 via the wrapper, the
+`io.ia.sdk.modl` 0.5.0 module plugin, and FlatLaf 3.8.
 
 ## Build
 
