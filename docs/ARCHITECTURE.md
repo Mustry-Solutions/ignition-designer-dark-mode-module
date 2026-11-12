@@ -513,6 +513,14 @@ Panels and the Spinner into the sweep. Still unbuildable headless: the Easy
 Chart (a `DropTarget`) and the Slider under Synthetica, both
 `HeadlessException`, and the Date Time Selector under a stock tree update,
 where Synthetica serves no style for it headless.
+Run windowed (`-Pharness.windowed=true`), the probe builds the Easy Chart
+and the Slider too, and the sweep covers 59 of the 60 kinds; only the Date
+Time Selector is still out. That is how the Slider's dark Property Editor
+readings (#189) were shown to be display-only for a slider nobody edited.
+A value the user sets under dark that equals FlatLaf's default is another
+matter: the serializer compares against a clean copy built in the current
+theme, so the dark save drops it, and the light restore leaves it on the
+component for a later light save to write (#193).
 
 What the sweep accepts as residue, each documented: the stock token value
 written where a stock Designer writes nothing (see
