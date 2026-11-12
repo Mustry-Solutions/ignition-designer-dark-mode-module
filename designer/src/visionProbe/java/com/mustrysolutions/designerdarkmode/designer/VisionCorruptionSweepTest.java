@@ -2,10 +2,12 @@ package com.mustrysolutions.designerdarkmode.designer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.awt.Color;
 import java.awt.Component;
+import java.awt.GraphicsEnvironment;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -13,8 +15,11 @@ import java.util.Map;
 import java.util.regex.Pattern;
 
 import javax.swing.JComponent;
+import javax.swing.JSlider;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
+import javax.swing.border.Border;
+import javax.swing.plaf.UIResource;
 
 import com.formdev.flatlaf.FlatDarkLaf;
 import com.inductiveautomation.factorypmi.application.FPMIWindow;
@@ -28,6 +33,7 @@ import com.inductiveautomation.ignition.common.xmlserialization.deserialization.
 import com.inductiveautomation.ignition.common.xmlserialization.serialization.XMLSerializer;
 import com.inductiveautomation.vision.api.designer.palette.JavaBeanPaletteItem;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -53,6 +59,8 @@ import org.junit.jupiter.api.Test;
  * else the switch leaves behind shows up as a diff.
  *
  * <p>Only runs with {@code -Pvision.jars}; see {@code ops/vision-jars.sh}.
+ * Headless it builds 57 of the 60 kinds; with {@code -Pharness.windowed=true}
+ * the Easy Chart and the Slider build too.
  */
 class VisionCorruptionSweepTest {
 
@@ -120,7 +128,7 @@ class VisionCorruptionSweepTest {
             assertTrue(reference.size() > 50, "the sweep must cover the palette; built only "
                 + reference.size() + " of " + PALETTE.size() + ": " + unbuildable);
             System.out.println("Sweep: built " + reference.size() + " of " + PALETTE.size()
-                + " palette kinds; unbuildable headless: " + unbuildable);
+                + " palette kinds; unbuildable: " + unbuildable);
 
             goDark();
             List<String> differing = new ArrayList<>();
@@ -314,6 +322,59 @@ class VisionCorruptionSweepTest {
             assertEquals(stock, dark, "a whole window saves differently under dark:\n" + firstDiff(stock, dark));
             Object back = load(raw);
             assertTrue(back instanceof FPMIWindow, "the dark save did not load back as a window");
+        });
+    }
+
+    /**
+     * #189 and #193: under dark, the Property Editor shows a slider's Border
+     * as No Border (Other Border under stock) and its Foreground Color as
+     * 221,221,221 (46,46,46). Both are the look and feel's own defaults,
+     * which the editor shows as it shows any other: FlatLaf gives a slider
+     * no border and #DDDDDD text. What matters is that neither is written:
+     * a slider born under stock, edited and saved while dark, saves the same
+     * bytes as one saved under stock.
+     *
+     * <p>A slider cannot be built headlessly, so this runs windowed only
+     * ({@code -Pharness.windowed=true}).
+     */
+    @Test
+    @DisplayName("a slider shows the dark theme's border and foreground, and saves neither (#189, #193)")
+    void sliderReadingsAreTheThemesAndAreNotSaved() throws Exception {
+        Assumptions.assumeFalse(GraphicsEnvironment.isHeadless(),
+            "no display: a Vision slider cannot be built headlessly.");
+        onEdt(() -> {
+            BasicContainer window = windowWith("PMISlider");
+            JSlider slider = (JSlider) window.getComponent(0);
+            javax.swing.JPanel desktop = new javax.swing.JPanel();
+            desktop.add(window);
+            ThemeManager.updateComponentTreeUiResiliently(desktop, new java.util.LinkedHashSet<>());
+            slider.setValue(42);
+            save(window);
+            String stock = comparable(save(window));
+            Color stockForeground = slider.getForeground();
+            Border stockBorder = slider.getBorder();
+
+            goDark();
+            ThemeManager.updateComponentTreeUiResiliently(desktop, new java.util.LinkedHashSet<>());
+            manager.swapWhiteTokenBackgrounds(desktop);
+            // An unrelated edit, then a save, as in a Designer.
+            slider.setValue(43);
+            slider.setValue(42);
+            String raw = save(window);
+            String dark = comparable(raw);
+
+            assertEquals(stock, dark,
+                "a slider saved while dark differs from its stock save:\n" + firstDiff(stock, dark));
+            assertNoFlatLafClass(raw, "PMISlider");
+            assertTrue(slider.getForeground() instanceof UIResource,
+                "the dark foreground is not the look and feel's: " + slider.getForeground());
+            assertNotEquals(stockForeground, slider.getForeground(),
+                "the reading this test documents has changed; re-check #193");
+            Border darkBorder = slider.getBorder();
+            assertTrue(darkBorder == null || darkBorder instanceof UIResource,
+                "the dark border is not the look and feel's: " + darkBorder);
+            assertTrue(stockBorder instanceof UIResource,
+                "the stock border is not the look and feel's: " + stockBorder);
         });
     }
 

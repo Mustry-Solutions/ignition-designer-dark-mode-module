@@ -497,6 +497,10 @@ Panels and the Spinner into the sweep. Still unbuildable headless: the Easy
 Chart (a `DropTarget`) and the Slider under Synthetica, both
 `HeadlessException`, and the Date Time Selector under a stock tree update,
 where Synthetica serves no style for it headless.
+Run windowed (`-Pharness.windowed=true`), the probe builds the Easy Chart
+and the Slider too, and the sweep covers 59 of the 60 kinds; only the Date
+Time Selector is still out. That is how the Slider's dark Property Editor
+readings (#189, #193) were shown to be display-only.
 
 What the sweep accepts as residue, each documented: the stock token value
 written where a stock Designer writes nothing (see
