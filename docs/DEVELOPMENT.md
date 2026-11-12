@@ -12,8 +12,8 @@ How to build, run, debug, sign and release Designer Dark Mode.
 - Network access to `https://nexus.inductiveautomation.com/repository/public`,
   where the Ignition SDK artifacts live.
 
-Everything else is resolved by Gradle: Gradle 9.7.1 via the wrapper, the
-`io.ia.sdk.modl` 0.5.0 module plugin, and FlatLaf 3.7.2.
+Everything else is resolved by Gradle: Gradle 9.8.2 via the wrapper, the
+`io.ia.sdk.modl` 0.5.0 module plugin, and FlatLaf 3.8.
 
 ## Build
 
@@ -470,7 +470,8 @@ suspect a renamed class or field before suspecting the theming logic — see
 ## Recovering from a bricked launch
 
 If a bad theme state ever prevents the Designer from launching, clear the saved
-preference so it starts light: remove the `java.util.prefs` node
+preference so it starts light (this clears Match System too): remove the
+`java.util.prefs` node
 `com/mustrysolutions/designerdarkmode/designer` (a tiny one-off program using
 `Preferences.userRoot().node(...).removeNode()`). `ThemeManager` also
 auto-reverts the preference when an apply fails in the essential phase, so this

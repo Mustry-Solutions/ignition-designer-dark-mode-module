@@ -8,7 +8,7 @@ remains under its own license.
 
 | Component | Version | License | Project |
 |---|---|---|---|
-| FlatLaf | 3.7.2 | Apache-2.0 | [github.com/JFormDesigner/FlatLaf](https://github.com/JFormDesigner/FlatLaf) |
+| FlatLaf | 3.8 | Apache-2.0 | [github.com/JFormDesigner/FlatLaf](https://github.com/JFormDesigner/FlatLaf) |
 
 FlatLaf is Copyright © FormDev Software GmbH, licensed under the Apache License,
 Version 2.0. The full text is available at
