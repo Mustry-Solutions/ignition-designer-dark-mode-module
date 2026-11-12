@@ -12,6 +12,17 @@ version parser is numeric-only and rejects a prerelease suffix at install time.
 
 ### Fixed
 
+- **The Vision Border Chooser paints under dark, and so does a Field Border**
+  ([#194](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/194)).
+  The Border Chooser opened blank: only its first tab header showed. Every
+  Field Border paints through one border Ignition takes from the stock look
+  and feel when it is first used, and under dark its painter threw on every
+  paint. That aborted the whole dialog, and left any component given a Field
+  Border without one, with a `NullPointerException` in the Output Console on
+  each repaint. Under dark a Field Border now draws the dark theme's text
+  field outline; in light it is the stock one, and a component's size and
+  layout are unchanged. Checked in the harness; not yet in a live Designer.
+
 - **SFC charts read as they do in a client**
   ([#41](https://github.com/Mustry-Solutions/ignition-designer-dark-mode-module/issues/41)).
   In dark mode the chart editor's canvas went dark while the steps stayed

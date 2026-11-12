@@ -698,6 +698,22 @@ is never written into a window. The class list is pinned to the FlatLaf jar
 by `FlatLafBorderClassesTest`. See the corruption sweep under
 [Vision](#vision).
 
+### FieldBorders
+Ignition's `FieldBorder` (Vision's Field Border, the Border Chooser's Field
+sample) paints every instance through one `private static final` border,
+taken from a throwaway `JTextField` when the class is first used: under
+stock, a `SynthBorder`. Under FlatLaf its Synthetica painter throws on every
+paint, which aborted the Border Chooser's whole paint (#194). The static
+cannot be replaced (final, and possibly folded by the JIT), and a Vision
+component's `FieldBorder` serializes, so the `SynthBorder` keeps its identity
+and gets a different `ui` (a plain instance field): `FieldBorders.Substitute`
+paints FlatLaf's `TextField.border` while FlatLaf is installed and hands
+everything else to Synthetica's UI, insets included, so a Field Border
+component's layout does not move. Installed before FlatLaf on the dark
+switch, which also makes sure the class is first used under stock; taken
+out at shutdown, since the static would pin the module's classloader. Needs
+`--add-opens java.desktop/javax.swing.plaf.synth`, which the Designer passes.
+
 ### ComponentInspector
 Debug only. **Cmd/Ctrl+Shift+I** (or `+F12`) dumps the component chain under the
 mouse to the debug log — class, background/foreground with `UIResource` vs
