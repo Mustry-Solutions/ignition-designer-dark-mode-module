@@ -298,11 +298,17 @@ public class ThemeManager {
     public void shutdown() {
         shutDown = true;
         onEdt(() -> {
-            exchangeScript.uninstall();
-            inspector.uninstall();
-            apply(false);
-            uninstallLightLeftoverWatcher();
-            uninstallComponentWatcher();
+            try {
+                exchangeScript.uninstall();
+                inspector.uninstall();
+                apply(false);
+                uninstallLightLeftoverWatcher();
+                uninstallComponentWatcher();
+            } finally {
+                // Ignition's static would otherwise keep this module's
+                // class, and with it the classloader, past an unload.
+                FieldBorders.uninstall();
+            }
         });
     }
 
@@ -726,6 +732,17 @@ public class ThemeManager {
                 // answering: this is the font the Designer has been drawing
                 // with, and the one dark mode keeps (see below).
                 java.awt.Font stockFont = UIManager.getFont("Label.font");
+                // Ignition's FieldBorder paints through a Synthetica border
+                // whose painter throws under FlatLaf (#194). Before FlatLaf, so
+                // the class is first used under stock.
+                safely("fieldBorder", () -> {
+                    try {
+                        FieldBorders.install();
+                    } catch (ReflectiveOperationException e) {
+                        throw new IllegalStateException("FieldBorder is out of reach; "
+                            + "a Field Border will not paint under dark", e);
+                    }
+                });
                 // Synthetica's uninstall writes back properties as they were
                 // when it styled each component, undoing what the application
                 // set since: button alignment and margin (#174), toolbar

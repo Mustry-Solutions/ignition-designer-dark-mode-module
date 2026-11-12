@@ -59,7 +59,10 @@ Steps marked *dark only* or *light only* are skipped in the other direction.
    clear (see [DeveloperDefaults](#developerdefaults)), the stock colours
    by key for [LookAndFeelColors](#lookandfeelcolors) and
    [VisionConstructionColors](#visionconstructioncolors), and the keystrokes
-   the stock tree map binds for [TreeClipboardKeys](#treeclipboardkeys) — then
+   the stock tree map binds for [TreeClipboardKeys](#treeclipboardkeys) —
+   and two passes that must run while Synthetica is still installed: the
+   [FieldBorders](#fieldborders) substitute (#194) and Synthetica's property
+   store kept for application-set properties (#174) — then
    `UIManager.setLookAndFeel(new FlatDarkLaf())`,
    then `keepStockFont(...)` puts the `Label.font` read just before the swap
    as FlatLaf's `defaultFont`, so the switch is colour-only (see
@@ -721,6 +724,23 @@ platform's own `SynthBorder` rule, extended to FlatLaf, so a FlatLaf border
 is never written into a window. The class list is pinned to the FlatLaf jar
 by `FlatLafBorderClassesTest`. See the corruption sweep under
 [Vision](#vision).
+
+### FieldBorders
+Ignition's `FieldBorder` (Vision's Field Border, the Border Chooser's Field
+sample) paints every instance through one `private static final` border,
+taken from a throwaway `JTextField` when the class is first used: under
+stock, a `SynthBorder`. Under FlatLaf its Synthetica painter throws on every
+paint, which aborted the Border Chooser's whole paint (#194). The static
+cannot be replaced (final, and possibly folded by the JIT), and a Vision
+component's `FieldBorder` serializes, so the `SynthBorder` keeps its identity
+and gets a different `ui` (a plain instance field): `FieldBorders.Substitute`
+paints FlatLaf's `TextField.border` while FlatLaf is installed and hands
+everything else to Synthetica's UI. The insets never come from the UI
+(`SynthBorder` computes them from its own style), so a Field Border
+component's layout does not move. Installed before FlatLaf on the dark
+switch, which also makes sure the class is first used under stock; taken
+out at shutdown, since the static would pin the module's classloader. Needs
+`--add-opens java.desktop/javax.swing.plaf.synth`, which the Designer passes.
 
 ### ComponentInspector
 Debug only. **Cmd/Ctrl+Shift+I** (or `+F12`) dumps the component chain under the

@@ -76,6 +76,8 @@ class ReflectiveSurfaceTest {
         named.put("SyntheticaPropertyStore", SyntheticaPropertyStore.STYLE_FACTORY_CLASS);
         named.put("JideButtonMargins", JideButtonMargins.JIDE_BUTTON_CLASS);
         named.put("CellRendererSanitizer.tagValueRenderer", CellRendererSanitizer.TAG_VALUE_RENDERER);
+        named.put("FieldBorders", FieldBorders.FIELD_BORDER_CLASS);
+        named.put("FieldBorders.synthBorder", FieldBorders.SYNTH_BORDER_CLASS);
         // ThemeManager.SFC_CHART is NOT listed: the SFC module's jars are not
         // on this classpath, and SfcChartWhiteSwapTest's stand-in would make
         // the check pass whatever the name.
@@ -250,6 +252,10 @@ class ReflectiveSurfaceTest {
 
         // --- CellRendererSanitizer: the Tag Browser value renderer's colours --
         methods(missing, CellRendererSanitizer.TAG_VALUE_RENDERER, "getColors");
+
+        // --- FieldBorders: the shared border every FieldBorder paints with --
+        fields(missing, FieldBorders.FIELD_BORDER_CLASS, FieldBorders.SUB_BORDER_FIELD);
+        fields(missing, FieldBorders.SYNTH_BORDER_CLASS, FieldBorders.SYNTH_BORDER_UI_FIELD);
 
         // --- CellRendererSanitizer + IaColorTokens reach into the JDK -------
         // These break on a JDK upgrade rather than an Ignition one, and the
